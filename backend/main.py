@@ -1,12 +1,17 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Dict, Any
 from dotenv import load_dotenv
 import os
-from auth import get_current_user, get_api_user, api_key_auth
+from datetime import datetime, timezone
+from auth import get_current_user, get_api_user, api_key_auth, clerk_auth
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import select
+from models import Base, User
 
 # Load environment variables
 load_dotenv()
@@ -26,6 +31,43 @@ if not CLERK_SECRET or CLERK_SECRET == "sk_test_bFhW0ISjDJ96RsI77Rcp7GfnRSnntvHl
         )
     else:
         print("WARNING: Using placeholder Clerk key. Set CLERK_SECRET_KEY for development.")
+
+# Database configuration
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    if ENVIRONMENT == "production":
+        raise ValueError("CRITICAL: DATABASE_URL must be set in production.")
+    else:
+        print("WARNING: DATABASE_URL not set. Using in-memory storage for development.")
+
+# SQLAlchemy setup
+if DATABASE_URL:
+    # Convert to asyncpg URL for async operations
+    async_database_url = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
+    # Remove SSL parameters that cause issues with asyncpg
+    async_database_url = async_database_url.split("?")[0] + "?ssl=require"
+    engine = create_async_engine(async_database_url, echo=DEBUG)
+    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    async def init_db():
+        """Initialize database tables on startup"""
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+            print("Database tables initialized successfully")
+
+    async def get_db() -> AsyncSession:
+        async with async_session() as session:
+            try:
+                yield session
+            finally:
+                await session.close()
+else:
+    # Fallback for development without database
+    async def get_db():
+        raise NotImplementedError("Database not configured")
+    
+    async def init_db():
+        pass
 
 # Configure CORS based on environment
 if ENVIRONMENT == "production":
@@ -59,6 +101,11 @@ app = FastAPI(
     docs_url="/docs" if DEBUG else None,
     redoc_url="/redoc" if DEBUG else None,
 )
+
+# Initialize database on startup
+@app.on_event("startup")
+async def startup_event():
+    await init_db()
 
 # Add security middleware (only in production)
 if ENVIRONMENT == "production":
@@ -112,20 +159,56 @@ async def example():
 
 # Protected endpoint example
 @app.get("/api/user/profile")
-async def get_user_profile(user: dict = Depends(get_current_user)):
+async def get_user_profile(user = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Get current user's profile (protected route)"""
+    clerk_id = user.get("sub")
+    if not clerk_id:
+        raise HTTPException(status_code=400, detail="Invalid user token")
+
+    # Check if user exists in database, create if not
+    result = await db.execute(select(User).where(User.clerk_id == clerk_id))
+    db_user = result.scalar_one_or_none()
+
+    if not db_user:
+        # Fetch full user profile from Clerk API
+        try:
+            profile = await clerk_auth.get_user_profile(clerk_id)
+            email = profile.get("email") or f"{clerk_id}@clerk.local"
+            name = profile.get("name") or f"User {clerk_id[-8:]}"
+        except Exception as e:
+            print(f"Failed to fetch profile from Clerk API: {e}")
+            # Fallback to basic info
+            email = f"{clerk_id}@clerk.local"
+            name = f"User {clerk_id[-8:]}"
+
+        # Set timestamps explicitly (naive UTC datetime for PostgreSQL)
+        now = datetime.utcnow()
+
+        new_user = User(
+            clerk_id=clerk_id,
+            email=email,
+            name=name,
+            created_at=now,
+            updated_at=now
+        )
+        db.add(new_user)
+        await db.commit()
+        await db.refresh(new_user)
+        db_user = new_user
+        print(f"Created new user: {db_user.id} with email: {email}, name: {name}")
+
     return {
-        "user_id": user.get("sub"),
-        "email": user.get("email"),
-        "first_name": user.get("first_name"),
-        "last_name": user.get("last_name"),
-        "profile": user
+        "id": str(db_user.id),
+        "clerk_id": db_user.clerk_id,
+        "email": db_user.email,
+        "name": db_user.name,
+        "created_at": db_user.created_at
     }
 
 
 # API Key Management (Clerk JWT protected)
 @app.post("/api/keys")
-async def generate_api_key(user: dict = Depends(get_current_user)):
+async def generate_api_key(user = Depends(get_current_user)):
     """Generate a new API key for the authenticated user"""
     user_id = user.get("sub") or "unknown_user"
     api_key = api_key_auth.generate_api_key(user_id)
@@ -138,7 +221,7 @@ async def generate_api_key(user: dict = Depends(get_current_user)):
 
 
 @app.get("/api/keys")
-async def list_api_keys(user: dict = Depends(get_current_user)):
+async def list_api_keys(user = Depends(get_current_user)):
     """List API keys for the authenticated user"""
     user_id = user.get("sub")
 
@@ -174,7 +257,7 @@ async def unified_health(api_user: dict = Depends(get_api_user)):
 class PaymentOrder(BaseModel):
     amount: float = Field(..., gt=0, description="Amount must be greater than 0")
     currency: str = Field(default="INR", min_length=3, max_length=3)
-    description: Optional[str] = Field(None, max_length=255)
+    description: str = Field(None, max_length=255)
 
 
 @app.post("/v1/payments/orders")

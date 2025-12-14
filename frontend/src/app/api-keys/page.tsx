@@ -5,8 +5,8 @@ import { useClientApiCall } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-
-import { Copy, Key, Plus, Trash2 } from 'lucide-react';
+import { Copy, Key, Plus, Trash2, Shield, AlertTriangle } from 'lucide-react';
+import Link from 'next/link';
 
 interface APIKey {
   id: string;
@@ -16,6 +16,21 @@ interface APIKey {
   last_used: string | null;
   is_active: boolean;
 }
+
+const LoadingDots = () => (
+  <div className="flex gap-2">
+    {Array.from({ length: 3 }).map((_, i) => (
+      <div
+        key={i}
+        className="w-2 h-2 rounded-full bg-[#00ff88]"
+        style={{
+          animation: "pulse 1s ease-in-out infinite",
+          animationDelay: `${i * 0.2}s`,
+        }}
+      />
+    ))}
+  </div>
+);
 
 export const dynamic = 'force-dynamic';
 
@@ -60,32 +75,54 @@ export default function APIKeysPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading API keys...</p>
+          <LoadingDots />
+          <p className="mt-4 text-[#888] font-mono">Loading API keys...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm border-b border-gray-200">
+    <div className="min-h-screen bg-black text-white">
+      <header className="bg-[#0a0a0a] shadow-sm border-b border-[#222]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">API Keys</h1>
-              <p className="text-sm text-gray-600 mt-1">Manage your application access keys</p>
+              <div className="flex items-center gap-3 mb-2">
+                <Key className="w-6 h-6 text-[#00ff88]" />
+                <h1 className="text-2xl font-bold font-mono">API Keys</h1>
+              </div>
+              <p className="text-sm text-[#888] font-mono">Manage your application access keys</p>
             </div>
-            <Button
-              onClick={generateAPIKey}
-              disabled={generating}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              {generating ? 'Generating...' : 'Generate New Key'}
-            </Button>
+            <div className="flex items-center gap-4">
+              <Link href="/dashboard">
+                <Button
+                  variant="outline"
+                  className="bg-transparent border-[#222] text-white hover:border-[#00ff88] font-mono"
+                >
+                  ← Dashboard
+                </Button>
+              </Link>
+              <Button
+                onClick={generateAPIKey}
+                disabled={generating}
+                className="bg-[#00ff88] text-black hover:bg-[#00dd77] font-mono font-bold"
+              >
+                {generating ? (
+                  <>
+                    <LoadingDots />
+                    <span className="ml-2">Generating...</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Generate New Key
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </div>
       </header>
@@ -93,29 +130,33 @@ export default function APIKeysPage() {
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
           {newKey && (
-            <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-md p-4">
+            <div className="mb-6 bg-[#ffbd2e]/10 border border-[#ffbd2e] rounded-lg p-4">
               <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
+                <div className="flex shrink-0">
+                  <AlertTriangle className="h-5 w-5 text-[#ffbd2e]" />
                 </div>
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-yellow-800">
+                <div className="ml-3 flex-1">
+                  <h3 className="text-sm font-medium text-[#ffbd2e] font-mono">
                     New API Key Generated
                   </h3>
-                  <div className="mt-2 text-sm text-yellow-700">
-                    <p className="font-mono bg-yellow-100 p-2 rounded">
-                      {newKey}
-                    </p>
-                    <p className="mt-2">
+                  <div className="mt-2 text-sm text-[#ffbd2e]">
+                    <div className="flex items-center gap-2 font-mono bg-[#1a1a1a] p-3 rounded border border-[#222]">
+                      <code className="flex-1 text-[#00ff88]">{newKey}</code>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(newKey)}
+                        className="px-3 py-1 bg-[#00ff88] text-black rounded hover:bg-[#00dd77] transition-colors"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <p className="mt-2 font-mono">
                       <strong>Important:</strong> Copy this key now. It will not be shown again for security reasons.
                     </p>
                   </div>
                   <div className="mt-4">
                     <button
                       onClick={() => setNewKey(null)}
-                      className="px-3 py-1 bg-yellow-600 text-white text-sm rounded hover:bg-yellow-700"
+                      className="px-3 py-1 bg-[#ffbd2e] text-black text-sm rounded hover:bg-[#ffaa00] font-mono font-bold"
                     >
                       Dismiss
                     </button>
@@ -126,54 +167,63 @@ export default function APIKeysPage() {
           )}
 
           {apiKeys.length === 0 ? (
-            <Card className="text-center py-12 bg-white border border-gray-200">
+            <Card className="text-center py-12 bg-[#0a0a0a] border-[#222]">
               <CardContent className="pt-6">
-                <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-6">
-                  <Key className="w-8 h-8 text-blue-600" />
+                <div className="mx-auto w-16 h-16 bg-[#00ff88]/10 rounded-full flex items-center justify-center mb-6 border-2 border-[#00ff88]">
+                  <Key className="w-8 h-8 text-[#00ff88]" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">No API keys yet</h3>
-                <p className="text-gray-600 mb-6 max-w-sm mx-auto">
+                <h3 className="text-lg font-semibold text-white mb-2 font-mono">No API keys yet</h3>
+                <p className="text-[#888] mb-6 max-w-sm mx-auto font-mono">
                   Generate your first API key to start integrating OneRouter into your applications.
                 </p>
                 <Button
                   onClick={generateAPIKey}
                   disabled={generating}
-                  className="bg-blue-600 hover:bg-blue-700"
+                  className="bg-[#00ff88] text-black hover:bg-[#00dd77] font-mono font-bold"
                 >
-                  <Plus className="w-4 h-4 mr-2" />
-                  {generating ? 'Generating...' : 'Generate Your First API Key'}
+                  {generating ? (
+                    <>
+                      <LoadingDots />
+                      <span className="ml-2">Generating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Generate Your First API Key
+                    </>
+                  )}
                 </Button>
               </CardContent>
             </Card>
           ) : (
-            <div className="bg-white shadow-sm rounded-lg overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h3 className="text-lg font-medium text-gray-900">Your API Keys</h3>
-                <p className="text-sm text-gray-600">Manage and monitor your API access</p>
+            <div className="bg-[#0a0a0a] border border-[#222] rounded-lg overflow-hidden">
+              <div className="px-6 py-4 border-b border-[#222]">
+                <h3 className="text-lg font-medium text-white font-mono">Your API Keys</h3>
+                <p className="text-sm text-[#888] font-mono">Manage and monitor your API access</p>
               </div>
-              <div className="divide-y divide-gray-200">
+              <div className="divide-y divide-[#222]">
                 {apiKeys.map((key) => (
-                  <div key={key.id} className="px-6 py-4 hover:bg-gray-50">
+                  <div key={key.id} className="px-6 py-4 hover:bg-[#1a1a1a] transition-colors">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                          <Key className="w-5 h-5 text-blue-600" />
+                        <div className="w-10 h-10 bg-[#00ff88]/10 rounded-lg flex items-center justify-center border border-[#00ff88]">
+                          <Key className="w-5 h-5 text-[#00ff88]" />
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <p className="font-medium text-gray-900">{key.name}</p>
+                            <p className="font-medium text-white font-mono">{key.name}</p>
                             <Badge
                               variant={key.is_active ? "default" : "destructive"}
-                              className="text-xs"
+                              className={key.is_active ? "bg-[#00ff88] text-black border-0" : ""}
                             >
                               {key.is_active ? 'Active' : 'Inactive'}
                             </Badge>
                           </div>
                           <div className="flex items-center gap-4 mt-1">
-                            <code className="text-xs bg-gray-100 px-2 py-1 rounded font-mono text-gray-800">
+                            <code className="text-xs bg-[#1a1a1a] border border-[#222] px-2 py-1 rounded font-mono text-[#00ff88]">
                               {key.prefix}••••••••
                             </code>
-                            <span className="text-xs text-gray-500">
+                            <span className="text-xs text-[#888] font-mono">
                               Created {new Date(key.created_at).toLocaleDateString()}
                             </span>
                           </div>
@@ -183,14 +233,23 @@ export default function APIKeysPage() {
                         <Button
                           size="sm"
                           variant="ghost"
+                          className="text-white hover:text-[#00ff88]"
                           onClick={() => navigator.clipboard.writeText(`${key.prefix}••••••••`)}
                         >
                           <Copy className="w-4 h-4" />
                         </Button>
-                        <Button size="sm" variant="outline">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="bg-transparent border-[#222] text-white hover:border-[#00ff88]"
+                        >
                           View Details
                         </Button>
-                        <Button size="sm" variant="destructive">
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          className="bg-[#ff3366] hover:bg-[#ff1a4f] text-white"
+                        >
                           <Trash2 className="w-4 h-4 mr-1" />
                           Revoke
                         </Button>
@@ -200,7 +259,32 @@ export default function APIKeysPage() {
                 ))}
               </div>
             </div>
-           )}
+          )}
+
+          {/* Security Info */}
+          <div className="mt-6 grid md:grid-cols-3 gap-4">
+            <div className="flex items-start gap-3 p-4 bg-[#0a0a0a] border border-[#222] rounded-lg">
+              <Shield className="w-5 h-5 text-[#00ff88] flex shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-mono font-bold text-sm mb-1 text-white">AES-256 Encryption</h3>
+                <p className="text-xs text-[#888] font-mono">Your keys are encrypted at rest</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-4 bg-[#0a0a0a] border border-[#222] rounded-lg">
+              <Shield className="w-5 h-5 text-[#00ff88] flex shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-mono font-bold text-sm mb-1 text-white">Rate Limiting</h3>
+                <p className="text-xs text-[#888] font-mono">Automatic rate limiting protection</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-4 bg-[#0a0a0a] border border-[#222] rounded-lg">
+              <Shield className="w-5 h-5 text-[#00ff88] flex shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-mono font-bold text-sm mb-1 text-white">Audit Logging</h3>
+                <p className="text-xs text-[#888] font-mono">Complete access logs available</p>
+              </div>
+            </div>
+          </div>
         </div>
       </main>
     </div>

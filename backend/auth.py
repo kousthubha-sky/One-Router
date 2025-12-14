@@ -2,13 +2,17 @@ import os
 import httpx
 from fastapi import HTTPException, Depends, Request, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from typing import Optional
+from typing import Optional, Dict, Any
 import jwt
 from cryptography.hazmat.primitives import serialization
 import base64
 import hashlib
 import secrets
 from fastapi import Request
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from models import User
+from typing import Dict, Any
 
 security = HTTPBearer()
 
@@ -98,6 +102,58 @@ class ClerkAuth:
         except jwt.InvalidTokenError as e:
             raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
 
+    async def get_user_profile(self, user_id: str) -> dict:
+        """Fetch full user profile from Clerk API"""
+        self._validate()
+
+        # Clerk API endpoint for user profile
+        url = f"https://api.clerk.com/v1/users/{user_id}"
+        print(f"DEBUG: Fetching user profile from: {url}")
+        print(f"DEBUG: Using secret key: {self.secret_key[:10]}...")
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    url,
+                    headers={
+                        "Authorization": f"Bearer {self.secret_key}",
+                        "Content-Type": "application/json"
+                    }
+                )
+                print(f"DEBUG: Clerk API response status: {response.status_code}")
+
+                if response.status_code == 401:
+                    print("ERROR: Authentication failed - check your CLERK_SECRET_KEY")
+                    return {}
+                elif response.status_code == 404:
+                    print(f"ERROR: User {user_id} not found")
+                    return {}
+                elif response.status_code == 403:
+                    print("ERROR: Forbidden - check your API permissions")
+                    return {}
+
+                response.raise_for_status()
+                user_data = response.json()
+                print(f"DEBUG: Clerk API response keys: {list(user_data.keys()) if user_data else 'None'}")
+
+                return {
+                    "id": user_data.get("id"),
+                    "email": user_data.get("email_addresses", [{}])[0].get("email_address"),
+                    "first_name": user_data.get("first_name"),
+                    "last_name": user_data.get("last_name"),
+                    "name": " ".join(filter(None, [user_data.get("first_name"), user_data.get("last_name")])) or user_data.get("username"),
+                    "username": user_data.get("username"),
+                    "image_url": user_data.get("image_url")
+                }
+
+        except httpx.HTTPError as e:
+            print(f"ERROR: Failed to fetch user profile from Clerk API: {e}")
+            print(f"ERROR: Response content: {e.response.text if hasattr(e, 'response') else 'No response'}")
+            return {}
+        except Exception as e:
+            print(f"ERROR: Unexpected error fetching user profile: {e}")
+            return {}
+
     async def get_current_user(self, credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
         """Dependency to get current authenticated user from JWT"""
         if not credentials:
@@ -109,7 +165,7 @@ class ClerkAuth:
 clerk_auth = ClerkAuth()
 
 # Dependency for protected routes
-async def get_current_user(request: Request) -> dict:
+async def get_current_user(request: Request):
     """Get current authenticated user"""
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
@@ -118,9 +174,11 @@ async def get_current_user(request: Request) -> dict:
     token = auth_header.split(" ")[1]
     print(f"DEBUG: Received token: {token[:50]}...")
 
-    user = await clerk_auth.verify_token(token)
-    print(f"DEBUG: Authenticated user: {user}")
-    return user
+    # Verify token with Clerk
+    token_payload = await clerk_auth.verify_token(token)
+    print(f"DEBUG: Authenticated user: {token_payload}")
+
+    return token_payload
 
 
 # API Key Authentication (for SDK users)
