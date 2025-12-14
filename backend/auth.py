@@ -18,7 +18,7 @@ security = HTTPBearer()
 
 class ClerkAuth:
     def __init__(self):
-        self.secret_key = os.getenv("CLERK_SECRET_KEY", "")
+        self.secret_key = os.getenv("CLERK_SECRET_KEY")
         self._initialized = False
         # Don't validate here - defer to when auth is actually used
 
@@ -29,12 +29,11 @@ class ClerkAuth:
         """Validate that Clerk secret key is configured (called when auth is actually used)"""
         if self._initialized:
             return
-        
-        if not self.secret_key or self.secret_key.startswith("sk_test_placeholder"):
+
+        if not self.secret_key:
             raise ValueError(
-                "CLERK_SECRET_KEY is not properly configured. "
-                "Please set a valid Clerk secret key in your .env file. "
-                "Get your key from: https://dashboard.clerk.com/"
+                "CLERK_SECRET_KEY is not set. "
+                "Please set a valid Clerk secret key in your .env file."
             )
         self._initialized = True
 
@@ -70,10 +69,10 @@ class ClerkAuth:
                 try:
                     # Just decode without verification in development with test keys
                     payload = jwt.decode(token, options={"verify_signature": False})
-                    print(f"DEBUG: Decoded token payload: {payload}")
+                    
                     return payload
                 except jwt.DecodeError as e:
-                    print(f"DEBUG: JWT decode error: {e}")
+                    
                     raise HTTPException(status_code=401, detail=f"Invalid token format: {str(e)}")
 
             # For production: verify with Clerk's public keys
@@ -108,11 +107,10 @@ class ClerkAuth:
 
         # Clerk API endpoint for user profile
         url = f"https://api.clerk.com/v1/users/{user_id}"
-        print(f"DEBUG: Fetching user profile from: {url}")
-        print(f"DEBUG: Using secret key: {self.secret_key[:10]}...")
+        
 
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(
                     url,
                     headers={
@@ -120,46 +118,63 @@ class ClerkAuth:
                         "Content-Type": "application/json"
                     }
                 )
-                print(f"DEBUG: Clerk API response status: {response.status_code}")
+                
 
                 if response.status_code == 401:
-                    print("ERROR: Authentication failed - check your CLERK_SECRET_KEY")
+                    print("ERROR: Authentication failed - CLERK_SECRET_KEY may be invalid")
+                    print(f"ERROR: Secret key starts with: {self.secret_key[:10]}...")
                     return {}
                 elif response.status_code == 404:
-                    print(f"ERROR: User {user_id} not found")
+                    print(f"ERROR: User {user_id} not found in Clerk")
                     return {}
                 elif response.status_code == 403:
-                    print("ERROR: Forbidden - check your API permissions")
+                    print("ERROR: Forbidden - check your Clerk API permissions")
                     return {}
 
                 response.raise_for_status()
                 user_data = response.json()
-                print(f"DEBUG: Clerk API response keys: {list(user_data.keys()) if user_data else 'None'}")
+                
+
+                # Extract user information
+                email_addresses = user_data.get("email_addresses", [])
+                primary_email = None
+                if email_addresses:
+                    # Find primary email or use first one
+                    for email_addr in email_addresses:
+                        if email_addr.get("id"):  # Has an ID, likely valid
+                            primary_email = email_addr.get("email_address")
+                            break
+                    if not primary_email and email_addresses:
+                        primary_email = email_addresses[0].get("email_address")
+
+                first_name = user_data.get("first_name", "")
+                last_name = user_data.get("last_name", "")
+                full_name = " ".join(filter(None, [first_name, last_name])).strip()
+                if not full_name:
+                    full_name = user_data.get("username") or user_data.get("id")
 
                 return {
                     "id": user_data.get("id"),
-                    "email": user_data.get("email_addresses", [{}])[0].get("email_address"),
-                    "first_name": user_data.get("first_name"),
-                    "last_name": user_data.get("last_name"),
-                    "name": " ".join(filter(None, [user_data.get("first_name"), user_data.get("last_name")])) or user_data.get("username"),
+                    "email": primary_email,
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "name": full_name,
                     "username": user_data.get("username"),
                     "image_url": user_data.get("image_url")
                 }
 
+        except httpx.TimeoutException:
+            print("ERROR: Timeout fetching user profile from Clerk API")
+            return {}
         except httpx.HTTPError as e:
-            print(f"ERROR: Failed to fetch user profile from Clerk API: {e}")
-            print(f"ERROR: Response content: {e.response.text if hasattr(e, 'response') else 'No response'}")
+            print(f"ERROR: HTTP error fetching user profile: {e}")
+            if hasattr(e, 'response') and e.response:
+                print(f"ERROR: Response status: {e.response.status_code}")
+                print(f"ERROR: Response body: {e.response.text[:500]}...")
             return {}
         except Exception as e:
             print(f"ERROR: Unexpected error fetching user profile: {e}")
             return {}
-
-    async def get_current_user(self, credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
-        """Dependency to get current authenticated user from JWT"""
-        if not credentials:
-            raise HTTPException(status_code=401, detail="Missing authorization token")
-        token = credentials.credentials
-        return await self.verify_token(token)
 
 # Global auth instance
 clerk_auth = ClerkAuth()
@@ -172,11 +187,11 @@ async def get_current_user(request: Request):
         raise HTTPException(status_code=401, detail="Authorization header missing or invalid")
 
     token = auth_header.split(" ")[1]
-    print(f"DEBUG: Received token: {token[:50]}...")
+    
 
     # Verify token with Clerk
     token_payload = await clerk_auth.verify_token(token)
-    print(f"DEBUG: Authenticated user: {token_payload}")
+    
 
     return token_payload
 

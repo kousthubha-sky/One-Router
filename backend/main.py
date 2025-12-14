@@ -6,11 +6,12 @@ from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 from dotenv import load_dotenv
 import os
+import uuid
 from datetime import datetime, timezone
 from auth import get_current_user, get_api_user, api_key_auth, clerk_auth
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import select
+from sqlalchemy import select, text
 from models import Base, User
 
 # Load environment variables
@@ -23,14 +24,14 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 # Validate required environment variables
 CLERK_SECRET = os.getenv("CLERK_SECRET_KEY")
-if not CLERK_SECRET or CLERK_SECRET == "sk_test_bFhW0ISjDJ96RsI77Rcp7GfnRSnntvHlI3a8bPGDjA":
+if not CLERK_SECRET:
     if ENVIRONMENT == "production":
         raise ValueError(
             "CRITICAL: CLERK_SECRET_KEY must be set to a valid production key. "
             "Check your environment variables."
         )
     else:
-        print("WARNING: Using placeholder Clerk key. Set CLERK_SECRET_KEY for development.")
+        print("WARNING: CLERK_SECRET_KEY not set. Set it in your .env file for proper Clerk integration.")
 
 # Database configuration
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -42,33 +43,52 @@ if not DATABASE_URL:
 
 # SQLAlchemy setup
 if DATABASE_URL:
-    # Convert to asyncpg URL for async operations
-    async_database_url = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
-    # Remove SSL parameters that cause issues with asyncpg
-    async_database_url = async_database_url.split("?")[0] + "?ssl=require"
-    engine = create_async_engine(async_database_url, echo=DEBUG)
+    # Convert to asyncpg URL
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    
+    # Remove non-asyncpg parameters and rebuild URL properly
+    base_url = DATABASE_URL.split("?")[0]  # Get URL without query string
+    async_database_url = base_url.replace("postgresql://", "postgresql+asyncpg://")
+    
+    # Add asyncpg-compatible SSL parameter (Neon requires it)
+    async_database_url = f"{async_database_url}?ssl=require"
+    
+    engine = create_async_engine(
+        async_database_url,
+        echo=DEBUG,
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=10
+    )
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async def init_db():
         """Initialize database tables on startup"""
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-            print("Database tables initialized successfully")
+        from models import Base
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+                print("Database tables initialized successfully")
+        except Exception as e:
+            print(f"Database initialization error: {e}")
+            raise
 
     async def get_db() -> AsyncSession:
         async with async_session() as session:
             try:
                 yield session
+            except Exception as e:
+                await session.rollback()
+                raise
             finally:
                 await session.close()
 else:
-    # Fallback for development without database
     async def get_db():
         raise NotImplementedError("Database not configured")
     
     async def init_db():
         pass
-
 # Configure CORS based on environment
 if ENVIRONMENT == "production":
     allowed_origins = [FRONTEND_URL]
@@ -165,8 +185,8 @@ async def get_user_profile(user = Depends(get_current_user), db: AsyncSession = 
     if not clerk_id:
         raise HTTPException(status_code=400, detail="Invalid user token")
 
-    # Check if user exists in database, create if not
-    result = await db.execute(select(User).where(User.clerk_id == clerk_id))
+    # Check if user exists in database
+    result = await db.execute(select(User).where(User.clerk_user_id == clerk_id))
     db_user = result.scalar_one_or_none()
 
     if not db_user:
@@ -176,36 +196,199 @@ async def get_user_profile(user = Depends(get_current_user), db: AsyncSession = 
             email = profile.get("email") or f"{clerk_id}@clerk.local"
             name = profile.get("name") or f"User {clerk_id[-8:]}"
         except Exception as e:
-            print(f"Failed to fetch profile from Clerk API: {e}")
-            # Fallback to basic info
+            print(f"⚠️  Failed to fetch profile from Clerk API: {e}")
             email = f"{clerk_id}@clerk.local"
             name = f"User {clerk_id[-8:]}"
 
-        # Set timestamps explicitly (naive UTC datetime for PostgreSQL)
-        now = datetime.utcnow()
-
+        # Create user - let DB handle timestamps
+        now = datetime.now(timezone.utc).replace(tzinfo=None)  # Remove timezone for naive timestamp column
         new_user = User(
-            clerk_id=clerk_id,
+            id=uuid.uuid4(),
+            clerk_user_id=clerk_id,
             email=email,
             name=name,
             created_at=now,
             updated_at=now
         )
         db.add(new_user)
-        await db.commit()
-        await db.refresh(new_user)
+        
+        try:
+            await db.commit()
+            await db.refresh(new_user)
+            print(f"✅ Created new user: {new_user.id} ({email})")
+        except Exception as e:
+            await db.rollback()
+            print(f"❌ Error creating user: {e}")
+            raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        
         db_user = new_user
-        print(f"Created new user: {db_user.id} with email: {email}, name: {name}")
 
     return {
         "id": str(db_user.id),
-        "clerk_id": db_user.clerk_id,
+        "clerk_user_id": db_user.clerk_user_id,
         "email": db_user.email,
         "name": db_user.name,
-        "created_at": db_user.created_at
+        "created_at": db_user.created_at.isoformat() if db_user.created_at else None
+    }
+
+# Add these debug endpoints to main.py (after line 180)
+
+@app.get("/api/debug/clerk-test")
+async def test_clerk_api():
+    """Test Clerk API authentication"""
+    try:
+        # Test with a known user ID format
+        test_user_id = "user_36pFlLcnxw3zwMnSuWXEihjpMFZ"  # Use the user's actual ID
+        profile = await clerk_auth.get_user_profile(test_user_id)
+
+        if profile:
+            return {
+                "status": "success",
+                "message": "Clerk API is working",
+                "profile": profile
+            }
+        else:
+            return {
+                "status": "failed",
+                "message": "Clerk API returned empty profile",
+                "secret_key_type": "test" if clerk_auth.secret_key and clerk_auth.secret_key.startswith("sk_test_") else "production"
+            }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e),
+            "secret_key_type": "test" if clerk_auth.secret_key and clerk_auth.secret_key.startswith("sk_test_") else "production"
+        }
+
+@app.get("/api/debug/db")
+async def debug_database():
+    """Debug database connection and data"""
+    if not DATABASE_URL:
+        return {"error": "DATABASE_URL not set"}
+    
+    try:
+        async with engine.begin() as conn:
+            # Test connection
+            await conn.execute(text("SELECT 1"))
+            
+            # Get table list
+            tables = await conn.execute(text("""
+                SELECT tablename FROM pg_tables 
+                WHERE schemaname = 'public'
+                ORDER BY tablename
+            """))
+            table_list = [row[0] for row in tables.fetchall()]
+            
+            # Get user count
+            user_count_result = await conn.execute(text("SELECT COUNT(*) FROM users"))
+            user_count = user_count_result.scalar()
+            
+            # Get all users (for debugging)
+            users_result = await conn.execute(text("""
+                SELECT id, clerk_user_id, email, name, created_at
+                FROM users
+                ORDER BY created_at DESC
+                LIMIT 5
+            """))
+            users = []
+            for row in users_result.fetchall():
+                users.append({
+                    "id": str(row[0]),
+                    "clerk_user_id": row[1],
+                    "email": row[2],
+                    "full_name": row[3],
+                    "created_at": row[4].isoformat() if row[4] else None
+                })
+            
+            return {
+                "status": "connected",
+                "tables": table_list,
+                "user_count": user_count,
+                "recent_users": users,
+                "database_url": DATABASE_URL.split("@")[1] if "@" in DATABASE_URL else "hidden"
+            }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "database_url": DATABASE_URL.split("@")[1] if "@" in DATABASE_URL else "hidden"
+        }
+
+
+@app.get("/api/debug/auth")
+async def debug_auth(user = Depends(get_current_user)):
+    """Debug authentication - requires valid JWT"""
+    return {
+        "status": "authenticated",
+        "user_data": user,
+        "clerk_id": user.get("sub"),
+        "message": "Authentication is working!"
     }
 
 
+@app.post("/api/debug/create-test-user")
+async def create_test_user(db: AsyncSession = Depends(get_db)):
+    """Create a test user directly (no auth required) - FOR TESTING ONLY"""
+    import uuid
+    
+    test_clerk_id = f"test_user_{uuid.uuid4().hex[:8]}"
+    
+    try:
+        # Check if test user already exists
+        result = await db.execute(
+            select(User).where(User.clerk_user_id == test_clerk_id)
+        )
+        existing = result.scalar_one_or_none()
+        
+        if existing:
+            return {
+                "status": "exists",
+                "user_id": str(existing.id),
+                "clerk_user_id": existing.clerk_user_id
+            }
+        
+        # Create test user
+        test_user = User(
+            id=uuid.uuid4(),
+            clerk_user_id=test_clerk_id,
+            email=f"test_{uuid.uuid4().hex[:8]}@example.com",
+            name="Test User",
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        
+        db.add(test_user)
+        await db.commit()
+        await db.refresh(test_user)
+        
+        return {
+            "status": "created",
+            "user_id": str(test_user.id),
+            "clerk_user_id": test_user.clerk_user_id,
+            "email": test_user.email,
+            "created_at": test_user.created_at.isoformat() if test_user.created_at else None,
+            "message": "Test user created successfully!"
+        }
+        
+    except Exception as e:
+        await db.rollback()
+        return {
+            "status": "error",
+            "error": str(e),
+            "error_type": type(e).__name__
+        }
+
+
+@app.get("/api/debug/logs")
+async def get_request_logs():
+    """Show recent request logs"""
+    # This would show actual logs in production
+    return {
+        "message": "Check your terminal for request logs",
+        "tip": "Look for lines starting with 'INFO:' in your console"
+    }
+    
 # API Key Management (Clerk JWT protected)
 @app.post("/api/keys")
 async def generate_api_key(user = Depends(get_current_user)):
