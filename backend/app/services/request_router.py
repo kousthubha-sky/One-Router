@@ -30,6 +30,9 @@ class RequestRouter:
         if service == "razorpay":
             from ..adapters.razorpay import RazorpayAdapter
             return RazorpayAdapter(credentials)
+        elif service == "paypal":
+            from ..adapters.paypal import PayPalAdapter
+            return PayPalAdapter(credentials)
         else:
             raise Exception(f"Unsupported service: {service}")
 
