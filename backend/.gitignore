@@ -30,4 +30,6 @@ ENV/
 *~
 .DS_Store
 
-alembic.ini/
+alembic.ini
+
+test.env

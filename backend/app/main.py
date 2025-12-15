@@ -11,6 +11,8 @@ from .config import settings
 from .database import get_db, engine
 from .auth.dependencies import get_current_user, get_api_user, api_key_auth
 from .models import User
+from .routes.onboarding import router as onboarding_router
+from .cache import init_redis, close_redis, cache_service
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -58,8 +60,18 @@ async def add_security_headers(request, call_next):
 # Startup event
 @app.on_event("startup")
 async def startup_event():
-    """Initialize database on startup"""
+    """Initialize database and Redis on startup"""
     await init_db()
+    await init_redis()
+
+# Shutdown event
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on shutdown"""
+    await close_redis()
+
+# Include routers
+app.include_router(onboarding_router, prefix="/api/onboarding", tags=["onboarding"])
 
 # Health check endpoint
 @app.get("/")
@@ -71,10 +83,57 @@ async def root():
 
 @app.get("/api/health")
 async def health_check():
+    """Health check including Redis status"""
+    redis_status = await cache_service.ping()
+    
     return {
         "status": "healthy",
-        "message": "API is running"
+        "message": "API is running",
+        "redis": "connected" if redis_status else "disconnected",
+        "timestamp": datetime.utcnow().isoformat()
     }
+
+@app.get("/api/debug/redis")
+async def debug_redis(user = Depends(get_current_user)):
+    """Debug Redis connection and keys"""
+    if settings.ENVIRONMENT == "production":
+        raise HTTPException(status_code=404, detail="Not found")
+    try:
+        redis_connected = await cache_service.ping()
+        
+        if not redis_connected:
+            return {
+                "status": "error",
+                "message": "Redis is not connected",
+                "connected": False
+            }
+        
+        # Test write/read
+        test_key = f"test:{uuid.uuid4().hex[:8]}"
+        redis = await cache_service._get_redis()
+        
+        await redis.set(test_key, "test_value", ex=60)
+        test_value = await redis.get(test_key)
+        await redis.delete(test_key)
+        
+        # Get info
+        info = await redis.info()
+        
+        return {
+            "status": "success",
+            "connected": True,
+            "test_write_read": test_value == "test_value",
+            "redis_version": info.get("redis_version"),
+            "used_memory_human": info.get("used_memory_human"),
+            "connected_clients": info.get("connected_clients"),
+            "total_commands_processed": info.get("total_commands_processed")
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "error_type": type(e).__name__
+        }
 
 # Example endpoint
 @app.get("/api/example")

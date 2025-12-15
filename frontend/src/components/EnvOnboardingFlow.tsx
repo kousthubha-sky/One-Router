@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useAuth } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +17,7 @@ type DetectedService = {
 
 // Environment Parser Component
 const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
+  const { getToken, isSignedIn } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [parsing, setParsing] = useState(false);
@@ -23,79 +25,60 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
   const [detectedServices, setDetectedServices] = useState<DetectedService[]>([]);
   const [step, setStep] = useState<"upload" | "review" | "complete">("upload");
 
-  // Supported payment services
+  // Supported services
   const SUPPORTED_SERVICES = {
     razorpay: { patterns: ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"], features: ["Payments", "Refunds", "Webhooks"] },
     stripe: { patterns: ["STRIPE_SECRET_KEY", "STRIPE_PUBLISHABLE_KEY"], features: ["Payments", "Subscriptions", "Refunds"] },
     paypal: { patterns: ["PAYPAL_CLIENT_ID", "PAYPAL_CLIENT_SECRET"], features: ["Payments", "Payouts"] },
-    square: { patterns: ["SQUARE_ACCESS_TOKEN", "SQUARE_APPLICATION_ID"], features: ["Payments", "Invoices"] },
+    twilio: { patterns: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"], features: ["SMS", "Calls", "Verification"] },
+    aws_s3: { patterns: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_S3_BUCKET"], features: ["Storage", "File Upload", "CDN"] },
   };
 
   const parseEnvFile = async (fileContent: string) => {
     setParsing(true);
 
-    // Simulate parsing delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    try {
+      // Call the backend API to parse the file
+      const formData = new FormData();
+      const blob = new Blob([fileContent], { type: 'text/plain' });
+      const file = new File([blob], 'env.txt', { type: 'text/plain' });
+      formData.append('file', file);
 
-    const lines = fileContent.split("\n");
-    const envVars: Record<string, string> = {};
+      const response = await fetch('/api/onboarding/parse-test', {
+        method: 'POST',
+        body: formData,
+      });
 
-    lines.forEach(line => {
-      const trimmed = line.trim();
-      if (trimmed && !trimmed.startsWith("#")) {
-        const [key, ...valueParts] = trimmed.split("=");
-        if (key) {
-          envVars[key.trim()] = valueParts.join("=").trim().replace(/["']/g, "");
-        }
+      if (!response.ok) {
+        throw new Error(`Failed to parse file: ${response.status}`);
       }
-    });
 
-    const detected: DetectedService[] = [];
-    const foundKeys = Object.keys(envVars);
+      const result = await response.json();
 
-    // Check for supported services
-    Object.entries(SUPPORTED_SERVICES).forEach(([service, config]) => {
-      const matchedKeys = foundKeys.filter(key =>
-        config.patterns.some(pattern => key.includes(pattern))
-      );
-
-      if (matchedKeys.length > 0) {
-        detected.push({
-          name: service,
-          status: "supported",
-          keys: matchedKeys,
-          features: config.features,
-        });
+      if (result.status === 'error') {
+        throw new Error(result.errors ? Object.values(result.errors)[0] : 'Parse error');
       }
-    });
 
-    // Check for unsupported services
-    const unsupportedPatterns = [
-      { name: "twilio", patterns: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"] },
-      { name: "sendgrid", patterns: ["SENDGRID_API_KEY"] },
-      { name: "aws", patterns: ["AWS_ACCESS_KEY", "AWS_SECRET_KEY"] },
-      { name: "firebase", patterns: ["FIREBASE_API_KEY", "FIREBASE_PROJECT_ID"] },
-    ];
+      // Convert backend response to frontend format
+      const detected: DetectedService[] = result.detected_services.map((service: any) => ({
+        name: service.service_name,
+        status: "supported", // All detected services from backend are supported
+        keys: service.detected_keys,
+        features: Object.entries(service.features)
+          .filter(([_, enabled]) => enabled)
+          .map(([feature, _]) => feature.charAt(0).toUpperCase() + feature.slice(1))
+      }));
 
-    unsupportedPatterns.forEach(({ name, patterns }) => {
-      const matchedKeys = foundKeys.filter(key =>
-        patterns.some(pattern => key.includes(pattern))
-      );
+      setDetectedServices(detected);
+      setParsing(false);
+      setParsed(true);
+      setStep("review");
 
-      if (matchedKeys.length > 0) {
-        detected.push({
-          name,
-          status: "unsupported",
-          keys: matchedKeys,
-          features: ["Coming Soon"],
-        });
-      }
-    });
-
-    setDetectedServices(detected);
-    setParsing(false);
-    setParsed(true);
-    setStep("review");
+    } catch (error) {
+      console.error('Parse error:', error);
+      setParsing(false);
+      alert(`Failed to parse .env file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -142,11 +125,64 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
     await parseEnvFile(content);
   };
 
-  const handleContinue = () => {
-    setStep("complete");
-    setTimeout(() => {
-      onBack(); // Return to dashboard
-    }, 2000);
+  const handleContinue = async () => {
+    try {
+      // Check if user is authenticated
+      if (!isSignedIn) {
+        alert("You must be signed in to configure services.");
+        return;
+      }
+
+      // Get Clerk JWT token
+      const token = await getToken();
+      if (!token) {
+        alert("Failed to retrieve authentication token. Please try signing in again.");
+        return;
+      }
+
+      // Get supported services
+      const supportedServices = detectedServices.filter(s => s.status === "supported");
+
+      if (supportedServices.length === 0) {
+        alert("No supported services detected. Please upload a different .env file.");
+        return;
+      }
+
+      // Prepare configuration request
+      const services = supportedServices.map(service => ({
+        service_name: service.name,
+        credentials: {}, // Will be extracted from parsed .env in backend
+        features: service.features.reduce((acc, feature) => ({
+          ...acc,
+          [feature.toLowerCase()]: true
+        }), {})
+      }));
+
+      const response = await fetch('/api/onboarding/configure', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ services }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Configuration failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('Services configured successfully');
+
+      setStep("complete");
+      setTimeout(() => {
+        onBack(); // Return to dashboard
+      }, 2000);
+
+    } catch (error) {
+      console.error('Configuration error:', error);
+      alert(`Failed to configure services: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   };
 
   return (
