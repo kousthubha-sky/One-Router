@@ -6,6 +6,8 @@ from typing import Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from datetime import datetime
+from uuid import uuid4
+
 from ..database import get_db
 from ..models import User
 from .clerk import clerk_auth
@@ -104,6 +106,7 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
         now = datetime.utcnow()
 
         new_user = User(
+            id=uuid4(),
             clerk_user_id=clerk_user_id,
             email=email,
             name=name,

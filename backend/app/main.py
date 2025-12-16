@@ -38,11 +38,19 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
+# Build CORS allow_origins list based on environment
+cors_allow_origins = [settings.FRONTEND_URL]
+is_dev = settings.DEBUG or settings.ENVIRONMENT == "development"
+
+if is_dev:
+    # Include localhost origins only in development
+    cors_allow_origins.extend(["http://localhost:3000", "http://localhost:3001"])
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL, "http://localhost:3000"],
-    allow_credentials=True,
+    allow_origins=cors_allow_origins,
+    allow_credentials=is_dev,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -233,54 +241,3 @@ async def debug_database(db: AsyncSession = Depends(get_db)):
             "error_type": type(e).__name__
         }
 
-@app.post("/api/debug/create-test-user")
-async def create_test_user(db: AsyncSession = Depends(get_db)):
-    """Create a test user directly (no auth required) - FOR TESTING ONLY"""
-    import uuid
-
-    test_clerk_id = f"test_user_{uuid.uuid4().hex[:8]}"
-
-    try:
-        # Check if test user already exists
-        result = await db.execute(
-            select(User).where(User.clerk_user_id == test_clerk_id)
-        )
-        existing = result.scalar_one_or_none()
-
-        if existing:
-            return {
-                "status": "exists",
-                "user_id": str(existing.id),
-                "clerk_user_id": existing.clerk_user_id
-            }
-
-        # Create test user
-        test_user = User(
-            id=uuid.uuid4(),
-            clerk_user_id=test_clerk_id,
-            email=f"test_{uuid.uuid4().hex[:8]}@example.com",
-            name="Test User",
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
-        )
-
-        db.add(test_user)
-        await db.commit()
-        await db.refresh(test_user)
-
-        return {
-            "status": "created",
-            "user_id": str(test_user.id),
-            "clerk_user_id": test_user.clerk_user_id,
-            "email": test_user.email,
-            "created_at": test_user.created_at.isoformat() if test_user.created_at else None,
-            "message": "Test user created successfully!"
-        }
-
-    except Exception as e:
-        await db.rollback()
-        return {
-            "status": "error",
-            "error": str(e),
-            "error_type": type(e).__name__
-        }

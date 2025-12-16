@@ -13,6 +13,17 @@ class RazorpayAdapter(BaseAdapter):
         # Always use production API, credentials determine test/live mode
         return "https://api.razorpay.com/v1"
 
+    async def _get_auth_headers(self) -> Dict[str, str]:
+        """Get auth headers for Razorpay API calls"""
+        import base64
+        auth_str = f"{self.credentials['RAZORPAY_KEY_ID']}:{self.credentials['RAZORPAY_KEY_SECRET']}"
+        auth_bytes = base64.b64encode(auth_str.encode()).decode()
+
+        return {
+            "Authorization": f"Basic {auth_bytes}",
+            "Content-Type": "application/json"
+        }
+
     async def validate_credentials(self) -> bool:
         """Validate Razorpay credentials by creating a test order"""
         try:
@@ -163,7 +174,7 @@ class RazorpayAdapter(BaseAdapter):
             auth = (self.credentials["RAZORPAY_KEY_ID"], self.credentials["RAZORPAY_KEY_SECRET"])
 
             payload = {"payment_id": payment_id}
-            if amount:
+            if amount is not None:
                 payload["amount"] = int(amount * 100)  # Partial refund in paise
 
             async with httpx.AsyncClient(auth=auth, timeout=30.0) as client:
@@ -171,7 +182,7 @@ class RazorpayAdapter(BaseAdapter):
                     f"{base_url}/refunds",
                     json=payload
                 )
-                
+
                 if response.status_code == 401:
                     raise Exception("Invalid Razorpay credentials")
                 elif response.status_code == 400:
@@ -180,7 +191,7 @@ class RazorpayAdapter(BaseAdapter):
                     raise Exception(f"Razorpay refund error: {error_desc}")
                 elif response.status_code == 404:
                     raise Exception(f"Payment {payment_id} not found")
-                
+
                 response.raise_for_status()
                 return response.json()
         except httpx.TimeoutException:
@@ -207,7 +218,7 @@ class RazorpayAdapter(BaseAdapter):
                 "currency": "INR",
                 "description": description
             }
-            
+
             # Only add customer object if we have data
             if customer_email or customer_phone:
                 payload["customer"] = {}
@@ -221,14 +232,14 @@ class RazorpayAdapter(BaseAdapter):
                     f"{base_url}/payment_links",
                     json=payload
                 )
-                
+
                 if response.status_code == 401:
                     raise Exception("Invalid Razorpay credentials")
                 elif response.status_code == 400:
                     error_data = response.json()
                     error_desc = error_data.get('error', {}).get('description', 'Unknown error')
                     raise Exception(f"Razorpay payment link error: {error_desc}")
-                
+
                 response.raise_for_status()
                 return response.json()
         except httpx.TimeoutException:
@@ -280,3 +291,35 @@ class RazorpayAdapter(BaseAdapter):
             "receipt": response.get('receipt'),
             "provider_data": response
         }
+
+    # Subscription Methods (Pass-Through)
+    async def create_subscription(self, plan_id: str, customer_notify: bool = True, **kwargs):
+        """Create subscription - direct pass-through to Razorpay"""
+        payload = {
+            "plan_id": plan_id,
+            "customer_notify": customer_notify,
+            "total_count": kwargs.get("total_count", 12),
+            "quantity": kwargs.get("quantity", 1),
+            **kwargs
+        }
+
+        return await self.call_api("/v1/subscriptions", method="POST", payload=payload)
+
+    async def get_subscription(self, subscription_id: str):
+        """Get subscription details"""
+        return await self.call_api(f"/v1/subscriptions/{subscription_id}", method="GET")
+
+    async def cancel_subscription(self, subscription_id: str, cancel_at_cycle_end: bool = False):
+        """Cancel subscription"""
+        payload = {"cancel_at_cycle_end": cancel_at_cycle_end}
+        return await self.call_api(f"/v1/subscriptions/{subscription_id}/cancel", method="POST", payload=payload)
+
+    async def pause_subscription(self, subscription_id: str, pause_at: str = "now"):
+        """Pause subscription"""
+        payload = {"pause_at": pause_at}
+        return await self.call_api(f"/v1/subscriptions/{subscription_id}/pause", method="POST", payload=payload)
+
+    async def resume_subscription(self, subscription_id: str, resume_at: str = "now"):
+        """Resume subscription"""
+        payload = {"resume_at": resume_at}
+        return await self.call_api(f"/v1/subscriptions/{subscription_id}/resume", method="POST", payload=payload)

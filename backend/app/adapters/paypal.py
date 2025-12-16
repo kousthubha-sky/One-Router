@@ -23,6 +23,14 @@ class PayPalAdapter(BaseAdapter):
         else:
             return "https://api-m.sandbox.paypal.com"
 
+    async def _get_auth_headers(self) -> Dict[str, str]:
+        """Get auth headers for PayPal API calls"""
+        access_token = await self._get_access_token()
+        return {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+
     async def _get_access_token(self) -> str:
         """Get OAuth access token from PayPal"""
         # Check if token is still valid (with 5 min buffer)
@@ -67,6 +75,35 @@ class PayPalAdapter(BaseAdapter):
             return True
         except Exception as e:
             self.logger.error("PayPal credential validation failed")
+            return False
+
+    async def verify_webhook_signature(
+        self,
+        transmission_id: str,
+        transmission_time: str,
+        transmission_sig: str,
+        auth_algo: str,
+        cert_url: str,
+        webhook_id: str,
+        webhook_event: str
+    ) -> bool:
+        """Verify PayPal webhook signature"""
+        try:
+            payload = {
+                "transmission_id": transmission_id,
+                "transmission_time": transmission_time,
+                "transmission_sig": transmission_sig,
+                "auth_algo": auth_algo,
+                "cert_url": cert_url,
+                "webhook_id": webhook_id,
+                "webhook_event": json.loads(webhook_event)  # PayPal expects the JSON object, not string
+            }
+
+            response = await self.call_api("/v1/notifications/verify-webhook-signature", method="POST", payload=payload)
+            verification_status = response.get("verification_status")
+            return verification_status == "SUCCESS"
+        except Exception as e:
+            self.logger.error(f"PayPal webhook verification failed: {e}")
             return False
 
     async def create_order(self, amount: float, currency: str = "USD", **kwargs) -> Dict[str, Any]:
@@ -212,7 +249,7 @@ class PayPalAdapter(BaseAdapter):
             "transaction_id": transaction_id,
             "provider": "paypal",
             "provider_order_id": provider_order_id,
-            "amount": float(amount_data.get("value", 0)) if amount_data else 0,
+            "amount": float(amount_data.get("value", 0)) if amount_data else 0.0,
             "currency": amount_data.get("currency_code", "USD") if amount_data else "USD",
             "status": status,
             "checkout_url": checkout_url,
@@ -256,7 +293,7 @@ class PayPalAdapter(BaseAdapter):
             access_token = await self._get_access_token()
 
             payload = {}
-            if amount:  # Partial refund
+            if amount is not None:  # Partial refund
                 payload["amount"] = {
                     "value": f"{amount:.2f}",
                     "currency_code": currency
@@ -271,7 +308,7 @@ class PayPalAdapter(BaseAdapter):
                         "Content-Type": "application/json"
                     }
                 )
-                
+
                 if response.status_code == 404:
                     raise Exception(f"Capture {capture_id} not found")
                 elif response.status_code == 401:
@@ -280,7 +317,7 @@ class PayPalAdapter(BaseAdapter):
                     error_data = response.json()
                     error_desc = error_data.get("details", [{}])[0].get("description", "Validation error")
                     raise Exception(f"PayPal refund error: {error_desc}")
-                
+
                 response.raise_for_status()
                 return response.json()
         except httpx.TimeoutException:
@@ -289,3 +326,32 @@ class PayPalAdapter(BaseAdapter):
             raise Exception(f"PayPal API network error: {str(e)}")
         except Exception as e:
             raise Exception(f"Failed to create PayPal refund: {str(e)}")
+
+    # Subscription Methods (Pass-Through)
+    async def create_subscription(self, plan_id: str, **kwargs):
+        """Create subscription - direct pass-through to PayPal"""
+        payload = {
+            "plan_id": plan_id,
+            **kwargs
+        }
+
+        return await self.call_api("/v1/billing/subscriptions", method="POST", payload=payload)
+
+    async def get_subscription(self, subscription_id: str):
+        """Get subscription details"""
+        return await self.call_api(f"/v1/billing/subscriptions/{subscription_id}", method="GET")
+
+    async def cancel_subscription(self, subscription_id: str, reason: str = ""):
+        """Cancel subscription"""
+        payload = {"reason": reason}
+        return await self.call_api(f"/v1/billing/subscriptions/{subscription_id}/cancel", method="POST", payload=payload)
+
+    async def suspend_subscription(self, subscription_id: str, reason: str = ""):
+        """Suspend subscription"""
+        payload = {"reason": reason}
+        return await self.call_api(f"/v1/billing/subscriptions/{subscription_id}/suspend", method="POST", payload=payload)
+
+    async def activate_subscription(self, subscription_id: str, reason: str = ""):
+        """Activate subscription"""
+        payload = {"reason": reason}
+        return await self.call_api(f"/v1/billing/subscriptions/{subscription_id}/activate", method="POST", payload=payload)

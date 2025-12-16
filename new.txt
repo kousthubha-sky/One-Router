@@ -1,539 +1,1090 @@
-# Payment Adapter Review & Enhancement Roadmap
+# Phase 3: Dynamic Service Detection & Pass-Through API Implementation
 
-## 📊 Current Implementation Status
+## 📋 Executive Summary
 
-### ✅ Razorpay Adapter - **GOOD**
-**What's Working:**
-- ✓ Order creation (POST /v1/orders)
-- ✓ Order fetching (GET /v1/orders/{id})
-- ✓ Amount conversion (₹ → paise)
-- ✓ Basic Auth with key_id/secret
-- ✓ Credential validation
-- ✓ Response normalization
+**Problem:** Developers using Razorpay/PayPal have subscription plans, payment links, and other service-specific features in their `.env` files. OneRouter should detect these and expose them through the unified API as **pass-through endpoints**.
 
-**API Compatibility:**
-- Using correct Razorpay API v1 endpoints
-- Follows official documentation structure
-- Proper error handling for 401, 400, 429
-
-### ⚠️ PayPal Adapter - **NEEDS UPDATE**
-**What's Working:**
-- ✓ OAuth 2.0 token flow
-- ✓ Sandbox/Live mode switching
-- ✓ Basic order creation
-- ✓ Token caching (5min buffer)
-
-**Issues Found:**
-- ❌ Using **v1 Payments API** (deprecated path)
-- ❌ Should use **v2 Orders API** for modern integration
-- ⚠️ v1 API has complex approval flow
-- ⚠️ v2 API is simpler and more widely used
-
-**Current API:** `/v1/payments/payment` (Old)  
-**Should Use:** `/v2/checkout/orders` (Modern)
+**Solution:** Enhance the `.env` parser to detect ALL available services (not just credentials), then dynamically create pass-through API routes that proxy requests to the respective gateway.
 
 ---
 
-## 🔧 Priority Fixes
+## 🎯 Current State Analysis
 
-### 1. **PayPal: Migrate to v2 Orders API** (HIGH PRIORITY)
-
-**Why:** v2 API is simpler, better documented, and recommended by PayPal
-
-**Current Implementation:**
-```python
-# v1 API (OLD)
-POST /v1/payments/payment
-{
-  "intent": "sale",
-  "payer": {"payment_method": "paypal"},
-  "transactions": [...]
-}
+### What We Have (95% Complete):
+```
+✅ Basic payment operations (orders, refunds, captures)
+✅ Credential encryption & storage
+✅ Authentication (Clerk + API keys)
+✅ Transaction logging
+✅ Webhook forwarding system
+🐛 request_router.py bug (FIXED)
 ```
 
-**Should Be:**
+### What's Missing (5%):
+```
+❌ Dynamic service detection in .env parsing
+❌ Subscription pass-through endpoints
+❌ Payment links pass-through endpoints
+❌ Generic proxy system for ANY gateway endpoint
+```
+
+---
+
+## 🔍 Understanding the Real Problem
+
+### Example Developer `.env` File:
+```bash
+# Razorpay Credentials
+RAZORPAY_KEY_ID=rzp_test_1234567890
+RAZORPAY_KEY_SECRET=abcdefghijklmnop
+RAZORPAY_WEBHOOK_SECRET=webhook_secret_xyz
+
+# Razorpay Features (detected from presence of plan IDs)
+RAZORPAY_SUBSCRIPTION_PLAN_BASIC=plan_monthly_99
+RAZORPAY_SUBSCRIPTION_PLAN_PRO=plan_monthly_499
+RAZORPAY_SUBSCRIPTION_PLAN_ENTERPRISE=plan_monthly_2999
+
+# PayPal Credentials
+PAYPAL_CLIENT_ID=AYSq3RDGsmBLJE-otTkBtM
+PAYPAL_CLIENT_SECRET=EGnHDxD_qRPdaLdZz8iCr8N
+PAYPAL_MODE=sandbox
+
+# PayPal Features (detected from presence of plan IDs)
+PAYPAL_SUBSCRIPTION_PLAN_BASIC=P-3RY123456M123456KMFIVTAQ
+PAYPAL_SUBSCRIPTION_PLAN_PRO=P-5ML4271244454362WXNWU5NQ
+```
+
+### What Developer Expects:
 ```python
-# v2 API (RECOMMENDED)
-POST /v2/checkout/orders
-{
-  "intent": "CAPTURE",
-  "purchase_units": [
+# Developer's code using OneRouter SDK
+client = UnifiedClient(api_key="unf_live_xyz")
+
+# Should work for subscriptions (if detected in .env)
+subscription = client.subscriptions.create(
+    plan_id="plan_monthly_99",  # From their .env
+    customer_email="user@example.com"
+)
+
+# Should work for payment links (if detected)
+link = client.payment_links.create(
+    amount=999.00,
+    description="Premium Plan"
+)
+
+# Should work for any Razorpay/PayPal endpoint
+result = client.call("razorpay.payouts.create", {
+    "account_number": "1234567890",
+    "amount": 1000
+})
+```
+
+---
+
+## 🏗️ Architecture: Dynamic Pass-Through System
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                  ENHANCED ARCHITECTURE                   │
+├─────────────────────────────────────────────────────────┤
+│                                                          │
+│  1. .ENV PARSING (Enhanced)                              │
+│  ┌────────────────────────────────────────────────┐    │
+│  │ Parse .env file                                 │    │
+│  │     ↓                                            │    │
+│  │ Detect Credentials (existing)                   │    │
+│  │     ↓                                            │    │
+│  │ Detect Features (NEW):                          │    │
+│  │   - Subscription plans                           │    │
+│  │   - Payment link configs                         │    │
+│  │   - Payout accounts                              │    │
+│  │   - Custom integrations                          │    │
+│  │     ↓                                            │    │
+│  │ Store in features_config JSONB                   │    │
+│  └────────────────────────────────────────────────┘    │
+│                                                          │
+│  2. UNIFIED API (Pass-Through Routes)                    │
+│  ┌────────────────────────────────────────────────┐    │
+│  │ POST /v1/payments/orders        ✅ Existing     │    │
+│  │ POST /v1/payments/refunds       ✅ Existing     │    │
+│  │                                                  │    │
+│  │ POST /v1/subscriptions          🆕 NEW          │    │
+│  │ GET  /v1/subscriptions/:id      🆕 NEW          │    │
+│  │ POST /v1/subscriptions/:id/cancel 🆕 NEW        │    │
+│  │ POST /v1/subscriptions/:id/pause  🆕 NEW        │    │
+│  │                                                  │    │
+│  │ POST /v1/payment-links          🆕 NEW          │    │
+│  │ GET  /v1/payment-links/:id      🆕 NEW          │    │
+│  │                                                  │    │
+│  │ POST /v1/proxy                  🆕 GENERIC      │    │
+│  │   (Generic proxy for any endpoint)              │    │
+│  └────────────────────────────────────────────────┘    │
+│                                                          │
+│  3. ADAPTER ENHANCEMENT                                  │
+│  ┌────────────────────────────────────────────────┐    │
+│  │ BaseAdapter:                                     │    │
+│  │   ├─ call_api(endpoint, payload)  🆕 NEW        │    │
+│  │   ├─ normalize_request()          ✅ Existing   │    │
+│  │   └─ normalize_response()         ✅ Existing   │    │
+│  │                                                  │    │
+│  │ RazorpayAdapter:                                 │    │
+│  │   ├─ Subscription methods         🆕 NEW        │    │
+│  │   ├─ Payment link methods         🆕 NEW        │    │
+│  │   └─ Payout methods               🆕 NEW        │    │
+│  │                                                  │    │
+│  │ PayPalAdapter:                                   │    │
+│  │   ├─ Subscription methods         🆕 NEW        │    │
+│  │   └─ Generic API proxy            🆕 NEW        │    │
+│  └────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 📝 Implementation Plan
+
+### **Step 1: Enhance .env Parser (2-3 hours)**
+
+**File:** `backend/app/services/env_parser.py`
+
+**Goal:** Detect subscription plans, payment links, and other service-specific features from .env variables.
+
+#### Enhanced Detection Patterns:
+```python
+# backend/app/services/env_parser.py - UPDATE
+
+class EnvParserService:
+    def __init__(self):
+        self.service_patterns = {
+            'razorpay': {
+                # Existing credential patterns
+                'credential_patterns': [
+                    r'^RAZORPAY_KEY_ID$',
+                    r'^RAZORPAY_KEY_SECRET$',
+                    r'^RAZORPAY_WEBHOOK_SECRET$'
+                ],
+                
+                # NEW: Feature detection patterns
+                'feature_patterns': {
+                    'payments': {
+                        'required': [r'^RAZORPAY_KEY_ID$', r'^RAZORPAY_KEY_SECRET$'],
+                        'indicator': ['KEY_ID', 'KEY_SECRET']
+                    },
+                    'subscriptions': {
+                        'optional': [
+                            r'^RAZORPAY_SUBSCRIPTION_PLAN_.*$',
+                            r'^RAZORPAY_PLAN_.*$',
+                            r'^SUBSCRIPTION_PLAN_.*$'  # Generic patterns
+                        ],
+                        'indicator': ['SUBSCRIPTION', 'PLAN']
+                    },
+                    'payment_links': {
+                        'optional': [
+                            r'^RAZORPAY_PAYMENT_LINK_.*$',
+                            r'^PAYMENT_LINK_.*$'
+                        ],
+                        'indicator': ['PAYMENT_LINK']
+                    },
+                    'payouts': {
+                        'optional': [
+                            r'^RAZORPAY_PAYOUT_ACCOUNT$',
+                            r'^RAZORPAY_ACCOUNT_NUMBER$'
+                        ],
+                        'indicator': ['PAYOUT', 'ACCOUNT_NUMBER']
+                    },
+                    'webhooks': {
+                        'required': [r'^RAZORPAY_WEBHOOK_SECRET$'],
+                        'indicator': ['WEBHOOK_SECRET']
+                    }
+                }
+            },
+            
+            'paypal': {
+                'credential_patterns': [
+                    r'^PAYPAL_CLIENT_ID$',
+                    r'^PAYPAL_CLIENT_SECRET$',
+                    r'^PAYPAL_MODE$'
+                ],
+                
+                'feature_patterns': {
+                    'payments': {
+                        'required': [r'^PAYPAL_CLIENT_ID$', r'^PAYPAL_CLIENT_SECRET$'],
+                        'indicator': ['CLIENT_ID', 'CLIENT_SECRET']
+                    },
+                    'subscriptions': {
+                        'optional': [
+                            r'^PAYPAL_SUBSCRIPTION_PLAN_.*$',
+                            r'^PAYPAL_PLAN_.*$',
+                            r'^PAYPAL_BILLING_PLAN_.*$'
+                        ],
+                        'indicator': ['SUBSCRIPTION', 'PLAN', 'BILLING']
+                    }
+                }
+            }
+        }
+
+    def detect_services(self, env_vars: Dict[str, str]) -> List[ServiceDetection]:
+        """Enhanced service detection with feature analysis"""
+        detections = []
+        
+        for service_name, patterns in self.service_patterns.items():
+            # 1. Detect credentials (existing logic)
+            detected_credentials = self._detect_credentials(service_name, env_vars, patterns)
+            
+            if not detected_credentials:
+                continue
+            
+            # 2. Detect features (NEW)
+            detected_features = self._detect_features(service_name, env_vars, patterns)
+            
+            # 3. Extract plan IDs and other metadata (NEW)
+            feature_metadata = self._extract_feature_metadata(service_name, env_vars, patterns)
+            
+            detections.append(ServiceDetection(
+                service_name=service_name,
+                confidence=self._calculate_confidence(detected_credentials, detected_features),
+                features=detected_features,
+                required_keys=patterns['credential_patterns'],
+                detected_keys=detected_credentials,
+                feature_metadata=feature_metadata  # NEW field
+            ))
+        
+        return detections
+
+    def _detect_features(self, service_name: str, env_vars: Dict[str, str], patterns: dict) -> Dict[str, bool]:
+        """Detect which features are available based on .env contents"""
+        features = {}
+        
+        feature_patterns = patterns.get('feature_patterns', {})
+        
+        for feature_name, feature_config in feature_patterns.items():
+            # Check required patterns
+            required_patterns = feature_config.get('required', [])
+            has_required = all(
+                any(re.match(pattern, key, re.IGNORECASE) for key in env_vars.keys())
+                for pattern in required_patterns
+            )
+            
+            # Check optional patterns
+            optional_patterns = feature_config.get('optional', [])
+            has_optional = any(
+                any(re.match(pattern, key, re.IGNORECASE) for key in env_vars.keys())
+                for pattern in optional_patterns
+            )
+            
+            # Feature is enabled if required patterns exist OR optional patterns exist
+            features[feature_name] = has_required or has_optional
+        
+        return features
+
+    def _extract_feature_metadata(self, service_name: str, env_vars: Dict[str, str], patterns: dict) -> Dict[str, Any]:
+        """Extract plan IDs, URLs, and other metadata from .env"""
+        metadata = {
+            'subscription_plans': [],
+            'payment_link_configs': [],
+            'payout_accounts': [],
+            'webhook_urls': []
+        }
+        
+        # Extract subscription plans
+        for key, value in env_vars.items():
+            if re.match(r'.*SUBSCRIPTION.*PLAN.*', key, re.IGNORECASE):
+                metadata['subscription_plans'].append({
+                    'env_key': key,
+                    'plan_id': value,
+                    'name': self._prettify_plan_name(key)
+                })
+            
+            elif re.match(r'.*PAYMENT.*LINK.*', key, re.IGNORECASE):
+                metadata['payment_link_configs'].append({
+                    'env_key': key,
+                    'value': value
+                })
+            
+            elif re.match(r'.*PAYOUT.*ACCOUNT.*', key, re.IGNORECASE):
+                metadata['payout_accounts'].append({
+                    'env_key': key,
+                    'account_number': value
+                })
+            
+            elif re.match(r'.*WEBHOOK.*URL.*', key, re.IGNORECASE):
+                metadata['webhook_urls'].append(value)
+        
+        return metadata
+
+    def _prettify_plan_name(self, env_key: str) -> str:
+        """Convert RAZORPAY_SUBSCRIPTION_PLAN_BASIC to 'Basic Plan'"""
+        parts = env_key.split('_')
+        if 'PLAN' in parts:
+            plan_name_parts = parts[parts.index('PLAN') + 1:]
+            return ' '.join(word.capitalize() for word in plan_name_parts)
+        return env_key
+```
+
+#### Updated Pydantic Model:
+```python
+# backend/app/services/env_parser.py
+
+class ServiceDetection(BaseModel):
+    service_name: str
+    confidence: float
+    features: Dict[str, bool]
+    required_keys: List[str]
+    detected_keys: List[str]
+    feature_metadata: Dict[str, Any] = {}  # NEW field
+```
+
+---
+
+### **Step 2: Store Feature Metadata (1 hour)**
+
+**File:** `backend/app/routes/onboarding.py`
+
+**Goal:** Store detected features and metadata in `features_config` JSONB field.
+
+#### Updated Configuration Endpoint:
+```python
+# backend/app/routes/onboarding.py - UPDATE
+
+@router.post("/configure", response_model=ConfigureResponse)
+async def configure_services(
+    config: ConfigureRequest,
+    user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+) -> ConfigureResponse:
+    """Store selected service credentials WITH feature metadata"""
+    
+    try:
+        stored_services = []
+
+        for service_config in config.services:
+            service_name = service_config.service_name
+            credentials = service_config.credentials
+            features = service_config.features
+            feature_metadata = service_config.get('feature_metadata', {})  # NEW
+
+            # Store credentials with feature metadata
+            credential = await credential_manager.store_service_credentials(
+                db=db,
+                user_id=user["id"],
+                service_name=service_name,
+                credentials=credentials,
+                features=features,
+                feature_metadata=feature_metadata,  # NEW: Pass metadata
+                environment="test"
+            )
+
+            stored_services.append(StoredService(
+                service_name=service_name,
+                status="connected",
+                credential_id=str(credential.id)
+            ))
+
+        return ConfigureResponse(
+            stored_services=stored_services,
+            message=f"Successfully connected {len(stored_services)} services"
+        )
+
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error configuring services: {str(e)}")
+```
+
+#### Updated Credential Manager:
+```python
+# backend/app/services/credential_manager.py - UPDATE
+
+async def store_service_credentials(
+    self,
+    db: AsyncSession,
+    user_id: str,
+    service_name: str,
+    credentials: Dict[str, str],
+    features: Dict[str, bool],
+    feature_metadata: Dict[str, Any] = {},  # NEW parameter
+    environment: str = "test"
+) -> ServiceCredential:
+    """Store encrypted service credentials WITH feature metadata"""
+
+    # Encrypt credentials
+    encrypted_creds = self.encrypt_credentials(credentials)
+
+    # Combine features and metadata into features_config
+    features_config = {
+        **features,
+        'metadata': feature_metadata  # Store metadata nested inside
+    }
+
+    # Create database record
+    credential = ServiceCredential(
+        user_id=user_id,
+        provider_name=service_name,
+        environment=environment,
+        encrypted_credential=encrypted_creds,
+        features_config=features_config,  # NOW includes metadata
+        is_active=True
+    )
+
+    db.add(credential)
+    await db.commit()
+    await db.refresh(credential)
+
+    return credential
+```
+
+---
+
+### **Step 3: Create Pass-Through Adapters (4-6 hours)**
+
+**Goal:** Add subscription, payment link, and generic proxy methods to adapters.
+
+#### Enhanced Base Adapter:
+```python
+# backend/app/adapters/base.py - UPDATE
+
+class BaseAdapter(ABC):
+    """Abstract base class with generic API proxy support"""
+
+    def __init__(self, credentials: Dict[str, str]):
+        self.credentials = credentials
+        self.base_url = None
+
+    @abstractmethod
+    async def _get_base_url(self) -> str:
+        """Return service base URL"""
+        pass
+
+    async def call_api(
+        self,
+        endpoint: str,
+        method: str = "POST",
+        payload: Dict[str, Any] = None,
+        params: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
+        """
+        Generic API proxy - call ANY gateway endpoint
+        
+        Example:
+            adapter.call_api("/v1/subscriptions/sub_123/pause", method="POST")
+        """
+        base_url = await self._get_base_url()
+        full_url = f"{base_url}{endpoint}"
+        
+        # Prepare request
+        headers = await self._get_auth_headers()
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            if method == "GET":
+                response = await client.get(full_url, params=params, headers=headers)
+            elif method == "POST":
+                response = await client.post(full_url, json=payload, headers=headers)
+            elif method == "PATCH":
+                response = await client.patch(full_url, json=payload, headers=headers)
+            elif method == "DELETE":
+                response = await client.delete(full_url, headers=headers)
+            else:
+                raise Exception(f"Unsupported method: {method}")
+            
+            response.raise_for_status()
+            return response.json()
+
+    @abstractmethod
+    async def _get_auth_headers(self) -> Dict[str, str]:
+        """Get authentication headers for API calls"""
+        pass
+```
+
+#### Razorpay Subscription Methods:
+```python
+# backend/app/adapters/razorpay.py - ADD THESE METHODS
+
+async def _get_auth_headers(self) -> Dict[str, str]:
+    """Get auth headers for Razorpay API calls"""
+    import base64
+    auth_str = f"{self.credentials['RAZORPAY_KEY_ID']}:{self.credentials['RAZORPAY_KEY_SECRET']}"
+    auth_bytes = base64.b64encode(auth_str.encode()).decode()
+    
+    return {
+        "Authorization": f"Basic {auth_bytes}",
+        "Content-Type": "application/json"
+    }
+
+# Subscription Methods (Pass-Through)
+async def create_subscription(self, plan_id: str, customer_notify: bool = True, **kwargs):
+    """Create subscription - direct pass-through to Razorpay"""
+    payload = {
+        "plan_id": plan_id,
+        "customer_notify": customer_notify,
+        "total_count": kwargs.get("total_count", 12),
+        "quantity": kwargs.get("quantity", 1),
+        **kwargs
+    }
+    
+    return await self.call_api("/v1/subscriptions", method="POST", payload=payload)
+
+async def get_subscription(self, subscription_id: str):
+    """Get subscription details"""
+    return await self.call_api(f"/v1/subscriptions/{subscription_id}", method="GET")
+
+async def cancel_subscription(self, subscription_id: str, cancel_at_cycle_end: bool = False):
+    """Cancel subscription"""
+    payload = {"cancel_at_cycle_end": cancel_at_cycle_end}
+    return await self.call_api(f"/v1/subscriptions/{subscription_id}/cancel", method="POST", payload=payload)
+
+async def pause_subscription(self, subscription_id: str, pause_at: str = "now"):
+    """Pause subscription"""
+    payload = {"pause_at": pause_at}
+    return await self.call_api(f"/v1/subscriptions/{subscription_id}/pause", method="POST", payload=payload)
+
+async def resume_subscription(self, subscription_id: str, resume_at: str = "now"):
+    """Resume subscription"""
+    payload = {"resume_at": resume_at}
+    return await self.call_api(f"/v1/subscriptions/{subscription_id}/resume", method="POST", payload=payload)
+```
+
+#### PayPal Subscription Methods:
+```python
+# backend/app/adapters/paypal.py - ADD THESE METHODS
+
+async def _get_auth_headers(self) -> Dict[str, str]:
+    """Get auth headers for PayPal API calls"""
+    access_token = await self._get_access_token()
+    return {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json"
+    }
+
+# Subscription Methods (Pass-Through)
+async def create_subscription(self, plan_id: str, **kwargs):
+    """Create subscription - direct pass-through to PayPal"""
+    payload = {
+        "plan_id": plan_id,
+        **kwargs
+    }
+    
+    return await self.call_api("/v1/billing/subscriptions", method="POST", payload=payload)
+
+async def get_subscription(self, subscription_id: str):
+    """Get subscription details"""
+    return await self.call_api(f"/v1/billing/subscriptions/{subscription_id}", method="GET")
+
+async def cancel_subscription(self, subscription_id: str, reason: str = ""):
+    """Cancel subscription"""
+    payload = {"reason": reason}
+    return await self.call_api(f"/v1/billing/subscriptions/{subscription_id}/cancel", method="POST", payload=payload)
+
+async def suspend_subscription(self, subscription_id: str, reason: str = ""):
+    """Suspend subscription"""
+    payload = {"reason": reason}
+    return await self.call_api(f"/v1/billing/subscriptions/{subscription_id}/suspend", method="POST", payload=payload)
+
+async def activate_subscription(self, subscription_id: str, reason: str = ""):
+    """Activate subscription"""
+    payload = {"reason": reason}
+    return await self.call_api(f"/v1/billing/subscriptions/{subscription_id}/activate", method="POST", payload=payload)
+```
+
+---
+
+### **Step 4: Create Unified API Routes (3-4 hours)**
+
+**File:** `backend/app/routes/unified_api.py`
+
+**Goal:** Add pass-through routes for subscriptions, payment links, and generic proxy.
+
+```python
+# backend/app/routes/unified_api.py - ADD THESE ROUTES
+
+# ========================================
+# SUBSCRIPTION ROUTES (Pass-Through)
+# ========================================
+
+@router.post("/subscriptions")
+async def create_subscription(
+    plan_id: str,
+    provider: Optional[str] = None,
+    customer_notify: bool = True,
+    user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    **kwargs
+):
+    """
+    Create subscription (pass-through to gateway)
+    
+    POST /v1/subscriptions
     {
-      "amount": {
-        "currency_code": "USD",
-        "value": "100.00"
+        "plan_id": "plan_monthly_99",
+        "provider": "razorpay",  // optional, auto-detect
+        "customer_notify": true,
+        "total_count": 12,
+        "quantity": 1
+    }
+    """
+    try:
+        # Auto-detect provider if not specified
+        if not provider:
+            provider = await _detect_provider_from_plan(user["id"], plan_id, db)
+        
+        # Get adapter
+        adapter = await request_router.get_adapter(user["id"], provider, db)
+        
+        # Pass-through to gateway
+        result = await adapter.create_subscription(plan_id, customer_notify, **kwargs)
+        
+        # Log transaction
+        await transaction_logger.log_request(
+            db=db,
+            user_id=user["id"],
+            method="POST",
+            endpoint="/subscriptions",
+            request_data={"plan_id": plan_id, **kwargs},
+            provider=provider
+        )
+        
+        return result
+        
+    except Exception as e:
+        logger.exception(f"Error creating subscription: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/subscriptions/{subscription_id}")
+async def get_subscription(
+    subscription_id: str,
+    provider: Optional[str] = None,
+    user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get subscription details (pass-through)"""
+    try:
+        if not provider:
+            provider = await _detect_provider_from_id(subscription_id)
+        
+        adapter = await request_router.get_adapter(user["id"], provider, db)
+        result = await adapter.get_subscription(subscription_id)
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/subscriptions/{subscription_id}/cancel")
+async def cancel_subscription(
+    subscription_id: str,
+    provider: Optional[str] = None,
+    cancel_at_cycle_end: bool = False,
+    reason: str = "",
+    user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Cancel subscription (pass-through)"""
+    try:
+        if not provider:
+            provider = await _detect_provider_from_id(subscription_id)
+        
+        adapter = await request_router.get_adapter(user["id"], provider, db)
+        
+        if provider == "razorpay":
+            result = await adapter.cancel_subscription(subscription_id, cancel_at_cycle_end)
+        else:  # paypal
+            result = await adapter.cancel_subscription(subscription_id, reason)
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/subscriptions/{subscription_id}/pause")
+async def pause_subscription(
+    subscription_id: str,
+    provider: Optional[str] = None,
+    pause_at: str = "now",
+    user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Pause subscription (Razorpay only)"""
+    try:
+        if not provider:
+            provider = await _detect_provider_from_id(subscription_id)
+        
+        if provider != "razorpay":
+            raise HTTPException(status_code=400, detail="Pause is only supported for Razorpay")
+        
+        adapter = await request_router.get_adapter(user["id"], provider, db)
+        result = await adapter.pause_subscription(subscription_id, pause_at)
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ========================================
+# GENERIC PROXY ROUTE
+# ========================================
+
+@router.post("/proxy")
+async def generic_proxy(
+    provider: str,
+    endpoint: str,
+    method: str = "POST",
+    payload: Optional[Dict[str, Any]] = None,
+    params: Optional[Dict[str, Any]] = None,
+    user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Generic proxy for ANY gateway endpoint
+    
+    POST /v1/proxy
+    {
+        "provider": "razorpay",
+        "endpoint": "/v1/subscriptions/sub_123/pause",
+        "method": "POST",
+        "payload": {"pause_at": "now"}
+    }
+    
+    This allows developers to call ANY gateway API through OneRouter
+    """
+    try:
+        # Get adapter
+        adapter = await request_router.get_adapter(user["id"], provider, db)
+        
+        # Call generic API proxy
+        result = await adapter.call_api(endpoint, method, payload, params)
+        
+        # Log transaction
+        await transaction_logger.log_request(
+            db=db,
+            user_id=user["id"],
+            method=method,
+            endpoint=f"/proxy{endpoint}",
+            request_data={"endpoint": endpoint, "payload": payload},
+            provider=provider
+        )
+        
+        return result
+        
+    except Exception as e:
+        logger.exception(f"Error in generic proxy: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ========================================
+# HELPER FUNCTIONS
+# ========================================
+
+async def _detect_provider_from_plan(user_id: str, plan_id: str, db: AsyncSession) -> str:
+    """Detect provider from plan_id format"""
+    # Razorpay plan IDs start with 'plan_'
+    if plan_id.startswith("plan_"):
+        return "razorpay"
+    
+    # PayPal plan IDs start with 'P-'
+    if plan_id.startswith("P-"):
+        return "paypal"
+    
+    # Fallback: check user's stored features_config
+    from ..models import ServiceCredential
+    result = await db.execute(
+        select(ServiceCredential).where(
+            ServiceCredential.user_id == user_id,
+            ServiceCredential.is_active == True
+        )
+    )
+    credentials = result.scalars().all()
+    
+    for cred in credentials:
+        metadata = cred.features_config.get('metadata', {})
+        subscription_plans = metadata.get('subscription_plans', [])
+        
+        for plan in subscription_plans:
+            if plan['plan_id'] == plan_id:
+                return cred.provider_name
+    
+    # Default to razorpay if can't detect
+    return "razorpay"
+
+async def _detect_provider_from_id(subscription_id: str) -> str:
+    """Detect provider from subscription_id format"""
+    # Razorpay subscription IDs start with 'sub_'
+    if subscription_id.startswith("sub_"):
+        return "razorpay"
+    
+    # PayPal subscription IDs start with 'I-'
+    if subscription_id.startswith("I-"):
+        return "paypal"
+    
+    # Default
+    return "razorpay"
+```
+
+---
+
+## 🧪 Testing Plan
+
+### Test Case 1: Detect Subscriptions in .env
+```bash
+# Create test .env file
+cat > test.env << EOF
+RAZORPAY_KEY_ID=rzp_test_123
+RAZORPAY_KEY_SECRET=secret_123
+RAZORPAY_SUBSCRIPTION_PLAN_BASIC=plan_monthly_99
+RAZORPAY_SUBSCRIPTION_PLAN_PRO=plan_monthly_499
+
+PAYPAL_CLIENT_ID=test_client_id
+PAYPAL_CLIENT_SECRET=test_secret
+PAYPAL_SUBSCRIPTION_PLAN_BASIC=P-3RY123456M123456KMFIVTAQ
+PAYPAL_MODE=sandbox
+EOF
+
+# Upload via API
+curl -X POST http://localhost:8000/api/onboarding/parse \
+  -F "file=@test.env" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Expected response:
+{
+  "detected_services": [
+    {
+      "service_name": "razorpay",
+      "confidence": 1.0,
+      "features": {
+        "payments": true,
+        "subscriptions": true,
+        "payment_links": false
+      },
+      "feature_metadata": {
+        "subscription_plans": [
+          {
+            "env_key": "RAZORPAY_SUBSCRIPTION_PLAN_BASIC",
+            "plan_id": "plan_monthly_99",
+            "name": "Basic Plan"
+          },
+          {
+            "env_key": "RAZORPAY_SUBSCRIPTION_PLAN_PRO",
+            "plan_id": "plan_monthly_499",
+            "name": "Pro Plan"
+          }
+        ]
       }
     }
   ]
 }
 ```
 
-**Changes Needed:**
-- Update `_get_base_url()` to return v2 endpoint
-- Simplify `create_order()` request format
-- Update `get_order()` to use `/v2/checkout/orders/{id}`
-- Fix response parsing for v2 structure
-
-### 2. **Add Missing Payment Features** (MEDIUM PRIORITY)
-
-Both adapters need:
-
-#### Razorpay Missing Features:
-```python
-# Add these methods
-async def capture_payment(self, payment_id: str, amount: float)
-async def create_refund(self, payment_id: str, amount: float)
-async def create_payment_link(self, amount: float, description: str)
-async def create_subscription(self, plan_id: str, customer_id: str)
-async def verify_webhook_signature(self, payload: dict, signature: str)
-```
-
-#### PayPal Missing Features:
-```python
-# Add these methods
-async def capture_order(self, order_id: str)
-async def create_refund(self, capture_id: str, amount: float)
-async def create_subscription(self, plan_id: str)
-async def verify_webhook_signature(self, headers: dict, payload: str)
-```
-
----
-
-## 📚 Official Documentation References
-
-### Razorpay API Docs
-- **Base URL:** `https://api.razorpay.com/v1`
-- **Auth:** Basic Auth (key_id:key_secret)
-- **Docs:** https://razorpay.com/docs/api/
-
-**Key Endpoints:**
-```
-Orders:
-POST   /v1/orders               # Create order ✅
-GET    /v1/orders/{id}          # Fetch order ✅
-PATCH  /v1/orders/{id}          # Update order ❌
-
-Payments:
-GET    /v1/payments/{id}        # Fetch payment ❌
-POST   /v1/payments/{id}/capture # Capture payment ❌
-POST   /v1/payments/{id}/refund # Create refund ❌
-
-Payment Links:
-POST   /v1/payment_links        # Create link ❌
-GET    /v1/payment_links/{id}   # Fetch link ❌
-
-Subscriptions:
-POST   /v1/subscriptions        # Create subscription ❌
-GET    /v1/subscriptions/{id}   # Fetch subscription ❌
-POST   /v1/subscriptions/{id}/cancel # Cancel ❌
-
-Refunds:
-POST   /v1/refunds              # Create refund ❌
-GET    /v1/refunds/{id}         # Fetch refund ❌
-```
-
-**Webhook Verification:**
-```python
-# Razorpay webhook signature verification
-import hmac
-import hashlib
-
-def verify_signature(webhook_secret: str, payload: str, signature: str) -> bool:
-    expected = hmac.new(
-        webhook_secret.encode(),
-        payload.encode(),
-        hashlib.sha256
-    ).hexdigest()
-    return hmac.compare_digest(expected, signature)
-```
-
-### PayPal API Docs
-- **Base URL (Sandbox):** `https://api-m.sandbox.paypal.com`
-- **Base URL (Live):** `https://api-m.paypal.com`
-- **Auth:** OAuth 2.0 (client_credentials)
-- **Docs:** https://developer.paypal.com/api/rest/
-
-**Key Endpoints (v2 - RECOMMENDED):**
-```
-Orders:
-POST   /v2/checkout/orders                    # Create order ⚠️ (update needed)
-GET    /v2/checkout/orders/{id}               # Show order ⚠️ (update needed)
-POST   /v2/checkout/orders/{id}/capture       # Capture payment ❌
-
-Payments (Captures):
-GET    /v2/payments/captures/{id}             # Show capture ❌
-POST   /v2/payments/captures/{id}/refund      # Refund capture ❌
-
-Subscriptions:
-POST   /v1/billing/subscriptions              # Create subscription ❌
-GET    /v1/billing/subscriptions/{id}         # Show subscription ❌
-POST   /v1/billing/subscriptions/{id}/cancel  # Cancel subscription ❌
-```
-
-**Webhook Verification:**
-```python
-# PayPal webhook signature verification
-import requests
-from jose import jwt
-
-def verify_webhook(headers: dict, payload: str, webhook_id: str) -> bool:
-    # Get PayPal's signing cert
-    cert_url = headers.get('PAYPAL-CERT-URL')
-    response = requests.get(cert_url)
-    cert = response.text
-    
-    # Verify JWT signature
-    token = headers.get('PAYPAL-TRANSMISSION-SIG')
-    decoded = jwt.decode(token, cert, algorithms=['RS256'])
-    return decoded['webhook_id'] == webhook_id
-```
-
----
-
-## 🚀 Implementation Roadmap
-
-### **Phase 2A: Fix PayPal v2 API** (Week 1)
-**Priority:** URGENT - Foundation for all PayPal features
-
-**Files to Update:**
-- `backend/app/adapters/paypal.py`
-
-**Changes:**
-```python
-async def _get_base_url(self) -> str:
-    """Return PayPal API base URL (v2 for orders)"""
-    mode = self.credentials.get("PAYPAL_MODE", "sandbox")
-    if mode == "live":
-        return "https://api-m.paypal.com"
-    return "https://api-m.sandbox.paypal.com"
-
-async def create_order(self, amount: float, currency: str = "USD", **kwargs):
-    """Create order using v2 API"""
-    base_url = await self._get_base_url()
-    access_token = await self._get_access_token()
-    
-    # v2 API format (SIMPLIFIED)
-    order_data = {
-        "intent": "CAPTURE",
-        "purchase_units": [{
-            "amount": {
-                "currency_code": currency,
-                "value": f"{amount:.2f}"
-            }
-        }]
-    }
-    
-    # Optional: add return/cancel URLs for checkout flow
-    if kwargs.get('return_url') or kwargs.get('cancel_url'):
-        order_data["application_context"] = {
-            "return_url": kwargs.get('return_url', 'https://example.com/return'),
-            "cancel_url": kwargs.get('cancel_url', 'https://example.com/cancel')
-        }
-    
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(
-            f"{base_url}/v2/checkout/orders",
-            json=order_data,
-            headers={
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json"
-            }
-        )
-        response.raise_for_status()
-        return response.json()
-
-async def get_order(self, order_id: str):
-    """Get order details using v2 API"""
-    base_url = await self._get_base_url()
-    access_token = await self._get_access_token()
-    
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.get(
-            f"{base_url}/v2/checkout/orders/{order_id}",
-            headers={"Authorization": f"Bearer {access_token}"}
-        )
-        response.raise_for_status()
-        return response.json()
-```
-
-**Test:**
+### Test Case 2: Create Subscription via Unified API
 ```bash
-cd backend
-python test_paypal.py  # Should pass with v2 API
+# Create subscription using detected plan
+curl -X POST http://localhost:8000/v1/subscriptions \
+  -H "X-Platform-Key: unf_live_xyz" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "plan_id": "plan_monthly_99",
+    "customer_notify": true,
+    "total_count": 12
+  }'
+
+# Expected: OneRouter detects provider from plan_id and routes to Razorpay
 ```
 
-### **Phase 2B: Add Payment Features** (Week 1-2)
-
-**Razorpay Features:**
-```python
-# backend/app/adapters/razorpay.py
-
-async def capture_payment(self, payment_id: str, amount: float, currency: str = "INR"):
-    """Capture a payment"""
-    base_url = await self._get_base_url()
-    auth = (self.credentials["RAZORPAY_KEY_ID"], self.credentials["RAZORPAY_KEY_SECRET"])
-    
-    async with httpx.AsyncClient(auth=auth) as client:
-        response = await client.post(
-            f"{base_url}/payments/{payment_id}/capture",
-            json={
-                "amount": int(amount * 100),  # Convert to paise
-                "currency": currency
-            }
-        )
-        response.raise_for_status()
-        return response.json()
-
-async def create_refund(self, payment_id: str, amount: float = None):
-    """Create a refund (full or partial)"""
-    base_url = await self._get_base_url()
-    auth = (self.credentials["RAZORPAY_KEY_ID"], self.credentials["RAZORPAY_KEY_SECRET"])
-    
-    payload = {"payment_id": payment_id}
-    if amount:
-        payload["amount"] = int(amount * 100)  # Partial refund in paise
-    
-    async with httpx.AsyncClient(auth=auth) as client:
-        response = await client.post(
-            f"{base_url}/refunds",
-            json=payload
-        )
-        response.raise_for_status()
-        return response.json()
-
-async def create_payment_link(
-    self, 
-    amount: float, 
-    description: str,
-    customer_email: str = None,
-    customer_phone: str = None
-):
-    """Create a payment link"""
-    base_url = await self._get_base_url()
-    auth = (self.credentials["RAZORPAY_KEY_ID"], self.credentials["RAZORPAY_KEY_SECRET"])
-    
-    payload = {
-        "amount": int(amount * 100),
-        "currency": "INR",
-        "description": description,
-        "customer": {}
-    }
-    
-    if customer_email:
-        payload["customer"]["email"] = customer_email
-    if customer_phone:
-        payload["customer"]["contact"] = customer_phone
-    
-    async with httpx.AsyncClient(auth=auth) as client:
-        response = await client.post(
-            f"{base_url}/payment_links",
-            json=payload
-        )
-        response.raise_for_status()
-        return response.json()
-
-def verify_webhook_signature(self, payload: str, signature: str) -> bool:
-    """Verify Razorpay webhook signature"""
-    import hmac
-    import hashlib
-    
-    webhook_secret = self.credentials.get("RAZORPAY_WEBHOOK_SECRET")
-    if not webhook_secret:
-        return False
-    
-    expected_signature = hmac.new(
-        webhook_secret.encode(),
-        payload.encode(),
-        hashlib.sha256
-    ).hexdigest()
-    
-    return hmac.compare_digest(expected_signature, signature)
+### Test Case 3: Generic Proxy
+```bash
+# Call any Razorpay endpoint through OneRouter
+curl -X POST http://localhost:8000/v1/proxy \
+  -H "X-Platform-Key: unf_live_xyz" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "razorpay",
+    "endpoint": "/v1/subscriptions/sub_123/pause",
+    "method": "POST",
+    "payload": {"pause_at": "now"}
+  }'
 ```
 
-**PayPal Features:**
-```python
-# backend/app/adapters/paypal.py
+---
 
-async def capture_order(self, order_id: str):
-    """Capture payment for an order"""
-    base_url = await self._get_base_url()
-    access_token = await self._get_access_token()
-    
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(
-            f"{base_url}/v2/checkout/orders/{order_id}/capture",
-            headers={"Authorization": f"Bearer {access_token}"}
-        )
-        response.raise_for_status()
-        return response.json()
+## 📊 Implementation Timeline
 
-async def create_refund(self, capture_id: str, amount: float = None, currency: str = "USD"):
-    """Create a refund (full or partial)"""
-    base_url = await self._get_base_url()
-    access_token = await self._get_access_token()
-    
-    payload = {}
-    if amount:  # Partial refund
-        payload["amount"] = {
-            "value": f"{amount:.2f}",
-            "currency_code": currency
-        }
-    
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(
-            f"{base_url}/v2/payments/captures/{capture_id}/refund",
-            json=payload,
-            headers={
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json"
-            }
-        )
-        response.raise_for_status()
-        return response.json()
-```
+| Task | Estimated Time | Priority |
+|------|---------------|----------|
+| **1. Enhance .env Parser** | 2-3 hours | HIGH |
+| **2. Update Database Storage** | 1 hour | HIGH |
+| **3. Add Subscription Adapters** | 4-6 hours | HIGH |
+| **4. Create Unified Routes** | 3-4 hours | HIGH |
+| **5. Testing & Debugging** | 2-3 hours | HIGH |
+| **6. Documentation** | 1-2 hours | MEDIUM |
+| **Total** | **13-19 hours** | **2-3 days** |
 
-### **Phase 2C: Unified API Routes** (Week 2)
+---
 
-**Update Unified API to support new features:**
-```python
-# backend/app/routes/unified_api.py
+## 🎯 Success Criteria
 
-@router.post("/payments/capture")
-async def capture_payment(
-    payment_id: str,
-    amount: Optional[float] = None,
-    user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Capture a payment (unified API)"""
-    # Route to appropriate adapter
-    adapter = await request_router.get_adapter(user["id"], "razorpay", db)
-    result = await adapter.capture_payment(payment_id, amount)
-    return result
+### Phase 3 is complete when:
+- ✅ .env parser detects subscription plans automatically
+- ✅ Features stored in `features_config.metadata`
+- ✅ Subscription routes work (create, get, cancel, pause)
+- ✅ Generic proxy route allows ANY gateway endpoint
+- ✅ Auto-detection of provider from plan_id/subscription_id
+- ✅ All tests pass
+- ✅ Documentation updated
 
-@router.post("/payments/refund")
-async def create_refund(
-    payment_id: str,
-    amount: Optional[float] = None,
-    user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Create a refund (unified API)"""
-    adapter = await request_router.get_adapter(user["id"], "razorpay", db)
-    result = await adapter.create_refund(payment_id, amount)
-    return result
+---
 
-@router.post("/payment-links")
-async def create_payment_link(
-    amount: float,
-    description: str,
-    customer_email: Optional[str] = None,
-    user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Create payment link (unified API)"""
-    adapter = await request_router.get_adapter(user["id"], "razorpay", db)
-    result = await adapter.create_payment_link(amount, description, customer_email)
-    return result
-```
+## 📚 API Documentation for Developers
 
-### **Phase 3: SDK Development** (Week 3-4)
-
-Once adapters are complete, create SDKs:
-
-**Python SDK Structure:**
-```
-unified-sdk-python/
-├── unified_sdk/
-│   ├── __init__.py
-│   ├── client.py          # Main UnifiedClient
-│   ├── resources/
-│   │   ├── payments.py    # payment.create(), payment.capture()
-│   │   ├── refunds.py     # refund.create()
-│   │   └── links.py       # link.create()
-│   ├── http.py            # HTTP client with retry
-│   └── exceptions.py      # Custom exceptions
-├── tests/
-├── setup.py
-└── README.md
-```
-
-**Usage Example:**
+### Subscription API
 ```python
 from unified_sdk import UnifiedClient
 
 client = UnifiedClient(api_key="unf_live_xyz")
 
-# Create order
-order = client.payments.create(
-    amount=500.00,
-    currency="INR"
+# Create subscription (auto-detects Razorpay from plan_id format)
+subscription = client.subscriptions.create(
+    plan_id="plan_monthly_99",  # From your .env
+    customer_notify=True,
+    total_count=12
 )
 
-# Capture payment
-capture = client.payments.capture(
-    payment_id=order.id,
-    amount=500.00
+# Get subscription
+sub = client.subscriptions.get("sub_abc123")
+
+# Cancel subscription
+client.subscriptions.cancel("sub_abc123", cancel_at_cycle_end=True)
+
+# Pause subscription (Razorpay only)
+client.subscriptions.pause("sub_abc123", pause_at="now")
+```
+
+### Generic Proxy API
+```python
+# Call ANY Razorpay/PayPal endpoint
+result = client.proxy.call(
+    provider="razorpay",
+    endpoint="/v1/subscriptions/sub_123/resume",
+    method="POST",
+    payload={"resume_at": "now"}
 )
 
-# Create refund
-refund = client.refunds.create(
-    payment_id=order.id,
-    amount=100.00  # Partial refund
-)
+# This gives developers 100% gateway feature parity through OneRouter
 ```
 
 ---
 
-## ✅ Testing Checklist
+## 🔄 Data Flow Diagram
 
-### Before Moving to SDK:
-- [ ] PayPal uses v2 API
-- [ ] All Razorpay features work
-- [ ] All PayPal features work
-- [ ] Webhook signature verification works
-- [ ] Error handling covers all cases
-- [ ] Unified API routes tested
-- [ ] Transaction logging works
-- [ ] Rate limiting tested
-
-### Test Commands:
-```bash
-# Test Razorpay
-cd backend
-python -m pytest tests/test_razorpay.py -v
-
-# Test PayPal
-python test_paypal.py
-
-# Test Unified API
-curl -X POST http://localhost:8000/v1/payments/orders \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"amount": 100, "currency": "INR"}'
+```
+Developer's .env File
+    ↓
+[1] Upload & Parse
+    ↓
+Detect: 
+  - Credentials ✅
+  - Features ✅
+  - Plan IDs 🆕
+  - Config 🆕
+    ↓
+[2] Store in Database
+    features_config: {
+      "payments": true,
+      "subscriptions": true,
+      "metadata": {
+        "subscription_plans": [...]
+      }
+    }
+    ↓
+[3] Developer Makes API Call
+    client.subscriptions.create(plan_id="plan_monthly_99")
+    ↓
+[4] OneRouter Unified API
+    POST /v1/subscriptions
+    ↓
+[5] Auto-Detect Provider
+    plan_id starts with "plan_" → Razorpay
+    ↓
+[6] Get Adapter
+    RazorpayAdapter with user's credentials
+    ↓
+[7] Pass-Through to Gateway
+    POST https://api.razorpay.com/v1/subscriptions
+    ↓
+[8] Normalize & Return
+    Gateway response → Unified format → Developer
 ```
 
 ---
 
-## 📝 Summary
+## ⚠️ Important Notes
 
-**Current State:**
-- ✅ Basic Razorpay integration working
-- ⚠️ PayPal needs v2 API migration
-- ❌ Missing advanced features (refunds, captures, etc.)
+### What This System Does:
+✅ **Detects** subscription plans from .env  
+✅ **Routes** requests to correct gateway  
+✅ **Pass-through** - doesn't modify business logic  
+✅ **Normalizes** responses to common format  
+✅ **Logs** all transactions  
 
-**Next Steps (Priority Order):**
-1. **Fix PayPal v2 API** (1-2 days) - CRITICAL
-2. **Add payment features** (3-5 days)
-3. **Add webhook verification** (1-2 days)
-4. **Update unified API routes** (2-3 days)
-5. **Build Python SDK** (5-7 days)
+### What This System Doesn't Do:
+❌ Doesn't manage subscriptions itself  
+❌ Doesn't store customer data  
+❌ Doesn't handle billing logic  
+❌ Doesn't replace gateway features  
 
-**Timeline:** ~3 weeks to complete adapters + SDK
+**OneRouter is a smart proxy, not a payment processor.**
 
-Your foundation is solid! The adapters work, you just need to:
-1. Modernize PayPal to v2
-2. Add the missing CRUD operations
-3. Package it all into a clean SDK
+---
 
-Ready to start with PayPal v2 migration? That's the quickest win! 🚀
+## 🚀 Next Steps After Phase 3
+
+### Phase 4: SDK Development (3-5 days)
+- Python SDK with subscription support
+- JavaScript/TypeScript SDK
+- Go SDK
+- CLI tool
+
+### Phase 5: Enhanced Features (1-2 weeks)
+- Advanced analytics dashboard
+- Usage-based billing
+- Multi-environment support (dev/staging/prod)
+- Team collaboration features
+- Webhook event streaming
+- Real-time monitoring
+
+### Phase 6: Scale & Optimize (Ongoing)
+- Performance optimization
+- Caching strategies
+- Load testing
+- Security audits
+- Compliance (PCI DSS, SOC 2)
+
+---
+
+## 📝 Summary for LLM Context
+
+**What to implement in Phase 3:**
+
+1. **Enhanced .env parsing** that detects:
+   - Subscription plan IDs
+   - Payment link configs
+   - Payout accounts
+   - Any gateway-specific features
+
+2. **Pass-through API system** that:
+   - Routes subscription requests to gateway
+   - Auto-detects provider from plan_id format
+   - Provides generic proxy for ANY endpoint
+   - Logs all transactions
+
+3. **Storage enhancement**:
+   - Store feature metadata in `features_config.metadata`
+   - Allow retrieval of plan IDs for auto-routing
+
+4. **Testing**:
+   - Upload .env with subscription plans
+   - Create subscription via unified API
+   - Verify pass-through works correctly
+
+**Key Philosophy:**
+- OneRouter = Smart Proxy, NOT Payment Processor
+- Pass-through ALL features to gateway
+- Don't implement business logic
+- Just route, normalize, log
+
+**Estimated Time:** 2-3 days (13-19 hours)
+
+**Success Metric:** Developers can use subscriptions, payment links, and any gateway feature through OneRouter with zero code changes to their integration.

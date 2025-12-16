@@ -1,7 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Upload, CheckCircle2, AlertCircle, Shield, Zap, FileCode } from "lucide-react";
@@ -13,6 +12,7 @@ type DetectedService = {
   status: ServiceStatus;
   keys: string[];
   features: string[];
+  feature_metadata?: any;
 };
 
 // Environment Parser Component
@@ -24,6 +24,7 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
   const [parsed, setParsed] = useState(false);
   const [detectedServices, setDetectedServices] = useState<DetectedService[]>([]);
   const [step, setStep] = useState<"upload" | "review" | "complete">("upload");
+  const [sessionId, setSessionId] = useState<string | null>(null);
 
   // Supported services
   const SUPPORTED_SERVICES = {
@@ -38,26 +39,35 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
     setParsing(true);
 
     try {
+      // Get authentication token
+      const token = await getToken();
       // Call the backend API to parse the file
       const formData = new FormData();
       const blob = new Blob([fileContent], { type: 'text/plain' });
       const file = new File([blob], 'env.txt', { type: 'text/plain' });
       formData.append('file', file);
 
-      const response = await fetch('/api/onboarding/parse-test', {
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const parseResponse = await fetch(`${API_BASE_URL}/api/onboarding/parse`, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
         body: formData,
       });
 
-      if (!response.ok) {
-        throw new Error(`Failed to parse file: ${response.status}`);
+      if (!parseResponse.ok) {
+        throw new Error(`Failed to parse file: ${parseResponse.status}`);
       }
 
-      const result = await response.json();
+      const result = await parseResponse.json();
 
       if (result.status === 'error') {
         throw new Error(result.errors ? Object.values(result.errors)[0] : 'Parse error');
       }
+
+      // Store session ID for configure request
+      setSessionId(result.session_id);
 
       // Convert backend response to frontend format
       const detected: DetectedService[] = result.detected_services.map((service: any) => ({
@@ -66,7 +76,8 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
         keys: service.detected_keys,
         features: Object.entries(service.features)
           .filter(([_, enabled]) => enabled)
-          .map(([feature, _]) => feature.charAt(0).toUpperCase() + feature.slice(1))
+          .map(([feature, _]) => feature.charAt(0).toUpperCase() + feature.slice(1)),
+        feature_metadata: service.feature_metadata // Store metadata for configure request
       }));
 
       setDetectedServices(detected);
@@ -155,16 +166,18 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
         features: service.features.reduce((acc, feature) => ({
           ...acc,
           [feature.toLowerCase()]: true
-        }), {})
+        }), {}),
+        feature_metadata: service.feature_metadata || {}
       }));
 
-      const response = await fetch('/api/onboarding/configure', {
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${API_BASE_URL}/api/onboarding/configure`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({ services }),
+        body: JSON.stringify({ services, session_id: sessionId }),
       });
 
       if (!response.ok) {
@@ -222,7 +235,7 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
               <FileCode className="w-4 h-4" />
               Review Services
             </div>
-            <div className="w-12 h-[2px] bg-[#222]" />
+            <div className="w-12 h[2px] bg-[#222]" />
             <div className={cn(
               "flex items-center gap-2 px-4 py-2 rounded-lg border font-mono text-sm",
               step === "complete" ? "border-[#00ff88] bg-[#00ff88]/10 text-[#00ff88]" : "border-[#222] text-[#888]"
@@ -244,7 +257,7 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
                   Upload Your <span className="text-[#00ff88]">.env</span> File
                 </h1>
                 <p className="text-[#888] font-mono text-lg">
-                  We'll automatically detect and configure your payment services
+                  We will automatically detect and configure your payment services
                 </p>
               </div>
 
@@ -297,21 +310,21 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
               {/* Security Features */}
               <div className="grid md:grid-cols-3 gap-4">
                 <div className="flex items-start gap-3 p-4 bg-[#0a0a0a] border border-[#222] rounded-lg">
-                  <Shield className="w-5 h-5 text-[#00ff88] flex-shrink-0 mt-0.5" />
+                  <Shield className="w-5 h-5 text-[#00ff88] flex shrink-0 mt-0.5" />
                   <div>
                     <h3 className="font-mono font-bold text-sm mb-1">AES-256 Encryption</h3>
                     <p className="text-xs text-[#888] font-mono">Your credentials are encrypted at rest</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3 p-4 bg-[#0a0a0a] border border-[#222] rounded-lg">
-                  <Zap className="w-5 h-5 text-[#00ff88] flex-shrink-0 mt-0.5" />
+                  <Zap className="w-5 h-5 text-[#00ff88] flex shrink-0 mt-0.5" />
                   <div>
                     <h3 className="font-mono font-bold text-sm mb-1">Instant Detection</h3>
                     <p className="text-xs text-[#888] font-mono">Auto-detect payment providers</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3 p-4 bg-[#0a0a0a] border border-[#222] rounded-lg">
-                  <FileCode className="w-5 h-5 text-[#00ff88] flex-shrink-0 mt-0.5" />
+                  <FileCode className="w-5 h-5 text-[#00ff88] flex shrink-0 mt-0.5" />
                   <div>
                     <h3 className="font-mono font-bold text-sm mb-1">Smart Parsing</h3>
                     <p className="text-xs text-[#888] font-mono">Validates all credentials</p>
@@ -384,7 +397,7 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
                             <AlertCircle className="w-6 h-6 text-[#ffbd2e]" />
                             <div>
                               <h3 className="font-mono font-bold text-lg capitalize">{service.name}</h3>
-                              <p className="text-sm text-[#888] font-mono">You'll need to manage these credentials yourself</p>
+                              <p className="text-sm text-[#888] font-mono">You will need to manage these credentials yourself</p>
                             </div>
                           </div>
                           <Badge className="bg-[#ffbd2e] text-black border-0">Coming Soon</Badge>
@@ -401,7 +414,7 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
                         </div>
                         <div className="mt-4 p-3 bg-[#ffbd2e]/10 border border-[#ffbd2e]/30 rounded">
                           <p className="text-xs font-mono text-[#ffbd2e]">
-                            ⚠️ We're implementing support for {service.name} in the next phase. These credentials will remain in your .env file.
+                            ⚠️ We are implementing support for {service.name} in the next phase. These credentials will remain in your .env file.
                           </p>
                         </div>
                       </div>

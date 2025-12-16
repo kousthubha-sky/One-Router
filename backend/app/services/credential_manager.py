@@ -74,14 +74,15 @@ class CredentialManager:
         return json.loads(decrypted.decode())
 
     async def store_service_credentials(
-        self,
-        db: AsyncSession,
-        user_id: str,
-        service_name: str,
-        credentials: Dict[str, str],
-        features: Dict[str, bool],
-        environment: str = "test"
-    ) -> ServiceCredential:
+    self,
+    db: AsyncSession,
+    user_id: str,
+    service_name: str,
+    credentials: Dict[str, str],
+    features: Dict[str, bool],
+    feature_metadata: Dict[str, Any] = {},  # NEW parameter
+    environment: str = "test"
+) -> ServiceCredential:
         """Store encrypted service credentials in database"""
 
         # Encrypt the credentials

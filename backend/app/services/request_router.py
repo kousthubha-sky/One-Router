@@ -3,7 +3,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from ..models import ServiceCredential
 from ..services.credential_manager import CredentialManager
-# Import will be done dynamically to avoid circular imports
 
 class RequestRouter:
     """Routes requests to appropriate service adapters"""
@@ -14,19 +13,26 @@ class RequestRouter:
     async def get_adapter(self, user_id: str, service: str, db: AsyncSession):
         """Get configured adapter for user"""
 
-        # Get stored credentials
-        credentials_list = await self.credential_manager.get_user_credentials(
-            db, user_id, service
+        # Query the database directly to get the ServiceCredential object
+        result = await db.execute(
+            select(ServiceCredential).where(
+                ServiceCredential.user_id == user_id,
+                ServiceCredential.provider_name == service,
+                ServiceCredential.is_active == True,
+                ServiceCredential.environment == "test"  # Default to test for now
+            )
         )
+        credential = result.scalar_one_or_none()
 
-        if not credentials_list:
+        if not credential:
             raise Exception(f"Service {service} not configured for user {user_id}")
 
-        # Decrypt credentials
-        encrypted_creds = credentials_list[0]['encrypted_creds']
-        credentials = self.credential_manager.decrypt_credentials(encrypted_creds)
+        # Decrypt credentials using the correct field name: encrypted_credential
+        credentials = self.credential_manager.decrypt_credentials(
+            str(credential.encrypted_credential)
+        )
 
-        # Create and return adapter
+        # Create and return adapter based on service
         if service == "razorpay":
             from ..adapters.razorpay import RazorpayAdapter
             return RazorpayAdapter(credentials)

@@ -32,4 +32,7 @@ ENV/
 
 alembic.ini
 
+
+parsed_sessions.json
+
 test.env
