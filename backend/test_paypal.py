@@ -37,7 +37,7 @@ def test_paypal_adapter():
         # Test 1: Base URL
         print("1. Testing base URL...")
         base_url = await adapter._get_base_url()
-        expected_url = "https://api-m.sandbox.paypal.com/v1" if credentials['PAYPAL_MODE'] == 'sandbox' else "https://api.paypal.com/v1"
+        expected_url = "https://api-m.sandbox.paypal.com" if credentials['PAYPAL_MODE'] == 'sandbox' else "https://api-m.paypal.com"
         assert base_url == expected_url, f"Expected {expected_url}, got {base_url}"
         print("   Base URL correct")
 
@@ -50,13 +50,13 @@ def test_paypal_adapter():
         # Test 3: Create order
         print("3. Creating test order...")
         order = await adapter.create_order(
-            amount=1.00,  # ₹1
-            currency="INR"
+            amount=1.00,  # $1
+            currency="USD"
         )
 
         assert order['provider'] == 'paypal', "Provider should be paypal"
         assert order['amount'] == 1.00, "Amount should be 1.00"
-        assert order['currency'] == "INR", "Currency should be INR"
+        assert order['currency'] == "USD", "Currency should be USD"
         assert 'transaction_id' in order, "Should have transaction_id"
         assert 'checkout_url' in order, "Should have checkout_url"
         assert order['status'] == 'created', "Status should be created"

@@ -19,9 +19,9 @@ class PayPalAdapter(BaseAdapter):
         """Return PayPal API base URL"""
         mode = self.credentials.get("PAYPAL_MODE", "sandbox")
         if mode == "live":
-            return "https://api.paypal.com/v1"
+            return "https://api-m.paypal.com"
         else:
-            return "https://api-m.sandbox.paypal.com/v1"
+            return "https://api-m.sandbox.paypal.com"
 
     async def _get_access_token(self) -> str:
         """Get OAuth access token from PayPal"""
@@ -69,77 +69,43 @@ class PayPalAdapter(BaseAdapter):
             self.logger.error("PayPal credential validation failed")
             return False
 
-    async def create_order(self, amount: float, currency: str = "INR", **kwargs) -> Dict[str, Any]:
-        """Create a PayPal order"""
+    async def create_order(self, amount: float, currency: str = "USD", **kwargs) -> Dict[str, Any]:
+        """Create a PayPal order using v2 API"""
         try:
-            # Extract optional parameters
-            return_url = kwargs.get("return_url")
-            cancel_url = kwargs.get("cancel_url")
-
             base_url = await self._get_base_url()
             access_token = await self._get_access_token()
 
-            # PayPal order structure (v2 API)
-            # Try the exact format from PayPal documentation
+            # v2 API format
             order_data = {
                 "intent": "CAPTURE",
                 "purchase_units": [{
                     "amount": {
-                        "currency_code": "USD",
-                        "value": "10.00"
+                        "currency_code": currency,
+                        "value": f"{amount:.2f}"
                     }
-                }],
-                "application_context": {
-                    "return_url": "https://example.com/return",
-                    "cancel_url": "https://example.com/cancel"
-                }
+                }]
             }
 
-            self.logger.debug("Order payload created")
-
-            # Add application context if URLs provided
-            if return_url or cancel_url:
+            # Optional: add return/cancel URLs for checkout flow
+            if kwargs.get('return_url') or kwargs.get('cancel_url'):
                 order_data["application_context"] = {
-                    "return_url": return_url or "https://example.com/success",
-                    "cancel_url": cancel_url or "https://example.com/cancel",
-                    "user_action": "PAY_NOW"
+                    "return_url": kwargs.get('return_url', 'https://example.com/return'),
+                    "cancel_url": kwargs.get('cancel_url', 'https://example.com/cancel')
                 }
-
-            headers = {
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json"
-            }
-
-            # Try v1 API format
-            v1_payment_data = {
-                "intent": "sale",
-                "payer": {
-                    "payment_method": "paypal"
-                },
-                "transactions": [{
-                    "amount": {
-                        "total": f"{amount:.2f}",
-                        "currency": currency
-                    },
-                    "description": "Test payment"
-                }],
-                "redirect_urls": {
-                    "return_url": return_url or "https://example.com/return",
-                    "cancel_url": cancel_url or "https://example.com/cancel"
-                }
-            }
 
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
-                    f"{base_url}/payments/payment",
-                    json=v1_payment_data,
-                    headers=headers
+                    f"{base_url}/v2/checkout/orders",
+                    json=order_data,
+                    headers={
+                        "Authorization": f"Bearer {access_token}",
+                        "Content-Type": "application/json"
+                    }
                 )
 
                 # Handle specific error codes
                 if response.status_code == 400:
                     error_data = response.json()
-                    self.logger.debug("PayPal 400 error occurred")
                     raise Exception(f"PayPal bad request: {error_data}")
                 elif response.status_code == 401:
                     raise Exception("Invalid PayPal credentials")
@@ -153,10 +119,10 @@ class PayPalAdapter(BaseAdapter):
                 response.raise_for_status()
                 order_response = response.json()
 
-                # Extract checkout URL from links (v1 API uses 'approval_url')
+                # Extract checkout URL from links (v2 API uses 'approve' rel)
                 checkout_url = None
                 for link in order_response.get("links", []):
-                    if link.get("rel") in ["approve", "approval_url"]:
+                    if link.get("rel") == "approve":
                         checkout_url = link["href"]
                         break
 
@@ -169,7 +135,7 @@ class PayPalAdapter(BaseAdapter):
                     transaction_id = None
                     provider_order_id = None
 
-                # Return normalized response (matching Razorpay format)
+                # Return normalized response
                 return {
                     "transaction_id": transaction_id,
                     "provider": "paypal",
@@ -189,29 +155,16 @@ class PayPalAdapter(BaseAdapter):
             raise Exception(f"Failed to create PayPal order: {str(e)}")
 
     async def get_order(self, order_id: str) -> Dict[str, Any]:
-        """Fetch order details from PayPal"""
+        """Get order details using v2 API"""
         try:
             base_url = await self._get_base_url()
             access_token = await self._get_access_token()
 
-            headers = {
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json"
-            }
-
             async with httpx.AsyncClient(timeout=10.0) as client:
-                # Try v2 API first (orders), then v1 API (payments) if not found
                 response = await client.get(
-                    f"{base_url}/checkout/orders/{order_id}",
-                    headers=headers
+                    f"{base_url}/v2/checkout/orders/{order_id}",
+                    headers={"Authorization": f"Bearer {access_token}"}
                 )
-
-                # If v2 API returns 404, try v1 API
-                if response.status_code == 404:
-                    response = await client.get(
-                        f"{base_url}/payments/payment/{order_id}",
-                        headers=headers
-                    )
 
                 if response.status_code == 404:
                     raise Exception(f"Order {order_id} not found")
@@ -265,3 +218,74 @@ class PayPalAdapter(BaseAdapter):
             "checkout_url": checkout_url,
             "provider_data": response
         }
+
+    async def capture_order(self, order_id: str):
+        """Capture payment for an order"""
+        try:
+            base_url = await self._get_base_url()
+            access_token = await self._get_access_token()
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    f"{base_url}/v2/checkout/orders/{order_id}/capture",
+                    headers={"Authorization": f"Bearer {access_token}"}
+                )
+                
+                if response.status_code == 404:
+                    raise Exception(f"Order {order_id} not found")
+                elif response.status_code == 401:
+                    raise Exception("Invalid PayPal credentials")
+                elif response.status_code == 422:
+                    error_data = response.json()
+                    error_desc = error_data.get("details", [{}])[0].get("description", "Validation error")
+                    raise Exception(f"PayPal capture error: {error_desc}")
+                
+                response.raise_for_status()
+                return response.json()
+        except httpx.TimeoutException:
+            raise Exception("PayPal API request timed out")
+        except httpx.HTTPError as e:
+            raise Exception(f"PayPal API network error: {str(e)}")
+        except Exception as e:
+            raise Exception(f"Failed to capture PayPal order: {str(e)}")
+
+    async def create_refund(self, capture_id: str, amount: float = None, currency: str = "USD"):
+        """Create a refund (full or partial)"""
+        try:
+            base_url = await self._get_base_url()
+            access_token = await self._get_access_token()
+
+            payload = {}
+            if amount:  # Partial refund
+                payload["amount"] = {
+                    "value": f"{amount:.2f}",
+                    "currency_code": currency
+                }
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    f"{base_url}/v2/payments/captures/{capture_id}/refund",
+                    json=payload,
+                    headers={
+                        "Authorization": f"Bearer {access_token}",
+                        "Content-Type": "application/json"
+                    }
+                )
+                
+                if response.status_code == 404:
+                    raise Exception(f"Capture {capture_id} not found")
+                elif response.status_code == 401:
+                    raise Exception("Invalid PayPal credentials")
+                elif response.status_code == 422:
+                    error_data = response.json()
+                    error_desc = error_data.get("details", [{}])[0].get("description", "Validation error")
+                    raise Exception(f"PayPal refund error: {error_desc}")
+                
+                response.raise_for_status()
+                return response.json()
+        except httpx.TimeoutException:
+            raise Exception("PayPal API request timed out")
+        except httpx.HTTPError as e:
+            raise Exception(f"PayPal API network error: {str(e)}")
+        except Exception as e:
+            raise Exception(f"Failed to create PayPal refund: {str(e)}")

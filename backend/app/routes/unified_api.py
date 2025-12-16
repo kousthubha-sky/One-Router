@@ -2,7 +2,8 @@ import logging
 from decimal import Decimal, InvalidOperation
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from sqlalchemy import select
+from pydantic import BaseModel, Field, validator
 from typing import Optional, Dict, Any, Annotated
 from ..database import get_db
 from ..auth.dependencies import get_current_user
@@ -30,7 +31,7 @@ class PaymentOrderRequest(BaseModel):
     receipt: Optional[str] = None
     notes: Optional[Dict[str, Any]] = None
     
-    @field_validator('amount', mode='before')
+    @validator('amount', pre=True)
     @classmethod
     def validate_amount(cls, v):
         """Coerce numeric strings to Decimal and validate"""
@@ -54,11 +55,6 @@ class PaymentOrderRequest(BaseModel):
         return v
 
 class UnifiedPaymentResponse(BaseModel):
-    model_config = ConfigDict(
-        json_encoders={
-            Decimal: lambda v: str(v)
-        }
-    )
     transaction_id: str
     provider: str
     provider_order_id: str
@@ -67,6 +63,11 @@ class UnifiedPaymentResponse(BaseModel):
     status: str
     receipt: Optional[str] = None
     created_at: Optional[int] = None
+
+    class Config:
+        json_encoders = {
+            Decimal: lambda v: str(v)
+        }
 
 @router.post("/payments/orders", response_model=UnifiedPaymentResponse)
 async def create_payment_order(
@@ -140,7 +141,7 @@ async def get_payment_order(
     import time
     from ..models import TransactionLog
     from datetime import datetime
-    
+
     provider = None
     try:
         # Log the incoming request
@@ -193,4 +194,103 @@ async def get_payment_order(
 
     except Exception as e:
         print(f"✗ Error retrieving payment order: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/payments/capture")
+async def capture_payment(
+    payment_id: str,
+    amount: Optional[float] = None,
+    provider: Optional[str] = None,
+    user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Capture a payment (unified API)"""
+    try:
+        # Determine provider (default to Razorpay for now)
+        provider = provider or "razorpay"
+
+        # Route to appropriate adapter
+        adapter = await request_router.get_adapter(user["id"], provider, db)
+        result = await adapter.capture_payment(payment_id, amount)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/payments/refund")
+async def create_refund(
+    payment_id: str,
+    amount: Optional[float] = None,
+    user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a refund (unified API)"""
+    try:
+        from ..models import TransactionLog
+
+        # Resolve provider from stored transaction log
+        result = await db.execute(
+            select(TransactionLog).where(TransactionLog.transaction_id == payment_id)
+        )
+        log_entry = result.scalar_one_or_none()
+
+        if log_entry:
+            provider = log_entry.service_name
+        else:
+            # Fallback: try to parse from payment_id format "unf_{provider}_{providerOrderId}"
+            if payment_id.startswith("unf_"):
+                parts = payment_id.split("_")
+                if len(parts) >= 3:
+                    provider = parts[1]
+                else:
+                    provider = None
+            else:
+                provider = None
+
+        # Use resolved provider or fall back to razorpay
+        if not provider:
+            provider = "razorpay"
+
+        adapter = await request_router.get_adapter(user["id"], provider, db)
+        result = await adapter.create_refund(payment_id, amount)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/payment-links")
+async def create_payment_link(
+    amount: float,
+    description: str,
+    customer_email: Optional[str] = None,
+    provider: Optional[str] = None,
+    user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create payment link (unified API)"""
+    try:
+        provider = provider or "razorpay"
+        
+        # Log transaction request
+        await transaction_logger.log_request(
+            db=db,
+            user_id=user["id"],
+            method="POST",
+            endpoint="/payment-links",
+            request_data={"amount": amount, "description": description, "customer_email": customer_email},
+            provider=provider
+        )
+        
+        adapter = await request_router.get_adapter(user["id"], provider, db)
+        result = await adapter.create_payment_link(amount, description, customer_email)
+        
+        # Log response
+        await transaction_logger.log_response(
+            db=db,
+            transaction_id=result.get("id", "unknown"),
+            response_data=result,
+            status_code=200,
+            response_time_ms=0
+        )
+        
+        return result
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

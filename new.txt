@@ -1,0 +1,539 @@
+# Payment Adapter Review & Enhancement Roadmap
+
+## 📊 Current Implementation Status
+
+### ✅ Razorpay Adapter - **GOOD**
+**What's Working:**
+- ✓ Order creation (POST /v1/orders)
+- ✓ Order fetching (GET /v1/orders/{id})
+- ✓ Amount conversion (₹ → paise)
+- ✓ Basic Auth with key_id/secret
+- ✓ Credential validation
+- ✓ Response normalization
+
+**API Compatibility:**
+- Using correct Razorpay API v1 endpoints
+- Follows official documentation structure
+- Proper error handling for 401, 400, 429
+
+### ⚠️ PayPal Adapter - **NEEDS UPDATE**
+**What's Working:**
+- ✓ OAuth 2.0 token flow
+- ✓ Sandbox/Live mode switching
+- ✓ Basic order creation
+- ✓ Token caching (5min buffer)
+
+**Issues Found:**
+- ❌ Using **v1 Payments API** (deprecated path)
+- ❌ Should use **v2 Orders API** for modern integration
+- ⚠️ v1 API has complex approval flow
+- ⚠️ v2 API is simpler and more widely used
+
+**Current API:** `/v1/payments/payment` (Old)  
+**Should Use:** `/v2/checkout/orders` (Modern)
+
+---
+
+## 🔧 Priority Fixes
+
+### 1. **PayPal: Migrate to v2 Orders API** (HIGH PRIORITY)
+
+**Why:** v2 API is simpler, better documented, and recommended by PayPal
+
+**Current Implementation:**
+```python
+# v1 API (OLD)
+POST /v1/payments/payment
+{
+  "intent": "sale",
+  "payer": {"payment_method": "paypal"},
+  "transactions": [...]
+}
+```
+
+**Should Be:**
+```python
+# v2 API (RECOMMENDED)
+POST /v2/checkout/orders
+{
+  "intent": "CAPTURE",
+  "purchase_units": [
+    {
+      "amount": {
+        "currency_code": "USD",
+        "value": "100.00"
+      }
+    }
+  ]
+}
+```
+
+**Changes Needed:**
+- Update `_get_base_url()` to return v2 endpoint
+- Simplify `create_order()` request format
+- Update `get_order()` to use `/v2/checkout/orders/{id}`
+- Fix response parsing for v2 structure
+
+### 2. **Add Missing Payment Features** (MEDIUM PRIORITY)
+
+Both adapters need:
+
+#### Razorpay Missing Features:
+```python
+# Add these methods
+async def capture_payment(self, payment_id: str, amount: float)
+async def create_refund(self, payment_id: str, amount: float)
+async def create_payment_link(self, amount: float, description: str)
+async def create_subscription(self, plan_id: str, customer_id: str)
+async def verify_webhook_signature(self, payload: dict, signature: str)
+```
+
+#### PayPal Missing Features:
+```python
+# Add these methods
+async def capture_order(self, order_id: str)
+async def create_refund(self, capture_id: str, amount: float)
+async def create_subscription(self, plan_id: str)
+async def verify_webhook_signature(self, headers: dict, payload: str)
+```
+
+---
+
+## 📚 Official Documentation References
+
+### Razorpay API Docs
+- **Base URL:** `https://api.razorpay.com/v1`
+- **Auth:** Basic Auth (key_id:key_secret)
+- **Docs:** https://razorpay.com/docs/api/
+
+**Key Endpoints:**
+```
+Orders:
+POST   /v1/orders               # Create order ✅
+GET    /v1/orders/{id}          # Fetch order ✅
+PATCH  /v1/orders/{id}          # Update order ❌
+
+Payments:
+GET    /v1/payments/{id}        # Fetch payment ❌
+POST   /v1/payments/{id}/capture # Capture payment ❌
+POST   /v1/payments/{id}/refund # Create refund ❌
+
+Payment Links:
+POST   /v1/payment_links        # Create link ❌
+GET    /v1/payment_links/{id}   # Fetch link ❌
+
+Subscriptions:
+POST   /v1/subscriptions        # Create subscription ❌
+GET    /v1/subscriptions/{id}   # Fetch subscription ❌
+POST   /v1/subscriptions/{id}/cancel # Cancel ❌
+
+Refunds:
+POST   /v1/refunds              # Create refund ❌
+GET    /v1/refunds/{id}         # Fetch refund ❌
+```
+
+**Webhook Verification:**
+```python
+# Razorpay webhook signature verification
+import hmac
+import hashlib
+
+def verify_signature(webhook_secret: str, payload: str, signature: str) -> bool:
+    expected = hmac.new(
+        webhook_secret.encode(),
+        payload.encode(),
+        hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature)
+```
+
+### PayPal API Docs
+- **Base URL (Sandbox):** `https://api-m.sandbox.paypal.com`
+- **Base URL (Live):** `https://api-m.paypal.com`
+- **Auth:** OAuth 2.0 (client_credentials)
+- **Docs:** https://developer.paypal.com/api/rest/
+
+**Key Endpoints (v2 - RECOMMENDED):**
+```
+Orders:
+POST   /v2/checkout/orders                    # Create order ⚠️ (update needed)
+GET    /v2/checkout/orders/{id}               # Show order ⚠️ (update needed)
+POST   /v2/checkout/orders/{id}/capture       # Capture payment ❌
+
+Payments (Captures):
+GET    /v2/payments/captures/{id}             # Show capture ❌
+POST   /v2/payments/captures/{id}/refund      # Refund capture ❌
+
+Subscriptions:
+POST   /v1/billing/subscriptions              # Create subscription ❌
+GET    /v1/billing/subscriptions/{id}         # Show subscription ❌
+POST   /v1/billing/subscriptions/{id}/cancel  # Cancel subscription ❌
+```
+
+**Webhook Verification:**
+```python
+# PayPal webhook signature verification
+import requests
+from jose import jwt
+
+def verify_webhook(headers: dict, payload: str, webhook_id: str) -> bool:
+    # Get PayPal's signing cert
+    cert_url = headers.get('PAYPAL-CERT-URL')
+    response = requests.get(cert_url)
+    cert = response.text
+    
+    # Verify JWT signature
+    token = headers.get('PAYPAL-TRANSMISSION-SIG')
+    decoded = jwt.decode(token, cert, algorithms=['RS256'])
+    return decoded['webhook_id'] == webhook_id
+```
+
+---
+
+## 🚀 Implementation Roadmap
+
+### **Phase 2A: Fix PayPal v2 API** (Week 1)
+**Priority:** URGENT - Foundation for all PayPal features
+
+**Files to Update:**
+- `backend/app/adapters/paypal.py`
+
+**Changes:**
+```python
+async def _get_base_url(self) -> str:
+    """Return PayPal API base URL (v2 for orders)"""
+    mode = self.credentials.get("PAYPAL_MODE", "sandbox")
+    if mode == "live":
+        return "https://api-m.paypal.com"
+    return "https://api-m.sandbox.paypal.com"
+
+async def create_order(self, amount: float, currency: str = "USD", **kwargs):
+    """Create order using v2 API"""
+    base_url = await self._get_base_url()
+    access_token = await self._get_access_token()
+    
+    # v2 API format (SIMPLIFIED)
+    order_data = {
+        "intent": "CAPTURE",
+        "purchase_units": [{
+            "amount": {
+                "currency_code": currency,
+                "value": f"{amount:.2f}"
+            }
+        }]
+    }
+    
+    # Optional: add return/cancel URLs for checkout flow
+    if kwargs.get('return_url') or kwargs.get('cancel_url'):
+        order_data["application_context"] = {
+            "return_url": kwargs.get('return_url', 'https://example.com/return'),
+            "cancel_url": kwargs.get('cancel_url', 'https://example.com/cancel')
+        }
+    
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(
+            f"{base_url}/v2/checkout/orders",
+            json=order_data,
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
+            }
+        )
+        response.raise_for_status()
+        return response.json()
+
+async def get_order(self, order_id: str):
+    """Get order details using v2 API"""
+    base_url = await self._get_base_url()
+    access_token = await self._get_access_token()
+    
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.get(
+            f"{base_url}/v2/checkout/orders/{order_id}",
+            headers={"Authorization": f"Bearer {access_token}"}
+        )
+        response.raise_for_status()
+        return response.json()
+```
+
+**Test:**
+```bash
+cd backend
+python test_paypal.py  # Should pass with v2 API
+```
+
+### **Phase 2B: Add Payment Features** (Week 1-2)
+
+**Razorpay Features:**
+```python
+# backend/app/adapters/razorpay.py
+
+async def capture_payment(self, payment_id: str, amount: float, currency: str = "INR"):
+    """Capture a payment"""
+    base_url = await self._get_base_url()
+    auth = (self.credentials["RAZORPAY_KEY_ID"], self.credentials["RAZORPAY_KEY_SECRET"])
+    
+    async with httpx.AsyncClient(auth=auth) as client:
+        response = await client.post(
+            f"{base_url}/payments/{payment_id}/capture",
+            json={
+                "amount": int(amount * 100),  # Convert to paise
+                "currency": currency
+            }
+        )
+        response.raise_for_status()
+        return response.json()
+
+async def create_refund(self, payment_id: str, amount: float = None):
+    """Create a refund (full or partial)"""
+    base_url = await self._get_base_url()
+    auth = (self.credentials["RAZORPAY_KEY_ID"], self.credentials["RAZORPAY_KEY_SECRET"])
+    
+    payload = {"payment_id": payment_id}
+    if amount:
+        payload["amount"] = int(amount * 100)  # Partial refund in paise
+    
+    async with httpx.AsyncClient(auth=auth) as client:
+        response = await client.post(
+            f"{base_url}/refunds",
+            json=payload
+        )
+        response.raise_for_status()
+        return response.json()
+
+async def create_payment_link(
+    self, 
+    amount: float, 
+    description: str,
+    customer_email: str = None,
+    customer_phone: str = None
+):
+    """Create a payment link"""
+    base_url = await self._get_base_url()
+    auth = (self.credentials["RAZORPAY_KEY_ID"], self.credentials["RAZORPAY_KEY_SECRET"])
+    
+    payload = {
+        "amount": int(amount * 100),
+        "currency": "INR",
+        "description": description,
+        "customer": {}
+    }
+    
+    if customer_email:
+        payload["customer"]["email"] = customer_email
+    if customer_phone:
+        payload["customer"]["contact"] = customer_phone
+    
+    async with httpx.AsyncClient(auth=auth) as client:
+        response = await client.post(
+            f"{base_url}/payment_links",
+            json=payload
+        )
+        response.raise_for_status()
+        return response.json()
+
+def verify_webhook_signature(self, payload: str, signature: str) -> bool:
+    """Verify Razorpay webhook signature"""
+    import hmac
+    import hashlib
+    
+    webhook_secret = self.credentials.get("RAZORPAY_WEBHOOK_SECRET")
+    if not webhook_secret:
+        return False
+    
+    expected_signature = hmac.new(
+        webhook_secret.encode(),
+        payload.encode(),
+        hashlib.sha256
+    ).hexdigest()
+    
+    return hmac.compare_digest(expected_signature, signature)
+```
+
+**PayPal Features:**
+```python
+# backend/app/adapters/paypal.py
+
+async def capture_order(self, order_id: str):
+    """Capture payment for an order"""
+    base_url = await self._get_base_url()
+    access_token = await self._get_access_token()
+    
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(
+            f"{base_url}/v2/checkout/orders/{order_id}/capture",
+            headers={"Authorization": f"Bearer {access_token}"}
+        )
+        response.raise_for_status()
+        return response.json()
+
+async def create_refund(self, capture_id: str, amount: float = None, currency: str = "USD"):
+    """Create a refund (full or partial)"""
+    base_url = await self._get_base_url()
+    access_token = await self._get_access_token()
+    
+    payload = {}
+    if amount:  # Partial refund
+        payload["amount"] = {
+            "value": f"{amount:.2f}",
+            "currency_code": currency
+        }
+    
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(
+            f"{base_url}/v2/payments/captures/{capture_id}/refund",
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
+            }
+        )
+        response.raise_for_status()
+        return response.json()
+```
+
+### **Phase 2C: Unified API Routes** (Week 2)
+
+**Update Unified API to support new features:**
+```python
+# backend/app/routes/unified_api.py
+
+@router.post("/payments/capture")
+async def capture_payment(
+    payment_id: str,
+    amount: Optional[float] = None,
+    user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Capture a payment (unified API)"""
+    # Route to appropriate adapter
+    adapter = await request_router.get_adapter(user["id"], "razorpay", db)
+    result = await adapter.capture_payment(payment_id, amount)
+    return result
+
+@router.post("/payments/refund")
+async def create_refund(
+    payment_id: str,
+    amount: Optional[float] = None,
+    user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a refund (unified API)"""
+    adapter = await request_router.get_adapter(user["id"], "razorpay", db)
+    result = await adapter.create_refund(payment_id, amount)
+    return result
+
+@router.post("/payment-links")
+async def create_payment_link(
+    amount: float,
+    description: str,
+    customer_email: Optional[str] = None,
+    user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create payment link (unified API)"""
+    adapter = await request_router.get_adapter(user["id"], "razorpay", db)
+    result = await adapter.create_payment_link(amount, description, customer_email)
+    return result
+```
+
+### **Phase 3: SDK Development** (Week 3-4)
+
+Once adapters are complete, create SDKs:
+
+**Python SDK Structure:**
+```
+unified-sdk-python/
+├── unified_sdk/
+│   ├── __init__.py
+│   ├── client.py          # Main UnifiedClient
+│   ├── resources/
+│   │   ├── payments.py    # payment.create(), payment.capture()
+│   │   ├── refunds.py     # refund.create()
+│   │   └── links.py       # link.create()
+│   ├── http.py            # HTTP client with retry
+│   └── exceptions.py      # Custom exceptions
+├── tests/
+├── setup.py
+└── README.md
+```
+
+**Usage Example:**
+```python
+from unified_sdk import UnifiedClient
+
+client = UnifiedClient(api_key="unf_live_xyz")
+
+# Create order
+order = client.payments.create(
+    amount=500.00,
+    currency="INR"
+)
+
+# Capture payment
+capture = client.payments.capture(
+    payment_id=order.id,
+    amount=500.00
+)
+
+# Create refund
+refund = client.refunds.create(
+    payment_id=order.id,
+    amount=100.00  # Partial refund
+)
+```
+
+---
+
+## ✅ Testing Checklist
+
+### Before Moving to SDK:
+- [ ] PayPal uses v2 API
+- [ ] All Razorpay features work
+- [ ] All PayPal features work
+- [ ] Webhook signature verification works
+- [ ] Error handling covers all cases
+- [ ] Unified API routes tested
+- [ ] Transaction logging works
+- [ ] Rate limiting tested
+
+### Test Commands:
+```bash
+# Test Razorpay
+cd backend
+python -m pytest tests/test_razorpay.py -v
+
+# Test PayPal
+python test_paypal.py
+
+# Test Unified API
+curl -X POST http://localhost:8000/v1/payments/orders \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"amount": 100, "currency": "INR"}'
+```
+
+---
+
+## 📝 Summary
+
+**Current State:**
+- ✅ Basic Razorpay integration working
+- ⚠️ PayPal needs v2 API migration
+- ❌ Missing advanced features (refunds, captures, etc.)
+
+**Next Steps (Priority Order):**
+1. **Fix PayPal v2 API** (1-2 days) - CRITICAL
+2. **Add payment features** (3-5 days)
+3. **Add webhook verification** (1-2 days)
+4. **Update unified API routes** (2-3 days)
+5. **Build Python SDK** (5-7 days)
+
+**Timeline:** ~3 weeks to complete adapters + SDK
+
+Your foundation is solid! The adapters work, you just need to:
+1. Modernize PayPal to v2
+2. Add the missing CRUD operations
+3. Package it all into a clean SDK
+
+Ready to start with PayPal v2 migration? That's the quickest win! 🚀
