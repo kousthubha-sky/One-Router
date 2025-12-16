@@ -1,41 +1,76 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { getUserProfile } from "@/lib/api-server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Shield, Key, BarChart3, Link as LinkIcon } from "lucide-react";
+import { Shield, Key, BarChart3, Link as LinkIcon, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 
 export const dynamic = 'force-dynamic';
 
+interface Service {
+  id: string | number;
+  service_name: string;
+  environment: string;
+}
+
+// Server-side API call to check user services
+async function getUserServices(token: string) {
+  const API_BASE_URL = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/services`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(5000), // 5 second timeout
+    });
+
+    if (!response.ok) {
+      console.error('Failed to fetch services:', response.status);
+      return { services: [], has_services: false, total_count: 0 };
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching services:', error);
+    return { services: [], has_services: false, total_count: 0 };
+  }
+}
+
 export default async function DashboardPage() {
-  const { userId } = await auth();
+  const { userId, getToken } = await auth();
 
   if (!userId) {
     redirect("/sign-in");
   }
 
-  // Get user data from our API
+  // Get authentication token
+  const token = await getToken();
+  
+  if (!token) {
+    redirect("/sign-in");
+  }
+  
+  // Check if user has any services configured
+  const servicesData = await getUserServices(token);
+  const hasServices = servicesData.has_services;
+  const services = servicesData.services || [];
+
+  // If no services, redirect to onboarding
+  if (!hasServices) {
+    redirect("/onboarding");
+  }
+
+  // API Keys count (placeholder - you can fetch real data)
   const apiKeysCount = 0;
   const transactionsCount = 0;
-  const servicesCount = 0;
-  
-  let userDisplayName = `User ID: ${userId}`;
-
-  try {
-    const userProfile = await getUserProfile();
-    if (userProfile.first_name || userProfile.last_name) {
-      userDisplayName = `${userProfile.first_name} ${userProfile.last_name}`.trim();
-    }
-  } catch (error) {
-    console.error("Failed to fetch user profile:", error);
-  }
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <header className=" shadow-sm ">
-        <div className="max-w-4xl bg-[#1a1a1a]/50 rounded-4xl  mx-auto px-4 sm:px-6 lg:px-8">
+      <header className="shadow-sm">
+        <div className="max-w-4xl bg-[#1a1a1a]/50 rounded-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div>
               <div className="flex items-center gap-3 mb-2">
@@ -97,7 +132,7 @@ export default async function DashboardPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-[#888] font-mono">Services</p>
-                    <p className="text-3xl font-bold text-[#00ff88] font-mono">{servicesCount}</p>
+                    <p className="text-3xl font-bold text-[#00ff88] font-mono">{services.length}</p>
                     <p className="text-xs text-[#666] font-mono mt-1">Connected providers</p>
                   </div>
                   <div className="w-12 h-12 bg-[#00ff88]/10 rounded-lg flex items-center justify-center">
@@ -108,11 +143,45 @@ export default async function DashboardPage() {
             </Card>
           </div>
 
+          {/* Connected Services */}
+          <Card className="bg-[#0a0a0a] border-[#222] mb-8">
+            <CardHeader>
+              <CardTitle className="font-mono text-white">🔗 Connected Services</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {services.map((service: Service) => (
+                  <div key={service.id} className="flex items-center justify-between p-4 bg-[#1a1a1a] border border-[#222] rounded-lg hover:border-[#00ff88] transition-colors">
+                    <div className="flex items-center gap-3">
+                      <CheckCircle2 className="w-5 h-5 text-[#00ff88]" />
+                      <div>
+                        <p className="font-medium text-white font-mono capitalize">{service.service_name}</p>
+                        <p className="text-sm text-[#888] font-mono">
+                          Environment: {service.environment}
+                        </p>
+                      </div>
+                    </div>
+                    <Badge className="bg-[#00ff88] text-black border-0">
+                      Active
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4">
+                <Link href="/onboarding">
+                  <Button variant="outline" className="w-full bg-transparent border-[#222] text-white hover:border-[#00ff88] font-mono">
+                    + Add More Services
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Quick Actions */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             <Card className="bg-[#0a0a0a] border-[#222]">
               <CardHeader>
-                <CardTitle className="font-mono text-white">🚀 Quick Start</CardTitle>
+                <CardTitle className="font-mono text-white">🚀 Next Steps</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
@@ -121,8 +190,8 @@ export default async function DashboardPage() {
                       <span className="text-[#00ff88] text-sm font-semibold font-mono">1</span>
                     </div>
                     <div>
-                      <p className="font-medium text-white font-mono">Upload Environment File</p>
-                      <p className="text-sm text-[#888] font-mono">Connect your payment services automatically</p>
+                      <p className="font-medium text-white font-mono">Generate API Keys</p>
+                      <p className="text-sm text-[#888] font-mono">Create keys for your applications</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3 p-3 bg-[#1a1a1a] border border-[#222] rounded-lg hover:border-[#00ff88] transition-colors">
@@ -130,8 +199,8 @@ export default async function DashboardPage() {
                       <span className="text-[#00ff88] text-sm font-semibold font-mono">2</span>
                     </div>
                     <div>
-                      <p className="font-medium text-white font-mono">Generate API Keys</p>
-                      <p className="text-sm text-[#888] font-mono">Create secure keys for your applications</p>
+                      <p className="font-medium text-white font-mono">Read Documentation</p>
+                      <p className="text-sm text-[#888] font-mono">Learn how to integrate OneRouter</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3 p-3 bg-[#1a1a1a] border border-[#222] rounded-lg hover:border-[#00ff88] transition-colors">
@@ -139,15 +208,15 @@ export default async function DashboardPage() {
                       <span className="text-[#00ff88] text-sm font-semibold font-mono">3</span>
                     </div>
                     <div>
-                      <p className="font-medium text-white font-mono">Start Integrating</p>
-                      <p className="text-sm text-[#888] font-mono">Use our SDK in your applications</p>
+                      <p className="font-medium text-white font-mono">Make Your First Call</p>
+                      <p className="text-sm text-[#888] font-mono">Test the unified API</p>
                     </div>
                   </div>
                 </div>
                 <div className="mt-6">
-                  <Link href="/onboarding">
+                  <Link href="/api-keys">
                     <Button className="w-full bg-[#00ff88] text-black hover:bg-[#00dd77] font-mono font-bold">
-                      Start Onboarding →
+                      Generate API Key →
                     </Button>
                   </Link>
                 </div>
@@ -163,49 +232,17 @@ export default async function DashboardPage() {
                   <div className="flex items-center gap-3 p-3 bg-[#1a1a1a] border border-[#222] rounded-lg">
                     <div className="w-2 h-2 bg-[#00ff88] rounded-full animate-pulse"></div>
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-white font-mono">Account created</p>
+                      <p className="text-sm font-medium text-white font-mono">Services connected</p>
                       <p className="text-xs text-[#888] font-mono">Just now</p>
                     </div>
                   </div>
                   <div className="text-center py-8 text-[#666] text-sm font-mono border border-dashed border-[#222] rounded-lg">
-                    No recent transactions yet
+                    No API transactions yet
                   </div>
                 </div>
               </CardContent>
             </Card>
           </div>
-
-          {/* Getting Started Guide */}
-          <Card className="bg-[#0a0a0a] border-[#222]">
-            <CardHeader>
-              <CardTitle className="font-mono text-white">🎯 Getting Started Guide</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="text-center p-4 bg-[#1a1a1a] border border-[#222] rounded-lg hover:border-[#00ff88] transition-colors">
-                  <div className="w-12 h-12 bg-[#00ff88]/10 rounded-lg flex items-center justify-center mx-auto mb-3 border border-[#00ff88]">
-                    <span className="text-[#00ff88] text-xl">📁</span>
-                  </div>
-                  <h3 className="font-semibold text-white mb-2 font-mono">1. Upload Credentials</h3>
-                  <p className="text-sm text-[#888] font-mono">Upload your .env file with payment service credentials</p>
-                </div>
-                <div className="text-center p-4 bg-[#1a1a1a] border border-[#222] rounded-lg hover:border-[#00ff88] transition-colors">
-                  <div className="w-12 h-12 bg-[#00ff88]/10 rounded-lg flex items-center justify-center mx-auto mb-3 border border-[#00ff88]">
-                    <span className="text-[#00ff88] text-xl">🔑</span>
-                  </div>
-                  <h3 className="font-semibold text-white mb-2 font-mono">2. Generate Keys</h3>
-                  <p className="text-sm text-[#888] font-mono">Create secure API keys for your applications</p>
-                </div>
-                <div className="text-center p-4 bg-[#1a1a1a] border border-[#222] rounded-lg hover:border-[#00ff88] transition-colors">
-                  <div className="w-12 h-12 bg-[#00ff88]/10 rounded-lg flex items-center justify-center mx-auto mb-3 border border-[#00ff88]">
-                    <span className="text-[#00ff88] text-xl">🚀</span>
-                  </div>
-                  <h3 className="font-semibold text-white mb-2 font-mono">3. Start Building</h3>
-                  <p className="text-sm text-[#888] font-mono">Integrate OneRouter into your applications</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </main>
     </div>

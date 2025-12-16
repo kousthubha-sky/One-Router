@@ -142,7 +142,7 @@ async def parse_env_file(
             'expires_at': time.time() + 3600,  # 1 hour expiry
             'user_id': user["id"]  # Associate with user for security
         }
-        save_sessions()  # Persist to file
+        save_sessions()
 
         return ParseResponse(
             detected_services=detections,

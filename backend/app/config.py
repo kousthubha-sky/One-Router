@@ -23,7 +23,7 @@ class Settings:
     # Frontend
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
     API_HOST: str = os.getenv("API_HOST", "127.0.0.1")
-    API_PORT: int = int(os.getenv("API_PORT", "8001"))
+    API_PORT: int = int(os.getenv("API_PORT", "8000"))
 
     # Security
     SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")

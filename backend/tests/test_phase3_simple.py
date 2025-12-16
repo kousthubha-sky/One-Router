@@ -33,7 +33,7 @@ def test_env_parser_subscription_detection():
     # Check plan details
     plans = {plan["env_key"]: plan for plan in detection.feature_metadata["subscription_plans"]}
     assert plans["RAZORPAY_SUBSCRIPTION_PLAN_BASIC"]["plan_id"] == "plan_monthly_99"
-    assert plans["RAZORPAY_SUBSCRIPTION_PLAN_BASIC"]["name"] == "Basic"
+    assert plans["RAZORPAY_SUBSCRIPTION_PLAN_BASIC"]["name"] == "Basic Plan"
 
 
 def test_env_parser_mixed_services():

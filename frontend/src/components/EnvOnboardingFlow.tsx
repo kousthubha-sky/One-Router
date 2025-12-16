@@ -12,7 +12,14 @@ type DetectedService = {
   status: ServiceStatus;
   keys: string[];
   features: string[];
-  feature_metadata?: any;
+  feature_metadata?: Record<string, unknown>;
+};
+
+type BackendService = {
+  service_name: string;
+  detected_keys: string[];
+  features: Record<string, boolean>;
+  feature_metadata?: Record<string, unknown>;
 };
 
 // Environment Parser Component
@@ -63,14 +70,14 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
       const result = await parseResponse.json();
 
       if (result.status === 'error') {
-        throw new Error(result.errors ? Object.values(result.errors)[0] : 'Parse error');
+        throw new Error(result.errors ? String(Object.values(result.errors)[0]) : 'Parse error');
       }
 
       // Store session ID for configure request
       setSessionId(result.session_id);
 
       // Convert backend response to frontend format
-      const detected: DetectedService[] = result.detected_services.map((service: any) => ({
+      const detected: DetectedService[] = result.detected_services.map((service: BackendService) => ({
         name: service.service_name,
         status: "supported", // All detected services from backend are supported
         keys: service.detected_keys,

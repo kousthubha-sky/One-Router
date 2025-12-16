@@ -13,6 +13,7 @@ from .auth.dependencies import get_current_user, get_api_user, api_key_auth
 from .models import User
 from .routes.onboarding import router as onboarding_router
 from .routes.unified_api import router as unified_api_router
+from .routes.services import router as services_router
 from .cache import init_redis, close_redis, cache_service
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -26,6 +27,13 @@ async def init_db():
             from . import models
             await conn.run_sync(User.metadata.create_all)
         print("Database tables initialized successfully")
+
+        # Test database connection health
+        from .database import check_connection_health
+        db_healthy = await check_connection_health()
+        if not db_healthy:
+            print("WARNING: Database connection health check failed")
+
     except Exception as e:
         print(f"Database initialization error: {e}")
 
@@ -55,10 +63,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Add security headers
+# Add security headers (skip for OPTIONS requests)
 @app.middleware("http")
 async def add_security_headers(request, call_next):
     response = await call_next(request)
+
+    # Skip security headers for OPTIONS requests (CORS preflight)
+    if request.method == "OPTIONS":
+        return response
+
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
@@ -81,6 +94,7 @@ async def shutdown_event():
 
 # Include routers
 app.include_router(onboarding_router, prefix="/api/onboarding", tags=["onboarding"])
+app.include_router(services_router, prefix="/api", tags=["services"])
 app.include_router(unified_api_router, prefix="/v1", tags=["unified-api"])
 
 # Health check endpoint
@@ -92,16 +106,36 @@ async def root():
     }
 
 @app.get("/api/health")
-async def health_check():
-    """Health check including Redis status"""
-    redis_status = await cache_service.ping()
-    
-    return {
+async def health_check(db: AsyncSession = Depends(get_db)):
+    """Health check including database and Redis status"""
+    health_status = {
         "status": "healthy",
         "message": "API is running",
-        "redis": "connected" if redis_status else "disconnected",
         "timestamp": datetime.utcnow().isoformat()
     }
+
+    try:
+        # Test database connection
+        # Test database connection
+        result = await db.execute(text("SELECT 1 as test"))
+        db_test = result.scalar() == 1
+        db_test = result.scalar() == 1
+        health_status["database"] = "connected" if db_test else "error"
+        print(f"Database test result: {db_test}")
+    except Exception as e:
+        health_status["database"] = f"error: {str(e)}"
+        health_status["status"] = "unhealthy"
+        print(f"Database health check failed: {e}")
+
+    # Test Redis connection
+    try:
+        redis_status = await cache_service.ping()
+        health_status["redis"] = "connected" if redis_status else "disconnected"
+    except Exception as e:
+        health_status["redis"] = f"error: {str(e)}"
+        print(f"Redis health check failed: {e}")
+
+    return health_status
 
 @app.get("/api/debug/redis")
 async def debug_redis(user = Depends(get_current_user)):
