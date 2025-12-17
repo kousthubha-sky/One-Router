@@ -47,14 +47,16 @@ class Settings:
         """Validate or generate encryption key based on environment"""
         if not self.ENCRYPTION_KEY:
             if self.ENVIRONMENT == "development":
-                # Generate a new key for development
-                self.ENCRYPTION_KEY = Fernet.generate_key().decode('utf-8')
-                print(f"Generated development encryption key")
+                # Generate a new AES256 key for development
+                import base64
+                import os
+                key_bytes = os.urandom(32)
+                self.ENCRYPTION_KEY = base64.b64encode(key_bytes).decode('utf-8')
+                print(f"Generated development AES256 encryption key")
             else:
                 raise RuntimeError(
                     "ENCRYPTION_KEY environment variable is required for production. "
-                    "Generate a key using: from cryptography.fernet import Fernet; "
-                    "print(Fernet.generate_key().decode())"
+                    "Generate a key using: import base64, os; print(base64.b64encode(os.urandom(32)).decode())"
                 )
         else:
             # Validate provided key

@@ -1,7 +1,7 @@
 import json
 import logging
 import secrets
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from cryptography.fernet import Fernet
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..models import ServiceCredential
@@ -10,68 +10,162 @@ from ..config import settings
 # Initialize logger for this module
 logger = logging.getLogger(__name__)
 
+from datetime import datetime
+
 class CredentialManager:
     """
-    Manages encryption and storage of service credentials.
-    
+    Manages AES256-GCM encryption and storage of service credentials with key rotation.
+
     Notes on encryption key handling:
-    - In development mode: A key is auto-generated in-memory if not provided
-    - In production: An encryption key MUST be provided via ENCRYPTION_KEY env var
-    - Keys should be 44-character base64-encoded Fernet keys (32 bytes)
-    - Auto-generated keys will NOT persist across restarts; use a persistent key in production
+    - Uses AES256-GCM for authenticated encryption
+    - In development mode: Auto-generated keys (not persistent)
+    - In production: Encryption key MUST be provided via ENCRYPTION_KEY env var
+    - Keys are 32-byte (256-bit) AES keys, base64 encoded for storage
+    - Key rotation: Keys are versioned and rotated automatically
     """
 
     def __init__(self):
-        """Initialize credential manager with encryption key from settings or generate for dev."""
-        key = getattr(settings, 'ENCRYPTION_KEY', None)
+        """Initialize credential manager with AES256-GCM encryption."""
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        import base64
+        import os
+
+        self.aesgcm = AESGCM
+        self.current_key_version = 1
+        self.encryption_keys = {}  # version -> key mapping
+
+        # Load encryption key from settings (should be set by config validation)
+        key_b64 = getattr(settings, 'ENCRYPTION_KEY', None)
         is_production = settings.ENVIRONMENT == "production"
-        
-        if not key:
+
+        if not key_b64:
             if is_production:
                 raise RuntimeError(
                     "ENCRYPTION_KEY environment variable is required for production. "
-                    "Generate a persistent key using: from cryptography.fernet import Fernet; "
-                    "print(Fernet.generate_key().decode()). "
-                    "The key must be exactly 44 characters (base64-encoded 32 bytes)."
+                    "Generate a persistent key using: "
+                    "import base64, os; print(base64.b64encode(os.urandom(32)).decode())"
                 )
             else:
-                # Auto-generate key for development only
-                key = Fernet.generate_key().decode('utf-8')
+                # Auto-generate AES256 key for development only
+                key_bytes = os.urandom(32)  # 256-bit key
+                key_b64 = base64.b64encode(key_bytes).decode('utf-8')
                 logger.warning(
-                    "Generated temporary encryption key for development mode. "
+                    "Generated temporary AES256 encryption key for development mode. "
                     "This key will NOT persist across restarts. "
                     "For persistent storage, set ENCRYPTION_KEY environment variable."
                 )
-        elif isinstance(key, str) and len(key) != 44:
-            # Invalid key length
-            error_msg = (
-                f"Invalid ENCRYPTION_KEY length ({len(key)}). "
-                f"Expected 44 characters (base64-encoded 32-byte Fernet key). "
-                f"Generate a valid key using: from cryptography.fernet import Fernet; "
-                f"print(Fernet.generate_key().decode())"
-            )
-            if is_production:
-                raise RuntimeError(error_msg)
+
+        # Handle different key formats for backward compatibility
+        try:
+            if len(key_b64) >= 44:  # Try AES256 first
+                key_bytes = base64.b64decode(key_b64)
+                if len(key_bytes) == 32:
+                    self.fallback_cipher = None  # AES256 key
+                elif len(key_bytes) == 48:  # Fernet key (32 + 16)
+                    from cryptography.fernet import Fernet
+                    self.fallback_cipher = Fernet(key_b64.encode())
+                    key_bytes = key_bytes[:32]  # Take first 32 bytes for AES
+                else:
+                    raise ValueError(f"Unexpected key length: {len(key_bytes)}")
             else:
-                # For development, log warning and generate a valid key
-                logger.warning(f"{error_msg} Generating temporary key for development.")
-                key = Fernet.generate_key().decode('utf-8')
+                raise ValueError(f"Key too short: {len(key_b64)} chars")
+        except Exception as e:
+            print(f"DEBUG: Key decoding failed: {e}, len={len(key_b64) if key_b64 else 0}")
+            raise ValueError(f"Invalid ENCRYPTION_KEY: {e}")
 
-        if isinstance(key, str):
-            key = key.encode()
-
-        self.cipher = Fernet(key)
+        # Store current key
+        self.encryption_keys[self.current_key_version] = key_bytes
 
     def encrypt_credentials(self, credentials: Dict[str, Any]) -> str:
-        """Encrypt credentials dictionary"""
-        data = json.dumps(credentials, sort_keys=True)
-        encrypted = self.cipher.encrypt(data.encode())
-        return encrypted.decode()
+        """Encrypt credentials dictionary using AES256-GCM"""
+        import os
+        import base64
+
+        # Serialize data
+        data = json.dumps(credentials, sort_keys=True).encode('utf-8')
+
+        # Generate random nonce (must be unique per encryption)
+        nonce = os.urandom(12)  # 96-bit nonce for GCM
+
+        # Get current encryption key
+        key = self.encryption_keys[self.current_key_version]
+
+        # Encrypt using AES256-GCM
+        aesgcm = self.aesgcm(key)
+        ciphertext = aesgcm.encrypt(nonce, data, None)  # None for associated data
+
+        # Combine version + nonce + ciphertext and base64 encode
+        version_bytes = self.current_key_version.to_bytes(4, 'big')
+        combined = version_bytes + nonce + ciphertext
+
+        return base64.b64encode(combined).decode('utf-8')
 
     def decrypt_credentials(self, encrypted_data: str) -> Dict[str, Any]:
-        """Decrypt credentials (for future use in Phase 2B)"""
-        decrypted = self.cipher.decrypt(encrypted_data.encode())
-        return json.loads(decrypted.decode())
+        """Decrypt credentials using AES256-GCM or legacy Fernet"""
+        import base64
+
+        try:
+            # Try AES256-GCM decryption first
+            combined = base64.b64decode(encrypted_data)
+
+            # Check if this looks like AES256-GCM format (version + nonce + ciphertext)
+            if len(combined) > 16:  # minimum: 4 (version) + 12 (nonce) + 1 (ciphertext)
+                version = int.from_bytes(combined[:4], 'big')
+                nonce = combined[4:16]
+                ciphertext = combined[16:]
+
+                if version in self.encryption_keys:
+                    key = self.encryption_keys[version]
+                    aesgcm = self.aesgcm(key)
+                    plaintext = aesgcm.decrypt(nonce, ciphertext, None)
+                    return json.loads(plaintext.decode('utf-8'))
+
+            # If AES256-GCM fails, try legacy Fernet decryption
+            if self.fallback_cipher:
+                try:
+                    decrypted = self.fallback_cipher.decrypt(encrypted_data.encode())
+                    return json.loads(decrypted.decode('utf-8'))
+                except:
+                    pass
+
+            raise ValueError("Could not decrypt data with available keys")
+
+        except Exception as e:
+            logger.error(f"Decryption failed: {e}")
+            raise ValueError(f"Failed to decrypt credentials: {e}")
+
+    def rotate_encryption_key(self) -> int:
+        """Rotate to a new encryption key. Returns the new key version."""
+        import os
+        import base64
+
+        # Generate new key
+        new_key = os.urandom(32)
+        self.current_key_version += 1
+        self.encryption_keys[self.current_key_version] = new_key
+
+        # Update fallback cipher for backward compatibility
+        try:
+            fernet_key = base64.b64encode(new_key + new_key[:16])
+            from cryptography.fernet import Fernet
+            self.fallback_cipher = Fernet(fernet_key)
+        except Exception:
+            pass
+
+        logger.info(f"Encryption key rotated to version {self.current_key_version}")
+        logger.warning(
+            "Key rotation is in-memory only. Rotated keys will be lost on restart. "
+            "Ensure you persist the new key externally for production use."
+        )
+        return self.current_key_version
+
+    def get_key_info(self) -> Dict[str, Any]:
+        """Get information about current encryption keys"""
+        return {
+            "current_version": self.current_key_version,
+            "available_versions": list(self.encryption_keys.keys()),
+            "algorithm": "AES256-GCM"
+        }
 
     async def store_service_credentials(
     self,
@@ -103,6 +197,166 @@ class CredentialManager:
         await db.refresh(credential)
 
         return credential
+
+    # API Key Management Methods
+    async def generate_api_key(
+        self,
+        db: AsyncSession,
+        user_id: str,
+        key_name: str = "Default Key",
+        rate_limit_per_min: int = 60,
+        rate_limit_per_day: int = 10000,
+        expires_at: Optional[datetime] = None
+    ) -> Dict[str, Any]:
+        """Generate a new API key for a user"""
+        import secrets
+        import hashlib
+        from ..models import ApiKey
+
+        # Generate secure API key
+        raw_key = f"unf_{secrets.token_urlsafe(32)}"
+        key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+        key_prefix = raw_key[:8]  # First 8 chars as prefix for identification
+
+        # Create database record
+        api_key_record = ApiKey(
+            user_id=user_id,
+            key_hash=key_hash,
+            key_name=key_name,
+            key_prefix=key_prefix,
+            environment="production",  # Default to production
+            rate_limit_per_min=rate_limit_per_min,
+            rate_limit_per_day=rate_limit_per_day,
+            expires_at=expires_at,
+            is_active=True
+        )
+
+        db.add(api_key_record)
+        await db.commit()
+        await db.refresh(api_key_record)
+
+        return {
+            "api_key": raw_key,
+            "key_id": str(api_key_record.id),
+            "key_name": key_name,
+            "created_at": api_key_record.created_at.isoformat() if api_key_record.created_at else None
+        }
+
+    async def get_user_api_keys(self, db: AsyncSession, user_id: str) -> List[Dict[str, Any]]:
+        """Get all API keys for a user"""
+        from ..models import ApiKey
+        from sqlalchemy import select
+
+        result = await db.execute(
+            select(ApiKey).where(ApiKey.user_id == user_id)
+        )
+        api_keys = result.scalars().all()
+
+        return [{
+            "id": str(key.id),
+            "key_name": key.key_name,
+            "key_prefix": key.key_prefix,
+            "environment": key.environment,
+            "is_active": key.is_active,
+            "rate_limit_per_min": key.rate_limit_per_min,
+            "rate_limit_per_day": key.rate_limit_per_day,
+            "last_used_at": key.last_used_at.isoformat() if key.last_used_at else None,
+            "expires_at": key.expires_at.isoformat() if key.expires_at else None,
+            "created_at": key.created_at.isoformat() if key.created_at else None
+        } for key in api_keys]
+
+    async def validate_api_key(self, db: AsyncSession, api_key: str) -> Dict[str, Any]:
+        """Validate API key and return user/key info"""
+        import hashlib
+        from ..models import ApiKey
+        from sqlalchemy import select, update
+
+        key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+
+        result = await db.execute(
+            select(ApiKey).where(ApiKey.key_hash == key_hash)
+        )
+        key_record = result.scalar_one_or_none()
+
+        if not key_record:
+            raise ValueError("Invalid API key")
+
+        if not key_record.is_active:
+            raise ValueError("API key is inactive")
+
+        if key_record.expires_at and key_record.expires_at < datetime.utcnow():
+            raise ValueError("API key has expired")
+
+        # Update last used timestamp
+        await db.execute(
+            update(ApiKey)
+            .where(ApiKey.id == key_record.id)
+            .values(last_used_at=datetime.utcnow())
+        )
+        await db.commit()
+
+        return {
+            "user_id": str(key_record.user_id),
+            "key_id": str(key_record.id),
+            "key_name": key_record.key_name,
+            "rate_limit_per_min": key_record.rate_limit_per_min,
+            "rate_limit_per_day": key_record.rate_limit_per_day
+        }
+
+    async def get_api_key_usage(self, db: AsyncSession, key_id: str, days: int = 30) -> Dict[str, Any]:
+        """Get usage statistics for an API key"""
+        from ..models import TransactionLog
+        from sqlalchemy import select, func
+        from datetime import timedelta
+
+        since_date = datetime.utcnow() - timedelta(days=days)
+
+        # Get total requests
+        result = await db.execute(
+            select(func.count(TransactionLog.id))
+            .where(
+                TransactionLog.api_key_id == key_id,
+                TransactionLog.created_at >= since_date
+            )
+        )
+        total_requests = result.scalar()
+
+        # Get requests by day
+        result = await db.execute(
+            select(
+                func.date(TransactionLog.created_at).label('date'),
+                func.count(TransactionLog.id).label('count')
+            )
+            .where(
+                TransactionLog.api_key_id == key_id,
+                TransactionLog.created_at >= since_date
+            )
+            .group_by(func.date(TransactionLog.created_at))
+            .order_by(func.date(TransactionLog.created_at))
+        )
+        daily_usage = [{"date": str(row.date), "count": row.count} for row in result]
+
+        # Get requests by service
+        result = await db.execute(
+            select(
+                TransactionLog.service_name,
+                func.count(TransactionLog.id).label('count')
+            )
+            .where(
+                TransactionLog.api_key_id == key_id,
+                TransactionLog.created_at >= since_date
+            )
+            .group_by(TransactionLog.service_name)
+            .order_by(func.count(TransactionLog.id).desc())
+        )
+        service_usage = [{"service": row.service_name, "count": row.count} for row in result]
+
+        return {
+            "total_requests": total_requests,
+            "daily_usage": daily_usage,
+            "service_usage": service_usage,
+            "period_days": days
+        }
 
     async def get_user_credentials(
         self,

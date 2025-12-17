@@ -206,24 +206,97 @@ async def get_user_profile(user = Depends(get_current_user), db: AsyncSession = 
 
 # API Key Management (Clerk JWT protected)
 @app.post("/api/keys")
-async def generate_api_key(user = Depends(get_current_user)):
+async def generate_api_key(
+    key_name: str = "My API Key",
+    db: AsyncSession = Depends(get_db),
+    user = Depends(get_current_user)
+):
     """Generate a new API key for the authenticated user"""
-    user_id = user.get("id") or "unknown_user"
-    api_key = api_key_auth.generate_api_key(user_id)
+    from app.services.credential_manager import CredentialManager
+
+    # Verify user has a valid ID
+    user_id = user.get("id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User ID not found in authentication token")
+    
+    cred_manager = CredentialManager()
+    user_id = str(user_id)
+
+    result = await cred_manager.generate_api_key(
+        db=db,
+        user_id=user_id,
+        key_name=key_name
+    )
 
     return {
-        "api_key": api_key,
-        "message": "API key generated successfully",
-        "user_id": user_id
+        "api_key": result["api_key"],
+        "key_id": result["key_id"],
+        "key_name": result["key_name"],
+        "message": "API key generated successfully. Store this key securely - it cannot be retrieved again.",
+        "warning": "This API key will only be shown once. Make sure to copy it now."
     }
 
 @app.get("/api/keys")
-async def list_api_keys(user = Depends(get_current_user)):
+async def list_api_keys(
+    db: AsyncSession = Depends(get_db),
+    user = Depends(get_current_user)
+):
     """List API keys for the authenticated user"""
-    # This is a simplified version - in production you'd query the database
+    from app.services.credential_manager import CredentialManager
+
+    # Verify user has a valid ID
+    user_id = user.get("id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User ID not found in authentication token")
+    
+    cred_manager = CredentialManager()
+    user_id = str(user_id)
+
+    api_keys = await cred_manager.get_user_api_keys(db, user_id)
+
     return {
-        "api_keys": [],
-        "message": "API key listing not yet implemented"
+        "api_keys": api_keys,
+        "count": len(api_keys)
+    }
+
+@app.get("/api/keys/{key_id}/usage")
+async def get_api_key_usage(
+    key_id: str,
+    days: int = 30,
+    db: AsyncSession = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """Get usage statistics for a specific API key"""
+    from app.services.credential_manager import CredentialManager
+    from uuid import UUID
+
+    # Verify user has a valid ID
+    user_id = user.get("id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User ID not found in authentication token")
+    
+    cred_manager = CredentialManager()
+    user_id = str(user_id)
+
+    # Verify the API key belongs to the user
+    try:
+        key_uuid = UUID(key_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid key ID format")
+
+    # Check if the key belongs to the user
+    api_keys = await cred_manager.get_user_api_keys(db, user_id)
+    key_info = next((k for k in api_keys if k["id"] == key_id), None)
+
+    if not key_info:
+        raise HTTPException(status_code=404, detail="API key not found")
+
+    usage_stats = await cred_manager.get_api_key_usage(db, key_id, days)
+
+    return {
+        "key_id": key_id,
+        "key_name": key_info["key_name"],
+        "usage": usage_stats
     }
 
 # Debug endpoints
