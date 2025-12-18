@@ -42,6 +42,9 @@ class Settings:
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB
     ALLOWED_EXTENSIONS: set = {".env", ".txt"}
 
+    # Session Management
+    SESSION_TTL_SECONDS: int = int(os.getenv("SESSION_TTL_SECONDS", "3600"))  # 1 hour default
+
     def __init__(self):
         """Initialize settings and validate/generate encryption key"""
         # Load admin user IDs from environment variable (comma-separated)

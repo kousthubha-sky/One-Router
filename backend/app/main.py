@@ -34,6 +34,10 @@ async def init_db():
         if not db_healthy:
             print("WARNING: Database connection health check failed")
 
+        # Migrate sessions from file to Redis if needed
+        from .routes.onboarding import migrate_file_sessions_to_redis
+        await migrate_file_sessions_to_redis()
+
     except Exception as e:
         print(f"Database initialization error: {e}")
 
@@ -108,7 +112,7 @@ async def root():
 @app.get("/api/health")
 async def health_check(db: AsyncSession = Depends(get_db)):
     """Health check including database and Redis status"""
-    health_status = {
+    health_status: Dict[str, Any] = {
         "status": "healthy",
         "message": "API is running",
         "timestamp": datetime.utcnow().isoformat()
@@ -116,24 +120,30 @@ async def health_check(db: AsyncSession = Depends(get_db)):
 
     try:
         # Test database connection
-        # Test database connection
         result = await db.execute(text("SELECT 1 as test"))
         db_test = result.scalar() == 1
-        db_test = result.scalar() == 1
         health_status["database"] = "connected" if db_test else "error"
-        print(f"Database test result: {db_test}")
     except Exception as e:
         health_status["database"] = f"error: {str(e)}"
         health_status["status"] = "unhealthy"
-        print(f"Database health check failed: {e}")
 
-    # Test Redis connection
+    # Test Redis connection and session storage
     try:
         redis_status = await cache_service.ping()
         health_status["redis"] = "connected" if redis_status else "disconnected"
+
+        # Test session storage
+        from app.routes.onboarding import get_session_manager
+        session_manager = await get_session_manager()
+        session_count = await session_manager.get_session_count()
+        health_status["sessions"] = {
+            "status": "operational",
+            "active_sessions": session_count
+        }
+
     except Exception as e:
         health_status["redis"] = f"error: {str(e)}"
-        print(f"Redis health check failed: {e}")
+        health_status["sessions"] = f"error: {str(e)}"
 
     return health_status
 
