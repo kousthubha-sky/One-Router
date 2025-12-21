@@ -36,3 +36,5 @@ alembic.ini
 parsed_sessions.json
 
 test.env
+
+.pytest_cache/
