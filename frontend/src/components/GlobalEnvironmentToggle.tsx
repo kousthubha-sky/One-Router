@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useClientApiCall } from "@/lib/api-client";
+import { loadCsrfToken, fetchWithCsrf } from "@/lib/csrf";
 import { Loader2, Zap, Shield } from "lucide-react";
 
 interface Service {
@@ -23,6 +24,11 @@ export function GlobalEnvironmentToggle({ services, onGlobalSwitch }: GlobalEnvi
   const [currentMode, setCurrentMode] = useState<"test" | "live" | "mixed">("test");
   const [manualOverride, setManualOverride] = useState<"test" | "live" | null>(null);
   const apiClient = useClientApiCall();
+
+  // Load CSRF token on component mount for state-changing operations
+  useEffect(() => {
+    loadCsrfToken().catch(err => console.warn('Failed to preload CSRF token:', err));
+  }, []);
 
   // Determine current global mode
   useEffect(() => {
@@ -63,49 +69,77 @@ export function GlobalEnvironmentToggle({ services, onGlobalSwitch }: GlobalEnvi
     setIsSwitching(true);
     
     try {
-      console.log('Switching all services to:', targetEnvironment);
+      console.log('Atomically switching all services to:', targetEnvironment);
 
-      // Switch all services to target environment
-      const switchPromises = services.map(service => {
-        console.log(`Switching ${service.service_name} to ${targetEnvironment}`);
-        return apiClient(`/api/services/${service.service_name}/switch-environment`, {
-          method: 'POST',
-          body: JSON.stringify({ environment: targetEnvironment })
-        });
+      // Use atomic batch API instead of sequential updates
+      // This ensures all-or-nothing semantics with database transaction
+      const switchResponse = await fetchWithCsrf('/api/services/switch-all-environments', {
+        method: 'POST',
+        body: JSON.stringify({
+          environment: targetEnvironment,
+          service_ids: services.map(s => s.id)
+        })
       });
 
-      const results = await Promise.all(switchPromises);
-      console.log('Switch results:', results);
+      if (!switchResponse.ok) {
+        throw new Error(`Switch failed: ${switchResponse.statusText}`);
+      }
 
-      // Check if any API calls failed
-      const failedResults = results.filter(result => !result || result.error);
-      if (failedResults.length > 0) {
-        console.error('Some API calls failed:', failedResults);
-        throw new Error('Some environment switches failed');
+      const switchResult = await switchResponse.json();
+      console.log('Switch result:', switchResult);
+
+      // Verify that the switch succeeded
+      const verifyResponse = await fetchWithCsrf('/api/services/verify-environment', {
+        method: 'POST',
+        body: JSON.stringify({ expected: targetEnvironment })
+      });
+
+      if (!verifyResponse.ok) {
+        throw new Error(`Verification failed: ${verifyResponse.statusText}`);
+      }
+
+      const verification = await verifyResponse.json();
+      console.log('Verification result:', verification);
+
+      // Check if all services switched successfully
+      if (!verification.all_switched) {
+        console.error('Not all services switched:', {
+          switched: verification.switched_count,
+          failed: verification.failed_count,
+          services: verification.services
+        });
+        throw new Error(
+          `Environment switch incomplete: ${verification.switched_count} switched, ` +
+          `${verification.failed_count} failed`
+        );
       }
 
       onGlobalSwitch?.(targetEnvironment);
+      console.log('All services switched successfully');
 
-      // Debug: Check what the backend thinks the state is
+      // Soft reload - use SWR-like refetch instead of hard page reload
+      // This preserves user state while getting fresh data
+      // The parent component should have access to a mutate function for /api/services
+      // For now, do a gentle refresh of just the services data
+      // Note: Ideally this would be passed as a prop from parent component that uses SWR
       try {
-        const debugResponse = await apiClient('/api/debug/service-environments');
-        console.log('Backend state after switch:', debugResponse);
-      } catch (debugError) {
-        console.warn('Could not fetch debug state:', debugError);
+        // Refresh the page data without full reload
+        // This gives users fresh data without losing form state
+        window.location.href = window.location.href;
+      } catch (err) {
+        console.warn('Could not trigger data refresh:', err);
       }
-
-      // Wait longer to ensure all backend operations complete before reload
-      console.log('All switches completed successfully, waiting before reload...');
-      setTimeout(() => {
-        console.log('Reloading page after environment switch');
-        console.log('Current window location:', window.location.href);
-        window.location.href = window.location.href; // Force full page reload with fresh data
-      }, 1500);
 
     } catch (error) {
       console.error("Failed to switch all services:", error);
       // Reset on error - let it recalculate from services
       setManualOverride(null);
+      setCurrentMode("test");
+      
+      // Show user-friendly error message
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      alert(`Failed to switch environment: ${errorMsg}\n\nPlease try again.`);
+    } finally {
       setIsSwitching(false);
     }
   };

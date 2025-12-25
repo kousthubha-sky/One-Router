@@ -18,9 +18,15 @@ class ApiKey(Base):
     rate_limit_per_day = Column(Integer, default=10000)
     last_used_at = Column(TIMESTAMP, nullable=True)
     expires_at = Column(TIMESTAMP, nullable=True)
+    rotated_at = Column(TIMESTAMP, nullable=True, comment="Timestamp of last key rotation")
+    rotation_required = Column(Boolean, default=False, comment="Whether rotation is required")
+    rotated_from_id = Column(UUID(as_uuid=True), ForeignKey("api_keys.id"), nullable=True, comment="ID of previous key if rotated")
     created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     __table_args__ = (
         Index('idx_api_keys_user_id', 'user_id'),
         Index('idx_api_keys_key_hash', 'key_hash'),
+        Index('idx_api_keys_active', 'is_active'),
+        Index('idx_api_keys_rotation_required', 'rotation_required'),
     )

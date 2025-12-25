@@ -3,12 +3,22 @@ import json
 import logging
 import time
 from typing import Dict, Any, Optional
+from pybreaker import CircuitBreaker
 from .base import BaseAdapter
 
 class PayPalAdapter(BaseAdapter):
     """PayPal payment service adapter"""
 
     logger = logging.getLogger(__name__)
+    
+    # Circuit breakers for external API calls
+    # failure_threshold: number of failures before opening circuit
+    # recovery_timeout: seconds to wait before attempting recovery
+    _auth_breaker = CircuitBreaker(fail_max=5, reset_timeout=60, listeners=[])
+    _order_breaker = CircuitBreaker(fail_max=5, reset_timeout=60, listeners=[])
+    _capture_breaker = CircuitBreaker(fail_max=5, reset_timeout=60, listeners=[])
+    _refund_breaker = CircuitBreaker(fail_max=5, reset_timeout=60, listeners=[])
+    _webhook_breaker = CircuitBreaker(fail_max=5, reset_timeout=60, listeners=[])
 
     def __init__(self, credentials: Dict[str, str]):
         super().__init__(credentials)
@@ -37,36 +47,44 @@ class PayPalAdapter(BaseAdapter):
         if self.access_token and self.token_expires and time.time() < (self.token_expires - 300):
             return self.access_token
 
-        base_url = await self._get_base_url()
-        token_url = base_url.replace("/v1", "/v1/oauth2/token")
+        return await self._auth_breaker.call(self._get_access_token_impl)
 
-        # Basic auth with client credentials
-        auth = (
-            self.credentials["PAYPAL_CLIENT_ID"],
-            self.credentials["PAYPAL_CLIENT_SECRET"]
-        )
+    async def _get_access_token_impl(self) -> str:
+        """Implementation of access token fetch (protected by circuit breaker)"""
+        try:
+            base_url = await self._get_base_url()
+            token_url = base_url.replace("/v1", "/v1/oauth2/token")
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                token_url,
-                data={"grant_type": "client_credentials"},
-                auth=auth,
-                headers={"Accept": "application/json"}
+            # Basic auth with client credentials
+            auth = (
+                self.credentials["PAYPAL_CLIENT_ID"],
+                self.credentials["PAYPAL_CLIENT_SECRET"]
             )
 
-            if response.status_code != 200:
-                error_msg = f"PayPal auth failed: {response.status_code}"
-                try:
-                    error_data = response.json()
-                    error_msg += f" - {error_data.get('error_description', response.text)}"
-                except json.JSONDecodeError:
-                    error_msg += f" - {response.text or 'No response text'}"
-                raise Exception(error_msg)
-            data = response.json()
-            self.access_token = data["access_token"]
-            self.token_expires = time.time() + data["expires_in"]
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    token_url,
+                    data={"grant_type": "client_credentials"},
+                    auth=auth,
+                    headers={"Accept": "application/json"}
+                )
 
-            return self.access_token
+                if response.status_code != 200:
+                    error_msg = f"PayPal auth failed: {response.status_code}"
+                    try:
+                        error_data = response.json()
+                        error_msg += f" - {error_data.get('error_description', response.text)}"
+                    except json.JSONDecodeError:
+                        error_msg += f" - {response.text or 'No response text'}"
+                    raise Exception(error_msg)
+                data = response.json()
+                self.access_token = data["access_token"]
+                self.token_expires = time.time() + data["expires_in"]
+
+                return self.access_token
+        except Exception as e:
+            self.logger.error(f"PayPal token fetch failed: {e}")
+            raise
 
     async def validate_credentials(self) -> bool:
         """Validate PayPal credentials by getting access token"""
@@ -89,6 +107,32 @@ class PayPalAdapter(BaseAdapter):
     ) -> bool:
         """Verify PayPal webhook signature"""
         try:
+            return await self._webhook_breaker.call(
+                self._verify_webhook_signature_impl,
+                transmission_id,
+                transmission_time,
+                transmission_sig,
+                auth_algo,
+                cert_url,
+                webhook_id,
+                webhook_event
+            )
+        except Exception as e:
+            self.logger.error(f"PayPal webhook verification failed: {e}")
+            return False
+
+    async def _verify_webhook_signature_impl(
+        self,
+        transmission_id: str,
+        transmission_time: str,
+        transmission_sig: str,
+        auth_algo: str,
+        cert_url: str,
+        webhook_id: str,
+        webhook_event: str
+    ) -> bool:
+        """Implementation of webhook signature verification (protected by circuit breaker)"""
+        try:
             payload = {
                 "transmission_id": transmission_id,
                 "transmission_time": transmission_time,
@@ -103,11 +147,19 @@ class PayPalAdapter(BaseAdapter):
             verification_status = response.get("verification_status")
             return verification_status == "SUCCESS"
         except Exception as e:
-            self.logger.error(f"PayPal webhook verification failed: {e}")
+            self.logger.error(f"PayPal webhook signature verification error: {e}")
             return False
 
     async def create_order(self, amount: float, currency: str = "USD", **kwargs) -> Dict[str, Any]:
         """Create a PayPal order using v2 API"""
+        try:
+            return await self._order_breaker.call(self._create_order_impl, amount, currency, **kwargs)
+        except Exception as e:
+            self.logger.error(f"Failed to create PayPal order: {e}")
+            raise
+
+    async def _create_order_impl(self, amount: float, currency: str = "USD", **kwargs) -> Dict[str, Any]:
+        """Implementation of order creation (protected by circuit breaker)"""
         try:
             base_url = await self._get_base_url()
             access_token = await self._get_access_token()
@@ -265,6 +317,14 @@ class PayPalAdapter(BaseAdapter):
     async def capture_order(self, order_id: str):
         """Capture payment for an order"""
         try:
+            return await self._capture_breaker.call(self._capture_order_impl, order_id)
+        except Exception as e:
+            self.logger.error(f"Failed to capture PayPal order: {e}")
+            raise
+
+    async def _capture_order_impl(self, order_id: str):
+        """Implementation of order capture (protected by circuit breaker)"""
+        try:
             base_url = await self._get_base_url()
             access_token = await self._get_access_token()
 
@@ -289,11 +349,17 @@ class PayPalAdapter(BaseAdapter):
             raise Exception("PayPal API request timed out")
         except httpx.HTTPError as e:
             raise Exception(f"PayPal API network error: {str(e)}")
-        except Exception as e:
-            raise Exception(f"Failed to capture PayPal order: {str(e)}")
 
     async def create_refund(self, capture_id: str, amount: float = None, currency: str = "USD"):
         """Create a refund (full or partial)"""
+        try:
+            return await self._refund_breaker.call(self._create_refund_impl, capture_id, amount, currency)
+        except Exception as e:
+            self.logger.error(f"Failed to create PayPal refund: {e}")
+            raise
+
+    async def _create_refund_impl(self, capture_id: str, amount: float = None, currency: str = "USD"):
+        """Implementation of refund creation (protected by circuit breaker)"""
         try:
             base_url = await self._get_base_url()
             access_token = await self._get_access_token()
@@ -330,8 +396,6 @@ class PayPalAdapter(BaseAdapter):
             raise Exception("PayPal API request timed out")
         except httpx.HTTPError as e:
             raise Exception(f"PayPal API network error: {str(e)}")
-        except Exception as e:
-            raise Exception(f"Failed to create PayPal refund: {str(e)}")
 
     # Subscription Methods (Pass-Through)
     async def create_subscription(self, plan_id: str, **kwargs):

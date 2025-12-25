@@ -1,9 +1,15 @@
 import httpx
 from typing import Dict, Any, Optional
+from pybreaker import CircuitBreaker
 from .base import BaseAdapter
 
 class RazorpayAdapter(BaseAdapter):
     """Razorpay payment service adapter"""
+    
+    # Circuit breakers for external API calls
+    _order_breaker = CircuitBreaker(fail_max=5, reset_timeout=60, listeners=[])
+    _verify_breaker = CircuitBreaker(fail_max=5, reset_timeout=60, listeners=[])
+    _refund_breaker = CircuitBreaker(fail_max=5, reset_timeout=60, listeners=[])
 
     def __init__(self, credentials: Dict[str, str]):
         super().__init__(credentials)
@@ -55,6 +61,15 @@ class RazorpayAdapter(BaseAdapter):
 
     async def create_order(self, amount: float, currency: str = "INR", **kwargs) -> Dict[str, Any]:
         """Create a Razorpay order"""
+        try:
+            return await self._order_breaker.call(self._create_order_impl, amount, currency, **kwargs)
+        except Exception as e:
+            logger = __import__('logging').getLogger(__name__)
+            logger.error(f"Failed to create Razorpay order: {e}")
+            raise
+
+    async def _create_order_impl(self, amount: float, currency: str = "INR", **kwargs) -> Dict[str, Any]:
+        """Implementation of order creation (protected by circuit breaker)"""
         try:
             # Extract optional parameters
             receipt = kwargs.get("receipt")
@@ -121,11 +136,18 @@ class RazorpayAdapter(BaseAdapter):
             raise Exception("Razorpay API request timed out")
         except httpx.HTTPError as e:
             raise Exception(f"Razorpay API network error: {str(e)}")
-        except Exception as e:
-            raise Exception(f"Failed to create Razorpay order: {str(e)}")
 
     async def get_order(self, order_id: str) -> Dict[str, Any]:
         """Fetch order details from Razorpay"""
+        try:
+            return await self._order_breaker.call(self._get_order_impl, order_id)
+        except Exception as e:
+            logger = __import__('logging').getLogger(__name__)
+            logger.error(f"Failed to fetch Razorpay order: {e}")
+            raise
+
+    async def _get_order_impl(self, order_id: str) -> Dict[str, Any]:
+        """Implementation of order fetch (protected by circuit breaker)"""
         try:
             # Get the base URL
             base_url = await self._get_base_url()

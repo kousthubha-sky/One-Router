@@ -1,7 +1,8 @@
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 from datetime import datetime
@@ -15,6 +16,7 @@ from .routes.onboarding import router as onboarding_router
 from .routes.unified_api import router as unified_api_router
 from .routes.services import router as services_router
 from .cache import init_redis, close_redis, cache_service
+from .exceptions import OneRouterException, ErrorResponse, ErrorDetail, ErrorCode
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
 
@@ -94,6 +96,294 @@ async def add_security_headers(request, call_next):
     response.headers["Content-Security-Policy"] = "default-src 'self'"
     return response
 
+# Rate limiting middleware
+@app.middleware("http")
+async def rate_limit_middleware(request, call_next):
+    """
+    Enforce rate limiting per API key or user.
+    Adds X-RateLimit-* headers to all responses.
+    """
+    # Skip rate limiting for health checks and docs
+    if request.url.path in ["/", "/docs", "/redoc", "/api/health", "/openapi.json"]:
+        response = await call_next(request)
+        return response
+    
+    # Try to identify the user/API key
+    api_key_id = None
+    limit_per_minute = 100  # Default for authenticated users
+    is_authenticated = False
+    
+    # Check for API key in Authorization header
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        try:
+            api_key = auth_header.split(" ", 1)[1]
+            # Hash the API key for rate limit tracking
+            import hashlib
+            api_key_id = hashlib.sha256(api_key.encode()).hexdigest()[:16]
+            is_authenticated = True
+            limit_per_minute = 100  # API key limit
+        except Exception:
+            pass
+    
+    # If no API key, try to get from Clerk token (authenticated web user)
+    if not api_key_id:
+        try:
+            from .auth.clerk import clerk_auth
+            if auth_header.startswith("Bearer "):
+                token = auth_header.split(" ", 1)[1]
+                token_payload = await clerk_auth.verify_token(token)
+                clerk_user_id = token_payload.get("sub")
+                if clerk_user_id:
+                    api_key_id = clerk_user_id[:16]
+                    is_authenticated = True
+                    limit_per_minute = 200  # Higher limit for authenticated web users
+        except Exception:
+            pass
+    
+    # If still no identification, use IP-based rate limiting for unauthenticated users
+    if not api_key_id:
+        client_ip = request.client.host if request.client else "unknown"
+        api_key_id = f"ip_{client_ip}"
+        limit_per_minute = 30  # Strict limit for unauthenticated users
+    
+    # Check rate limit
+    try:
+        is_allowed, remaining, reset_at = await cache_service.check_rate_limit(
+            api_key_id=api_key_id,
+            limit_per_minute=limit_per_minute
+        )
+        
+        if not is_allowed:
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "detail": "Rate limit exceeded",
+                    "error": "too_many_requests",
+                    "retry_after": max(1, reset_at - int(__import__('time').time()))
+                },
+                headers={
+                    "X-RateLimit-Limit": str(limit_per_minute),
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": str(reset_at),
+                    "Retry-After": str(max(1, reset_at - int(__import__('time').time())))
+                }
+            )
+        
+        # Process request
+        response = await call_next(request)
+        
+        # Add rate limit headers to response
+        response.headers["X-RateLimit-Limit"] = str(limit_per_minute)
+        response.headers["X-RateLimit-Remaining"] = str(remaining)
+        response.headers["X-RateLimit-Reset"] = str(reset_at)
+        response.headers["X-RateLimit-Authenticated"] = "true" if is_authenticated else "false"
+        
+        return response
+    except Exception as e:
+        # If rate limiting fails, log but allow request (fail open)
+        import logging
+        logging.exception(f"Rate limiting error: {e}")
+        response = await call_next(request)
+        return response
+
+# API version negotiation middleware
+@app.middleware("http")
+async def api_version_middleware(request: Request, call_next):
+    """
+    Handle API version negotiation via X-API-Version header.
+    Stores version in request state for routing decisions.
+    Adds version and deprecation headers to response.
+    """
+    api_version = request.headers.get("X-API-Version", "1.0")
+    request.state.api_version = api_version
+    
+    response = await call_next(request)
+    response.headers["X-API-Version"] = api_version
+    response.headers["X-API-Deprecated"] = "false"
+    
+    # Add deprecation notice for older versions (for future compatibility)
+    if api_version.startswith("1."):
+        response.headers["X-API-Deprecation-Date"] = "2026-01-01"
+    
+    return response
+
+# CSRF token validation middleware
+@app.middleware("http")
+async def csrf_validation_middleware(request: Request, call_next):
+    """
+    Validate CSRF tokens for state-changing operations.
+    
+    Skips validation for:
+    - GET/HEAD/OPTIONS requests (safe methods)
+    - CSRF token endpoints
+    - Health checks
+    - Public endpoints (registration, login)
+    """
+    method = request.method
+    path = request.url.path
+    
+    # Skip CSRF validation for safe methods
+    if method in ["GET", "HEAD", "OPTIONS"]:
+        return await call_next(request)
+    
+    # Skip CSRF validation for these paths
+    skip_paths = [
+        "/api/csrf-token",
+        "/api/csrf-validate",
+        "/api/health",
+        "/docs",
+        "/redoc",
+        "/openapi.json",
+        "/api/onboarding",  # Registration/signup endpoints
+        "/v1/payment",  # Public payment endpoint (uses API key auth instead)
+    ]
+    
+    if any(path.startswith(skip_path) for skip_path in skip_paths):
+        return await call_next(request)
+    
+    # Extract CSRF token from header
+    csrf_token = request.headers.get("X-CSRF-Token", "")
+    
+    if not csrf_token:
+        # CSRF token missing - this is an error for state-changing operations
+        from .exceptions import ErrorCode, ErrorDetail, ErrorResponse
+        request_id = getattr(request.state, 'request_id', str(uuid.uuid4()))
+        
+        return JSONResponse(
+            status_code=403,
+            content=ErrorResponse(
+                error=ErrorDetail(
+                    code=ErrorCode.INVALID_REQUEST,
+                    message="CSRF token missing or invalid",
+                    details={"field": "X-CSRF-Token"}
+                ),
+                request_id=request_id,
+                timestamp=datetime.utcnow().isoformat()
+            ).dict()
+        )
+    
+    # Get session ID for validation
+    session_id = None
+    if hasattr(request.state, 'user_id') and request.state.user_id:
+        session_id = request.state.user_id
+    elif "session_id" in request.cookies:
+        session_id = request.cookies["session_id"]
+    
+    # If no session, generate one for this request
+    if not session_id:
+        import secrets
+        session_id = secrets.token_urlsafe(32)
+    
+    # Validate CSRF token
+    from app.services.csrf_manager import CSRFTokenManager
+    is_valid = await CSRFTokenManager.validate_token(session_id, csrf_token)
+    
+    if not is_valid:
+        from .exceptions import ErrorCode, ErrorDetail, ErrorResponse
+        request_id = getattr(request.state, 'request_id', str(uuid.uuid4()))
+        
+        return JSONResponse(
+            status_code=403,
+            content=ErrorResponse(
+                error=ErrorDetail(
+                    code=ErrorCode.INVALID_REQUEST,
+                    message="CSRF token validation failed",
+                    details={"reason": "token_mismatch_or_expired"}
+                ),
+                request_id=request_id,
+                timestamp=datetime.utcnow().isoformat()
+            ).dict()
+        )
+    
+    # CSRF validation passed, continue with request
+    request.state.csrf_validated = True
+    return await call_next(request)
+
+# Global exception handler for OneRouterException
+@app.exception_handler(OneRouterException)
+async def onerouter_exception_handler(request: Request, exc: OneRouterException):
+    """Handle custom OneRouter exceptions with standardized error response"""
+    request_id = getattr(request.state, 'request_id', str(uuid.uuid4()))
+    
+    error_response = ErrorResponse(
+        error=ErrorDetail(
+            code=exc.error_code,
+            message=exc.message,
+            details=exc.details
+        ),
+        request_id=request_id,
+        timestamp=datetime.utcnow().isoformat()
+    )
+    
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=error_response.dict(),
+        headers={"X-Request-ID": request_id}
+    )
+
+# Global exception handler for validation errors
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Handle Pydantic validation errors with standardized format"""
+    request_id = getattr(request.state, 'request_id', str(uuid.uuid4()))
+    
+    # Extract validation error details
+    errors = []
+    for error in exc.errors():
+        errors.append({
+            "field": ".".join(str(x) for x in error["loc"][1:]),
+            "message": error["msg"],
+            "type": error["type"]
+        })
+    
+    error_response = ErrorResponse(
+        error=ErrorDetail(
+            code=ErrorCode.INVALID_REQUEST_FORMAT,
+            message="Request validation failed",
+            details={"validation_errors": errors}
+        ),
+        request_id=request_id,
+        timestamp=datetime.utcnow().isoformat()
+    )
+    
+    return JSONResponse(
+        status_code=400,
+        content=error_response.dict(),
+        headers={"X-Request-ID": request_id}
+    )
+
+# Global exception handler for generic exceptions
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Handle unexpected exceptions with sanitized error response"""
+    request_id = getattr(request.state, 'request_id', str(uuid.uuid4()))
+    
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.exception(f"Unhandled exception in request {request_id}: {exc}")
+    
+    # In production, don't leak stack traces or sensitive info
+    error_message = "An unexpected error occurred"
+    if settings.DEBUG:
+        error_message = f"Internal server error: {str(exc)}"
+    
+    error_response = ErrorResponse(
+        error=ErrorDetail(
+            code=ErrorCode.INTERNAL_ERROR,
+            message=error_message,
+            details={"request_id": request_id} if settings.DEBUG else None
+        ),
+        request_id=request_id,
+        timestamp=datetime.utcnow().isoformat()
+    )
+    
+    return JSONResponse(
+        status_code=500,
+        content=error_response.dict(),
+        headers={"X-Request-ID": request_id}
+    )
+
 # Startup event
 @app.on_event("startup")
 async def startup_event():
@@ -128,6 +418,10 @@ app.include_router(analytics_router, tags=["analytics"])
 # Import and include API keys router
 from .routes.api_keys import router as api_keys_router
 app.include_router(api_keys_router, tags=["api-keys"])
+
+# Import and include CSRF router
+from .routes.csrf import router as csrf_router
+app.include_router(csrf_router, tags=["security"])
 
 # Health check endpoint
 @app.get("/")
@@ -647,24 +941,24 @@ async def debug_database(db: AsyncSession = Depends(get_db)):
     """Debug database connection and data"""
     try:
         # Get table list
-        tables_result = await db.execute("""
+        tables_result = await db.execute(text("""
             SELECT tablename FROM pg_tables
-            WHERE schemaname = 'public'
+            WHERE schemaname = :schema
             ORDER BY tablename
-        """)
+        """), {"schema": "public"})
         table_list = [row[0] for row in tables_result.fetchall()]
 
         # Get user count
-        user_count_result = await db.execute("SELECT COUNT(*) FROM users")
+        user_count_result = await db.execute(text("SELECT COUNT(*) FROM users"))
         user_count = user_count_result.scalar()
 
         # Get all users (for debugging)
-        users_result = await db.execute("""
+        users_result = await db.execute(text("""
             SELECT id, clerk_user_id, email, name, created_at
             FROM users
             ORDER BY created_at DESC
             LIMIT 5
-        """)
+        """))
         users = []
         for row in users_result.fetchall():
             users.append({

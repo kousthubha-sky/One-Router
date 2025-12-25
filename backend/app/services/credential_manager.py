@@ -19,10 +19,10 @@ class CredentialManager:
 
     Notes on encryption key handling:
     - Uses AES256-GCM for authenticated encryption
-    - In development mode: Auto-generated keys (not persistent)
-    - In production: Encryption key MUST be provided via ENCRYPTION_KEY env var
-    - Keys are 32-byte (256-bit) AES keys, base64 encoded for storage
+    - Encryption key MUST be provided via ENCRYPTION_KEY env var
+    - Keys are 32-byte (256-bit) AES keys, base64 encoded in env var
     - Key rotation: Keys are versioned and rotated automatically
+    - Credentials stored as binary in database (BYTEA)
     """
 
     def __init__(self):
@@ -35,49 +35,27 @@ class CredentialManager:
         self.current_key_version = 1
         self.encryption_keys = {}  # version -> key mapping
 
-        # Load encryption key from settings (should be set by config validation)
-        key_b64 = getattr(settings, 'ENCRYPTION_KEY', None)
-        is_production = settings.ENVIRONMENT == "production"
+        # Use encryption key from settings (which handles dev key generation)
+        self.encryption_key = settings.ENCRYPTION_KEY
+        if not self.encryption_key:
+            raise RuntimeError(
+                "ENCRYPTION_KEY must be set in environment. "
+                "Generate with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+            )
 
-        if not key_b64:
-            if is_production:
-                raise RuntimeError(
-                    "ENCRYPTION_KEY environment variable is required for production. "
-                    "Generate a persistent key using: "
-                    "import base64, os; print(base64.b64encode(os.urandom(32)).decode())"
-                )
-            else:
-                # Auto-generate AES256 key for development only
-                key_bytes = os.urandom(32)  # 256-bit key
-                key_b64 = base64.b64encode(key_bytes).decode('utf-8')
-                logger.warning(
-                    "Generated temporary AES256 encryption key for development mode. "
-                    "This key will NOT persist across restarts. "
-                    "For persistent storage, set ENCRYPTION_KEY environment variable."
-                )
-
-        # Handle different key formats for backward compatibility
+        # Decode the key
         try:
-            if len(key_b64) >= 44:  # Try AES256 first
-                key_bytes = base64.b64decode(key_b64)
-                if len(key_bytes) == 32:
-                    self.fallback_cipher = None  # AES256 key
-                elif len(key_bytes) == 48:  # Fernet key (32 + 16)
-                    from cryptography.fernet import Fernet
-                    self.fallback_cipher = Fernet(key_b64.encode())
-                    key_bytes = key_bytes[:32]  # Take first 32 bytes for AES
-                else:
-                    raise ValueError(f"Unexpected key length: {len(key_bytes)}")
-            else:
-                raise ValueError(f"Key too short: {len(key_b64)} chars")
+            key_bytes = base64.b64decode(self.encryption_key)
+            if len(key_bytes) != 32:
+                raise ValueError(f"Key must be 32 bytes, got {len(key_bytes)}")
         except Exception as e:
-            print(f"DEBUG: Key decoding failed: {e}, len={len(key_b64) if key_b64 else 0}")
             raise ValueError(f"Invalid ENCRYPTION_KEY: {e}")
 
-        # Store current key
+        # Store key version with each encrypted credential
+        # Format: {version:4bytes}{nonce:12bytes}{ciphertext}
         self.encryption_keys[self.current_key_version] = key_bytes
 
-    def encrypt_credentials(self, credentials: Dict[str, Any]) -> str:
+    def encrypt_credentials(self, credentials: Dict[str, Any]) -> bytes:
         """Encrypt credentials dictionary using AES256-GCM"""
         import os
         import base64
@@ -95,19 +73,16 @@ class CredentialManager:
         aesgcm = self.aesgcm(key)
         ciphertext = aesgcm.encrypt(nonce, data, None)  # None for associated data
 
-        # Combine version + nonce + ciphertext and base64 encode
+        # Combine version + nonce + ciphertext
         version_bytes = self.current_key_version.to_bytes(4, 'big')
         combined = version_bytes + nonce + ciphertext
 
-        return base64.b64encode(combined).decode('utf-8')
+        return combined
 
-    def decrypt_credentials(self, encrypted_data: str) -> Dict[str, Any]:
-        """Decrypt credentials using AES256-GCM or legacy Fernet"""
-        import base64
-
+    def decrypt_credentials(self, encrypted_data: bytes) -> Dict[str, Any]:
+        """Decrypt credentials using AES256-GCM"""
         try:
-            # Try AES256-GCM decryption first
-            combined = base64.b64decode(encrypted_data)
+            combined = encrypted_data
 
             # Check if this looks like AES256-GCM format (version + nonce + ciphertext)
             if len(combined) > 16:  # minimum: 4 (version) + 12 (nonce) + 1 (ciphertext)
@@ -121,14 +96,6 @@ class CredentialManager:
                     plaintext = aesgcm.decrypt(nonce, ciphertext, None)
                     return json.loads(plaintext.decode('utf-8'))
 
-            # If AES256-GCM fails, try legacy Fernet decryption
-            if self.fallback_cipher:
-                try:
-                    decrypted = self.fallback_cipher.decrypt(encrypted_data.encode())
-                    return json.loads(decrypted.decode('utf-8'))
-                except:
-                    pass
-
             raise ValueError("Could not decrypt data with available keys")
 
         except Exception as e:
@@ -138,20 +105,11 @@ class CredentialManager:
     def rotate_encryption_key(self) -> int:
         """Rotate to a new encryption key. Returns the new key version."""
         import os
-        import base64
 
         # Generate new key
         new_key = os.urandom(32)
         self.current_key_version += 1
         self.encryption_keys[self.current_key_version] = new_key
-
-        # Update fallback cipher for backward compatibility
-        try:
-            fernet_key = base64.b64encode(new_key + new_key[:16])
-            from cryptography.fernet import Fernet
-            self.fallback_cipher = Fernet(fernet_key)
-        except Exception:
-            pass
 
         logger.info(f"Encryption key rotated to version {self.current_key_version}")
         logger.warning(

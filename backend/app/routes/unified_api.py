@@ -10,12 +10,26 @@ from ..services.request_router import RequestRouter
 from ..auth.dependencies import get_current_user
 from ..services.transaction_logger import TransactionLogger
 from ..models import ServiceCredential
+from ..exceptions import InvalidAmountException, CurrencyAmountMismatchException
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 request_router = RequestRouter()
 transaction_logger = TransactionLogger()
+
+# Currency-specific validation rules
+CURRENCY_RULES = {
+    "JPY": {"decimals": 0, "min_amount": 1, "max_amount": 999999999},
+    "INR": {"decimals": 2, "min_amount": 1, "max_amount": 10000000},
+    "USD": {"decimals": 2, "min_amount": 0.01, "max_amount": 1000000},
+    "EUR": {"decimals": 2, "min_amount": 0.01, "max_amount": 1000000},
+    "GBP": {"decimals": 2, "min_amount": 0.01, "max_amount": 1000000},
+    "AUD": {"decimals": 2, "min_amount": 0.01, "max_amount": 1000000},
+    "CAD": {"decimals": 2, "min_amount": 0.01, "max_amount": 1000000},
+    "SGD": {"decimals": 2, "min_amount": 0.01, "max_amount": 1000000},
+    "BRL": {"decimals": 2, "min_amount": 0.01, "max_amount": 10000000},
+}
 
 class PaymentOrderRequest(BaseModel):
     amount: Annotated[Decimal, Field(
@@ -31,6 +45,7 @@ class PaymentOrderRequest(BaseModel):
     provider: Optional[str] = None  # Auto-select if not specified
     receipt: Optional[str] = None
     notes: Optional[Dict[str, Any]] = None
+    idempotency_key: Optional[str] = None  # For idempotent request handling
     
     @validator('amount', pre=True)
     @classmethod
@@ -55,6 +70,39 @@ class PaymentOrderRequest(BaseModel):
             raise ValueError("Amount cannot have more than 2 decimal places")
         
         return v
+    
+    @validator('amount')
+    @classmethod
+    def validate_amount_for_currency(cls, v, values):
+        """Validate amount against currency-specific rules"""
+        currency = values.get('currency', 'INR')
+        
+        # Get currency rules (use INR defaults for unknown currencies)
+        rules = CURRENCY_RULES.get(currency, CURRENCY_RULES['INR'])
+        
+        # Check decimal places
+        if rules['decimals'] == 0:
+            if v % 1 != 0:
+                raise ValueError(
+                    f"{currency} does not support decimal amounts. "
+                    f"Please provide an integer amount."
+                )
+        
+        # Check minimum amount
+        if v < Decimal(str(rules['min_amount'])):
+            raise ValueError(
+                f"Minimum amount for {currency} is {rules['min_amount']}. "
+                f"You provided {v}."
+            )
+        
+        # Check maximum amount
+        if v > Decimal(str(rules['max_amount'])):
+            raise ValueError(
+                f"Maximum amount for {currency} is {rules['max_amount']}. "
+                f"Amount {v} exceeds this limit."
+            )
+        
+        return v
 
 class UnifiedPaymentResponse(BaseModel):
     transaction_id: str
@@ -77,72 +125,113 @@ async def create_payment_order(
     user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Create payment order (unified API)"""
+    """Create payment order (unified API) with proper transaction management and idempotency"""
+    import time
+    from ..models import TransactionLog
+    from ..cache import cache_service
+    import uuid
+    
+    provider = request.provider or "razorpay"
+    start_time = time.time()
+    
+    # Generate or use provided idempotency key
+    idempotency_key = request.idempotency_key or f"idempotency_{user['id']}_{int(start_time)}_{uuid.uuid4().hex[:8]}"
+    transaction_id = f"txn_{user['id']}_{int(start_time)}_{uuid.uuid4().hex[:8]}"
+    
+    # Check if response is already cached
+    cached_response = await cache_service.get_idempotent_response(user["id"], idempotency_key)
+    if cached_response:
+        return UnifiedPaymentResponse(**cached_response)
+    
+    # Acquire lock to prevent duplicate processing
+    lock_acquired = await cache_service.acquire_idempotency_lock(idempotency_key)
+    if not lock_acquired:
+        raise HTTPException(
+            status_code=409,
+            detail="Duplicate request in progress. Please retry after a moment."
+        )
+    
+    # Create initial log entry within transaction
+    log_entry = TransactionLog(
+        user_id=user["id"],
+        transaction_id=transaction_id,
+        service_name=provider,
+        endpoint="/payments/orders",
+        http_method="POST",
+        request_payload=request.dict(),
+        status="pending",
+        environment=user.get("environment", "development")
+    )
+    
     try:
-        # Determine provider (default to Razorpay for now)
-        provider = request.provider or "razorpay"
+        # Start transaction block
+        async with db.begin_nested():
+            db.add(log_entry)
+            await db.flush()  # Ensure log entry is written
+            
+            # Get service adapter
+            adapter = await request_router.get_adapter(user["id"], provider, db)
 
-        # Log transaction request
-        await transaction_logger.log_request(
-            db=db,
-            user_id=user["id"],
-            method="POST",
-            endpoint="/payments/orders",
-            request_data=request.dict(),
-            provider=provider
-        )
+            # Prepare notes with user_id for webhook identification
+            notes = request.notes or {}
+            notes["onerouter_user_id"] = str(user["id"])
 
-        # Get service adapter
-        adapter = await request_router.get_adapter(user["id"], provider, db)
+            # Create order through adapter
+            order_kwargs = {
+                "amount": float(request.amount),
+                "currency": request.currency,
+                "receipt": request.receipt,
+            }
 
-        # Prepare notes with user_id for webhook identification
-        notes = request.notes or {}
-        notes["onerouter_user_id"] = str(user["id"])
+            if provider == "razorpay":
+                order_kwargs["notes"] = notes
+            elif provider == "paypal":
+                order_kwargs["custom_id"] = str(user["id"])
 
-        # Create order through adapter
-        # Pass different parameters based on provider
-        order_kwargs = {
-            "amount": float(request.amount),
-            "currency": request.currency,
-            "receipt": request.receipt,
-        }
-
-        if provider == "razorpay":
-            order_kwargs["notes"] = notes
-        elif provider == "paypal":
-            order_kwargs["custom_id"] = str(user["id"])
-
-        result = await adapter.create_order(**order_kwargs)
-
-        await transaction_logger.log_response(
-            db=db,
-            transaction_id=result["transaction_id"],
-            response_data=result,
-            status_code=200,
-            response_time_ms=0  # TODO: measure actual response time
-        )
-
+            result = await adapter.create_order(**order_kwargs)
+            
+            # Calculate response time
+            response_time_ms = int((time.time() - start_time) * 1000)
+            
+            # Update log entry with success
+            log_entry.response_payload = result
+            log_entry.response_status = 200
+            log_entry.response_time_ms = response_time_ms
+            log_entry.status = "completed"
+            log_entry.provider_txn_id = result.get("provider_order_id") or result.get("id")
+        
+        # Commit the transaction
+        await db.commit()
+        
+        # Cache the response for idempotent retrieval
+        await cache_service.cache_idempotent_response(user["id"], idempotency_key, result)
+        
         return UnifiedPaymentResponse(**result)
 
-    except Exception as log_err:
-        # Log the exception with full traceback
-        logger.exception(f"Error creating payment order for user {user['id']}: {str(log_err)}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Calculate response time for failed request
+        response_time_ms = int((time.time() - start_time) * 1000)
         
-        # Try to record transaction log entry for failed request
+        # Log the exception
+        logger.exception(f"Error creating payment order for user {user['id']}: {str(e)}")
+        
+        # Compensation: Update log entry with failure status
         try:
-            await transaction_logger.log_request(
-                db=db,
-                user_id=user["id"],
-                method="POST",
-                endpoint="/payments/orders",
-                request_data=request.dict(),
-                provider=request.provider or "razorpay"
-            )
-        except Exception as log_err_tx:
-            logger.exception(f"Failed to log transaction for failed request: {str(log_err_tx)}")
+            log_entry.response_payload = {"error": str(e)}
+            log_entry.response_status = 500
+            log_entry.response_time_ms = response_time_ms
+            log_entry.status = "failed"
+            await db.commit()
+        except Exception as log_err:
+            logger.exception(f"Failed to log transaction failure: {str(log_err)}")
+            await db.rollback()
         
-        # Return generic error to client
         raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        # Always release the lock
+        await cache_service.release_idempotency_lock(idempotency_key)
 
 @router.get("/payments/orders/{transaction_id}")
 async def get_payment_order(
@@ -286,6 +375,7 @@ class CreateSubscriptionRequest(BaseModel):
     customer_notify: bool = True
     total_count: Optional[int] = 12
     quantity: Optional[int] = 1
+    idempotency_key: Optional[str] = None  # For idempotent request handling
 
 @router.post("/subscriptions")
 async def create_subscription(
@@ -294,7 +384,7 @@ async def create_subscription(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Create subscription (pass-through to gateway)
+    Create subscription (pass-through to gateway) with proper transaction management and idempotency
 
     POST /v1/subscriptions
     {
@@ -302,44 +392,103 @@ async def create_subscription(
         "provider": "razorpay",  // optional, auto-detect
         "customer_notify": true,
         "total_count": 12,
-        "quantity": 1
+        "quantity": 1,
+        "idempotency_key": "optional-idempotency-key"
     }
     """
+    import time
+    from ..models import TransactionLog
+    from ..cache import cache_service
+    import uuid
+    
+    start_time = time.time()
+    transaction_id = f"txn_{user['id']}_{int(start_time)}_{uuid.uuid4().hex[:8]}"
+    
+    # Generate or use provided idempotency key
+    idempotency_key = request.idempotency_key or f"idempotency_{user['id']}_{int(start_time)}_{uuid.uuid4().hex[:8]}"
+    
+    # Check if response is already cached
+    cached_response = await cache_service.get_idempotent_response(user["id"], idempotency_key)
+    if cached_response:
+        return cached_response
+    
+    # Acquire lock to prevent duplicate processing
+    lock_acquired = await cache_service.acquire_idempotency_lock(idempotency_key)
+    if not lock_acquired:
+        raise HTTPException(
+            status_code=409,
+            detail="Duplicate request in progress. Please retry after a moment."
+        )
+    
+    # Auto-detect provider if not specified
+    provider = request.provider
+    plan_id = request.plan_id
+    customer_notify = request.customer_notify
+    
+    if not provider:
+        provider = await _detect_provider_from_plan(user["id"], plan_id, db)
+    
+    # Create initial log entry
+    log_entry = TransactionLog(
+        user_id=user["id"],
+        transaction_id=transaction_id,
+        service_name=provider,
+        endpoint="/subscriptions",
+        http_method="POST",
+        request_payload=request.dict(),
+        status="pending",
+        environment=user.get("environment", "development")
+    )
+    
     try:
-        # Auto-detect provider if not specified
-        provider = request.provider
-        plan_id = request.plan_id
-        customer_notify = request.customer_notify
+        async with db.begin_nested():
+            db.add(log_entry)
+            await db.flush()
+            
+            # Get adapter
+            adapter = await request_router.get_adapter(user["id"], provider, db)
+
+            # Pass-through to gateway
+            result = await adapter.create_subscription(
+                plan_id, 
+                customer_notify, 
+                total_count=request.total_count,
+                quantity=request.quantity
+            )
+            
+            # Calculate response time
+            response_time_ms = int((time.time() - start_time) * 1000)
+            
+            # Update log entry with success
+            log_entry.response_payload = result
+            log_entry.response_status = 200
+            log_entry.response_time_ms = response_time_ms
+            log_entry.status = "completed"
         
-        if not provider:
-            provider = await _detect_provider_from_plan(user["id"], plan_id, db)
-
-        # Get adapter
-        adapter = await request_router.get_adapter(user["id"], provider, db)
-
-        # Pass-through to gateway
-        result = await adapter.create_subscription(
-            plan_id, 
-            customer_notify, 
-            total_count=request.total_count,
-            quantity=request.quantity
-        )
-
-        # Log transaction
-        await transaction_logger.log_request(
-            db=db,
-            user_id=user["id"],
-            method="POST",
-            endpoint="/subscriptions",
-            request_data=request.dict(),
-            provider=provider
-        )
-
+        await db.commit()
+        
+        # Cache the response for idempotent retrieval
+        await cache_service.cache_idempotent_response(user["id"], idempotency_key, result)
+        
         return result
 
     except Exception as e:
+        response_time_ms = int((time.time() - start_time) * 1000)
         logger.exception(f"Error creating subscription: {str(e)}")
+        
+        try:
+            log_entry.response_payload = {"error": str(e)}
+            log_entry.response_status = 500
+            log_entry.response_time_ms = response_time_ms
+            log_entry.status = "failed"
+            await db.commit()
+        except Exception:
+            await db.rollback()
+        
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Always release the lock
+        await cache_service.release_idempotency_lock(idempotency_key)
 
 @router.get("/subscriptions/{subscription_id}")
 async def get_subscription(
@@ -425,44 +574,101 @@ async def generic_proxy(
     method: str = "POST",
     payload: Optional[Dict[str, Any]] = None,
     params: Optional[Dict[str, Any]] = None,
+    idempotency_key: Optional[str] = None,
     user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Generic proxy for ANY gateway endpoint
+    Generic proxy for ANY gateway endpoint with proper transaction management and idempotency
 
     POST /v1/proxy
     {
         "provider": "razorpay",
         "endpoint": "/v1/subscriptions/sub_123/pause",
         "method": "POST",
-        "payload": {"pause_at": "now"}
+        "payload": {"pause_at": "now"},
+        "idempotency_key": "optional-key"
     }
 
     This allows developers to call ANY gateway API through OneRouter
     """
-    try:
-        # Get adapter
-        adapter = await request_router.get_adapter(user["id"], provider, db)
-
-        # Call generic API proxy
-        result = await adapter.call_api(endpoint, method, payload or {}, params or {})
-
-        # Log transaction
-        await transaction_logger.log_request(
-            db=db,
-            user_id=user["id"],
-            method=method,
-            endpoint=f"/proxy{endpoint}",
-            request_data={"endpoint": endpoint, "payload": payload},
-            provider=provider
+    import time
+    from ..models import TransactionLog
+    from ..cache import cache_service
+    import uuid
+    
+    start_time = time.time()
+    transaction_id = f"txn_{user['id']}_{int(start_time)}_{uuid.uuid4().hex[:8]}"
+    
+    # Generate or use provided idempotency key
+    idempotency_key = idempotency_key or f"idempotency_{user['id']}_{int(start_time)}_{uuid.uuid4().hex[:8]}"
+    
+    # Check if response is already cached
+    cached_response = await cache_service.get_idempotent_response(user["id"], idempotency_key)
+    if cached_response:
+        return cached_response
+    
+    # Acquire lock to prevent duplicate processing
+    lock_acquired = await cache_service.acquire_idempotency_lock(idempotency_key)
+    if not lock_acquired:
+        raise HTTPException(
+            status_code=409,
+            detail="Duplicate request in progress. Please retry after a moment."
         )
+    
+    log_entry = TransactionLog(
+        user_id=user["id"],
+        transaction_id=transaction_id,
+        service_name=provider,
+        endpoint=f"/proxy{endpoint}",
+        http_method=method,
+        request_payload={"endpoint": endpoint, "payload": payload},
+        status="pending",
+        environment=user.get("environment", "development")
+    )
+    
+    try:
+        async with db.begin_nested():
+            db.add(log_entry)
+            await db.flush()
+            
+            # Get adapter
+            adapter = await request_router.get_adapter(user["id"], provider, db)
 
+            # Call generic API proxy
+            result = await adapter.call_api(endpoint, method, payload or {}, params or {})
+            
+            response_time_ms = int((time.time() - start_time) * 1000)
+            
+            log_entry.response_payload = result
+            log_entry.response_status = 200
+            log_entry.response_time_ms = response_time_ms
+            log_entry.status = "completed"
+        
+        await db.commit()
+        
+        # Cache the response for idempotent retrieval
+        await cache_service.cache_idempotent_response(user["id"], idempotency_key, result)
+        
         return result
 
     except Exception as e:
+        response_time_ms = int((time.time() - start_time) * 1000)
         logger.exception(f"Error in generic proxy: {str(e)}")
+        
+        try:
+            log_entry.response_payload = {"error": str(e)}
+            log_entry.response_status = 500
+            log_entry.response_time_ms = response_time_ms
+            log_entry.status = "failed"
+            await db.commit()
+        except Exception:
+            await db.rollback()
+        
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Always release the lock
+        await cache_service.release_idempotency_lock(idempotency_key)
 
 # ========================================
 # HELPER FUNCTIONS
@@ -517,38 +723,87 @@ async def create_payment_link(
     description: str,
     customer_email: Optional[str] = None,
     provider: Optional[str] = None,
+    idempotency_key: Optional[str] = None,
     user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Create payment link (unified API)"""
+    """Create payment link (unified API) with proper transaction management and idempotency"""
+    import time
+    from ..models import TransactionLog
+    from ..cache import cache_service
+    import uuid
+    
+    provider = provider or "razorpay"
+    start_time = time.time()
+    transaction_id = f"txn_{user['id']}_{int(start_time)}_{uuid.uuid4().hex[:8]}"
+    
+    # Generate or use provided idempotency key
+    idempotency_key = idempotency_key or f"idempotency_{user['id']}_{int(start_time)}_{uuid.uuid4().hex[:8]}"
+    
+    # Check if response is already cached
+    cached_response = await cache_service.get_idempotent_response(user["id"], idempotency_key)
+    if cached_response:
+        return cached_response
+    
+    # Acquire lock to prevent duplicate processing
+    lock_acquired = await cache_service.acquire_idempotency_lock(idempotency_key)
+    if not lock_acquired:
+        raise HTTPException(
+            status_code=409,
+            detail="Duplicate request in progress. Please retry after a moment."
+        )
+    
+    log_entry = TransactionLog(
+        user_id=user["id"],
+        transaction_id=transaction_id,
+        service_name=provider,
+        endpoint="/payment-links",
+        http_method="POST",
+        request_payload={"amount": amount, "description": description, "customer_email": customer_email},
+        status="pending",
+        environment=user.get("environment", "development")
+    )
+    
     try:
-        provider = provider or "razorpay"
-        
-        # Log transaction request
-        await transaction_logger.log_request(
-            db=db,
-            user_id=user["id"],
-            method="POST",
-            endpoint="/payment-links",
-            request_data={"amount": amount, "description": description, "customer_email": customer_email},
-            provider=provider
-        )
-        
-        adapter = await request_router.get_adapter(user["id"], provider, db)
-        if hasattr(adapter, 'create_payment_link'):
+        async with db.begin_nested():
+            db.add(log_entry)
+            await db.flush()
+            
+            adapter = await request_router.get_adapter(user["id"], provider, db)
+            if not hasattr(adapter, 'create_payment_link'):
+                raise HTTPException(status_code=400, detail="Payment links not supported for this provider")
+            
             result = await adapter.create_payment_link(amount, description, customer_email)
-        else:
-            raise HTTPException(status_code=400, detail="Payment links not supported for this provider")
+            
+            response_time_ms = int((time.time() - start_time) * 1000)
+            
+            log_entry.response_payload = result
+            log_entry.response_status = 200
+            log_entry.response_time_ms = response_time_ms
+            log_entry.status = "completed"
         
-        # Log response
-        await transaction_logger.log_response(
-            db=db,
-            transaction_id=result.get("id", "unknown"),
-            response_data=result,
-            status_code=200,
-            response_time_ms=0
-        )
-
+        await db.commit()
+        
+        # Cache the response for idempotent retrieval
+        await cache_service.cache_idempotent_response(user["id"], idempotency_key, result)
+        
         return result
+        
+    except HTTPException:
+        raise
     except Exception as e:
+        response_time_ms = int((time.time() - start_time) * 1000)
+        
+        try:
+            log_entry.response_payload = {"error": str(e)}
+            log_entry.response_status = 500
+            log_entry.response_time_ms = response_time_ms
+            log_entry.status = "failed"
+            await db.commit()
+        except Exception:
+            await db.rollback()
+        
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Always release the lock
+        await cache_service.release_idempotency_lock(idempotency_key)

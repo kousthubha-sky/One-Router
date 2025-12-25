@@ -15,17 +15,9 @@ from .clerk import clerk_auth
 # API Key Authentication (for SDK users)
 class APIKeyAuth:
     def __init__(self):
-        # In production, this would be stored in database
-        # For demo purposes, using in-memory store
-        self.api_keys = {
-            # Example: hash("unf_live_demo_key") -> user_id mapping
-            "hashed_demo_key": {
-                "user_id": "demo_user_123",
-                "is_active": True,
-                "rate_limit_per_min": 100,
-                "rate_limit_per_day": 10000,
-            }
-        }
+        # In production, API keys are stored in database
+        # In-memory store is only used as cache (Redis preferred)
+        self.api_keys = {}
 
     def hash_api_key(self, api_key: str) -> str:
         """Hash API key for storage/lookup"""
@@ -64,9 +56,13 @@ class APIKeyAuth:
 api_key_auth = APIKeyAuth()
 
 # Dependency for API key protected routes
-async def get_api_user(x_platform_key: str = Header(..., alias="X-Platform-Key")) -> dict:
+async def get_api_user(authorization: str = Header(...)) -> dict:
     """Get user from API key for SDK calls"""
-    return await api_key_auth.validate_api_key(x_platform_key)
+    # Expect: Authorization: Bearer <api_key>
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid Authorization header format")
+    api_key = authorization.split(" ", 1)[1]
+    return await api_key_auth.validate_api_key(api_key)
 
 # Dependency for protected routes
 async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)):

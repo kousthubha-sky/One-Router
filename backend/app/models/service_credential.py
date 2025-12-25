@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, Boolean, TIMESTAMP, Text, ForeignKey, Index
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import UUID, JSONB, BYTEA
 from sqlalchemy.sql import func
 from .user import Base
 
@@ -11,7 +11,7 @@ class ServiceCredential(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     provider_name = Column(String, nullable=False)
     environment = Column(String, nullable=False)
-    encrypted_credential = Column(Text, nullable=False)
+    encrypted_credential = Column(BYTEA, nullable=False)
     features_config = Column(JSONB, nullable=False, server_default='{}')
     webhook_secret = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)

@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from pydantic import BaseModel
 import logging
+import hashlib
 
 logger = logging.getLogger(__name__)
 
@@ -23,20 +24,31 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 import base64
 
 class SecureSessionManager:
-    """Production-grade session management with Redis and encryption"""
+    """Production-grade session management with Redis, encryption, and fingerprinting"""
 
     def __init__(self, redis_client, encryption_key: bytes):
         self.redis = redis_client
         self.aesgcm = AESGCM(encryption_key)
 
-    async def create_session(self, user_id: str, env_vars: dict, ttl: int = 3600) -> str:
-        """Create encrypted session in Redis"""
+    def _generate_fingerprint(self, request_fingerprint: str) -> str:
+        """Generate SHA256 hash of request fingerprint"""
+        return hashlib.sha256(request_fingerprint.encode()).hexdigest()
+
+    async def create_session(
+        self, 
+        user_id: str, 
+        env_vars: dict, 
+        request_fingerprint: str,
+        ttl: int = 3600
+    ) -> str:
+        """Create encrypted session in Redis with fingerprinting"""
         session_id = secrets.token_urlsafe(16)
-        session_key = f"env_session:{session_id}"
+        session_key = "env_session:{}".format(session_id)
 
         session_data = {
             'user_id': user_id,
             'env_vars': env_vars,
+            'fingerprint': self._generate_fingerprint(request_fingerprint),
             'created_at': time.time(),
             'expires_at': time.time() + ttl
         }
@@ -49,9 +61,14 @@ class SecureSessionManager:
 
         return session_id
 
-    async def get_session(self, session_id: str, user_id: str) -> Optional[dict]:
-        """Retrieve and decrypt session from Redis with ownership verification"""
-        session_key = f"env_session:{session_id}"
+    async def get_session(
+        self, 
+        session_id: str, 
+        user_id: str,
+        request_fingerprint: str
+    ) -> Optional[dict]:
+        """Retrieve and decrypt session with ownership and fingerprint validation"""
+        session_key = "env_session:{}".format(session_id)
         encrypted_data = await self.redis.get(session_key)
 
         if not encrypted_data:
@@ -63,8 +80,16 @@ class SecureSessionManager:
 
             # Verify ownership
             if session_data['user_id'] != user_id:
-                print(f"Security warning: User {user_id} attempted to access session owned by {session_data['user_id']}")
+                logger.warning(f"Security: User {user_id} attempted to access session owned by {session_data['user_id']}")
                 return None
+
+            # Verify fingerprint to detect session hijacking
+            current_fingerprint = self._generate_fingerprint(request_fingerprint)
+            if session_data.get('fingerprint') != current_fingerprint:
+                logger.error(f"Security: Session hijacking detected for session {session_id}. Fingerprint mismatch.")
+                # Delete compromised session immediately
+                await self.redis.delete(session_key)
+                raise HTTPException(status_code=401, detail="Session hijacking detected")
 
             # Check expiration
             if time.time() > session_data['expires_at']:
@@ -73,15 +98,17 @@ class SecureSessionManager:
 
             return session_data['env_vars']
 
+        except HTTPException:
+            raise
         except Exception as e:
-            print(f"Error decrypting session {session_id}: {e}")
+            logger.error(f"Error decrypting session {session_id}: {e}")
             # Clean up corrupted session
             await self.redis.delete(session_key)
             return None
 
     async def delete_session(self, session_id: str):
         """Delete session from Redis"""
-        session_key = f"env_session:{session_id}"
+        session_key = "env_session:{}".format(session_id)
         await self.redis.delete(session_key)
 
     async def get_session_count(self) -> int:
@@ -124,16 +151,27 @@ class SecureSessionManager:
 _session_manager = None
 
 async def get_session_manager() -> SecureSessionManager:
-    """Get or create session manager instance"""
+    """Get or create session manager instance with persistent encryption key"""
     global _session_manager
     if _session_manager is None:
-        # Get encryption key (same as credential manager)
-        from ..services.credential_manager import CredentialManager
-        cred_manager = CredentialManager()
-
-        # Extract the key from the credential manager's key list
-        # This assumes the first key is the current one
-        encryption_key = list(cred_manager.encryption_keys.values())[0]
+        # Use SESSION_ENCRYPTION_KEY from environment (same approach as API_KEY_ENCRYPTION_KEY)
+        encryption_key_env = os.getenv("SESSION_ENCRYPTION_KEY")
+        
+        if not encryption_key_env:
+            # Fallback to credential manager for backward compatibility, but warn
+            logger.warning("SESSION_ENCRYPTION_KEY not found in environment. Using credential manager key.")
+            from ..services.credential_manager import CredentialManager
+            cred_manager = CredentialManager()
+            encryption_key = list(cred_manager.encryption_keys.values())[0]
+        else:
+            # Use persistent encryption key from environment
+            try:
+                encryption_key = base64.b64decode(encryption_key_env)
+                if len(encryption_key) != 32:
+                    raise ValueError(f"SESSION_ENCRYPTION_KEY must be 256-bit (32 bytes), got {len(encryption_key)}")
+            except Exception as e:
+                logger.error(f"Failed to decode SESSION_ENCRYPTION_KEY: {e}")
+                raise
 
         redis_client = await cache_service._get_redis()
         _session_manager = SecureSessionManager(redis_client, encryption_key)
@@ -142,22 +180,24 @@ async def get_session_manager() -> SecureSessionManager:
 
 # Migration function for existing file-based sessions
 async def migrate_file_sessions_to_redis():
-    """One-time migration from parsed_sessions.json to Redis"""
+    """One-time migration from parsed_sessions.json to Redis with secure cleanup"""
     sessions_file = Path("parsed_sessions.json")
 
     if not sessions_file.exists():
         return  # No migration needed
 
-    print("🔄 Migrating sessions from file to Redis...")
+    logger.info("🔄 Migrating sessions from file to Redis...")
 
+    temp_backup = None
     try:
         # Load existing sessions
         with open(sessions_file, 'r') as f:
             old_sessions = json.load(f)
 
         if not old_sessions:
-            print("No sessions to migrate")
-            sessions_file.unlink()
+            logger.info("No sessions to migrate")
+            # Securely delete the file (overwrite with random data first)
+            _secure_delete_file(sessions_file)
             return
 
         # Get session manager
@@ -171,33 +211,68 @@ async def migrate_file_sessions_to_redis():
                 remaining_ttl = max(0, int(expires_at - time.time()))
 
                 if remaining_ttl > 0:
-                    # Create new Redis session
+                    # Create new Redis session with default fingerprint for migration
+                    # (in production, this should be re-verified by user)
                     await session_manager.create_session(
                         user_id=session_data['user_id'],
                         env_vars=session_data['env_vars'],
+                        request_fingerprint="migration",
                         ttl=remaining_ttl
                     )
                     migrated_count += 1
                 else:
-                    print(f"Skipping expired session {session_id}")
+                    logger.debug(f"Skipping expired session {session_id}")
 
             except Exception as e:
-                print(f"Error migrating session {session_id}: {e}")
+                logger.error(f"Error migrating session {session_id}: {e}")
 
-        # Remove old file
-        sessions_file.unlink()
-        print(f"✅ Migrated {migrated_count} sessions from file to Redis")
+        # Securely delete old file with overwrite
+        _secure_delete_file(sessions_file)
+        logger.info(f"✅ Migrated {migrated_count} sessions from file to Redis")
 
     except Exception as e:
-        print(f"❌ Migration failed: {e}")
+        logger.error(f"❌ Migration failed: {e}")
         import traceback
         traceback.print_exc()
+
+
+def _secure_delete_file(file_path: Path):
+    """Securely delete a file by overwriting with random data before removal"""
+    try:
+        # Get file size
+        file_size = file_path.stat().st_size
+        
+        # Overwrite with random data 3 times (DoD standard)
+        for _ in range(3):
+            with open(file_path, 'wb') as f:
+                f.write(os.urandom(file_size))
+        
+        # Delete the file
+        file_path.unlink()
+        logger.info(f"Securely deleted {file_path}")
+    except Exception as e:
+        logger.error(f"Failed to securely delete {file_path}: {e}")
+        # Still try to delete even if overwrite fails
+        try:
+            file_path.unlink()
+        except:
+            pass
 
 # Sessions now loaded from Redis on demand
 
 router = APIRouter()
 env_parser = EnvParserService()
 credential_manager = CredentialManager()
+
+
+def _generate_request_fingerprint(request: Request, user_id: str) -> str:
+    """Generate fingerprint from request characteristics to prevent session hijacking"""
+    # Combine user_id + user agent + client ip for fingerprint
+    user_agent = request.headers.get("user-agent", "")
+    client_ip = request.client.host if request.client else "unknown"
+    
+    fingerprint_data = f"{user_id}:{user_agent}:{client_ip}"
+    return fingerprint_data
 
 # Pydantic models for API requests/responses
 class ParseResponse(BaseModel):
@@ -229,7 +304,8 @@ class ConfigureResponse(BaseModel):
 @router.post("/parse", response_model=ParseResponse)
 async def parse_env_file(
     file: UploadFile = File(...),
-    user = Depends(get_current_user)
+    user = Depends(get_current_user),
+    request: Request = None
 ) -> ParseResponse:
     
     """Parse uploaded .env file and detect services"""
@@ -262,12 +338,16 @@ async def parse_env_file(
         # Detect services
         detections = env_parser.detect_services(env_vars)
 
-        # Store parsed env_vars securely in Redis
+        # Generate request fingerprint for session hijacking detection
+        request_fingerprint = _generate_request_fingerprint(request, user["id"])
+
+        # Store parsed env_vars securely in Redis with fingerprinting
         session_manager = await get_session_manager()
         session_id = await session_manager.create_session(
             user_id=user["id"],
             env_vars=env_vars,
-            ttl=settings.SESSION_TTL_SECONDS  # Make TTL configurable
+            request_fingerprint=request_fingerprint,
+            ttl=settings.SESSION_TTL_SECONDS
         )
 
         return ParseResponse(
@@ -290,7 +370,8 @@ async def parse_env_file(
 async def configure_services(
     config: ConfigureRequest,
     user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    request: Request = None
 ) -> ConfigureResponse:
     """Store selected service credentials WITH feature metadata"""
 
@@ -299,9 +380,12 @@ async def configure_services(
         env_vars = {}
         if config.session_id:
             session_manager = await get_session_manager()
+            # Generate request fingerprint for session hijacking detection
+            request_fingerprint = _generate_request_fingerprint(request, user["id"])
             env_vars = await session_manager.get_session(
                 session_id=config.session_id,
-                user_id=user["id"]
+                user_id=user["id"],
+                request_fingerprint=request_fingerprint
             )
             if env_vars is None:
                 raise HTTPException(status_code=400, detail="Invalid or expired session")

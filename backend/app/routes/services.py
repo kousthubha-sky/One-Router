@@ -185,3 +185,207 @@ async def update_service_credentials(
     except Exception as e:
         print(f"Error updating credentials for {service_name}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to update credentials: {str(e)}")
+
+
+class SwitchAllEnvironmentsRequest(BaseModel):
+    """Request to atomically switch all services to a target environment"""
+    environment: str
+    service_ids: List[str] = []
+
+
+class VerifyEnvironmentRequest(BaseModel):
+    """Request to verify environment switch success"""
+    expected: str
+
+
+class VerifyEnvironmentResponse(BaseModel):
+    """Response indicating whether all services switched correctly"""
+    all_switched: bool
+    switched_count: int
+    failed_count: int
+    services: List[Dict[str, Any]]
+
+
+@router.post("/services/switch-all-environments")
+async def switch_all_environments_atomic(
+    request: SwitchAllEnvironmentsRequest,
+    user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Atomically switch all (or specified) services to target environment.
+    
+    Uses database transaction to ensure all-or-nothing semantics:
+    - If any service update fails, entire transaction rolls back
+    - Prevents partial updates that could cause inconsistent state
+    - Faster than sequential updates (single roundtrip)
+    
+    Args:
+        request.environment: "test" or "live"
+        request.service_ids: Optional list of service IDs to switch (empty = all)
+    
+    Returns:
+        {
+            "status": "switched",
+            "environment": "live",
+            "count": 5,
+            "timestamp": "2025-12-25T10:30:00"
+        }
+    """
+    try:
+        user_id = str(user.get("id"))
+        target_env = request.environment
+        
+        # Validate environment
+        if target_env not in ["test", "live"]:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid environment. Must be 'test' or 'live'"
+            )
+        
+        # Use database transaction for atomicity
+        async with db.begin_nested() as nested_transaction:
+            # Build query for services to update
+            query = select(ServiceCredential).where(
+                ServiceCredential.user_id == user_id,
+                ServiceCredential.is_active == True
+            )
+            
+            # Filter by specific service IDs if provided
+            if request.service_ids:
+                query = query.where(
+                    ServiceCredential.id.in_(request.service_ids)
+                )
+            
+            # Fetch all matching services
+            result = await db.execute(query)
+            services_to_update = result.scalars().all()
+            
+            if not services_to_update:
+                raise HTTPException(
+                    status_code=404,
+                    detail="No active services found to update"
+                )
+            
+            # Update all services in a single query for efficiency
+            update_query = update(ServiceCredential).where(
+                ServiceCredential.user_id == user_id,
+                ServiceCredential.is_active == True
+            )
+            
+            if request.service_ids:
+                update_query = update_query.where(
+                    ServiceCredential.id.in_(request.service_ids)
+                )
+            
+            update_query = update_query.values(
+                environment=target_env,
+                updated_at=datetime.utcnow()
+            )
+            
+            result = await db.execute(update_query)
+            updated_count = result.rowcount
+        
+        # Commit the transaction
+        await db.commit()
+        
+        return {
+            "status": "switched",
+            "environment": target_env,
+            "count": updated_count,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception as e:
+        await db.rollback()
+        print(f"Error switching all environments: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to switch environments: {str(e)}"
+        )
+
+
+@router.post("/services/verify-environment", response_model=VerifyEnvironmentResponse)
+async def verify_environment_switch(
+    request: VerifyEnvironmentRequest,
+    user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Verify that all services are in the expected environment.
+    
+    Called after environment switch to confirm atomicity.
+    If any service is in a different environment, returns failure.
+    
+    Args:
+        request.expected: Expected environment ("test" or "live")
+    
+    Returns:
+        {
+            "all_switched": true/false,
+            "switched_count": 5,
+            "failed_count": 0,
+            "services": [
+                {"name": "stripe", "environment": "live", "switched": true},
+                ...
+            ]
+        }
+    """
+    try:
+        user_id = str(user.get("id"))
+        expected_env = request.expected
+        
+        # Fetch all active services for user
+        result = await db.execute(
+            select(ServiceCredential).where(
+                ServiceCredential.user_id == user_id,
+                ServiceCredential.is_active == True
+            )
+        )
+        services = result.scalars().all()
+        
+        if not services:
+            return VerifyEnvironmentResponse(
+                all_switched=True,
+                switched_count=0,
+                failed_count=0,
+                services=[]
+            )
+        
+        # Check each service
+        switched_count = 0
+        failed_count = 0
+        service_details = []
+        
+        for service in services:
+            is_switched = service.environment == expected_env
+            if is_switched:
+                switched_count += 1
+            else:
+                failed_count += 1
+            
+            service_details.append({
+                "id": str(service.id),
+                "name": service.provider_name,
+                "environment": service.environment,
+                "switched": is_switched
+            })
+        
+        all_switched = failed_count == 0
+        
+        return VerifyEnvironmentResponse(
+            all_switched=all_switched,
+            switched_count=switched_count,
+            failed_count=failed_count,
+            services=service_details
+        )
+        
+    except Exception as e:
+        print(f"Error verifying environment switch: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to verify environment: {str(e)}"
+        )

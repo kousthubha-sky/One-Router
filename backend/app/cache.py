@@ -8,8 +8,12 @@ import redis
 from redis.asyncio import Redis
 from typing import Optional
 import json
-from datetime import timedelta
+from datetime import timedelta, datetime
 import uuid
+from cryptography.fernet import Fernet
+import logging
+
+logger = logging.getLogger(__name__)
 
 class RedisManager:
     """Manages Redis connection and operations"""
@@ -42,6 +46,20 @@ class CacheService:
     
     def __init__(self):
         self.redis: Optional[Redis] = None
+        self._cipher = self._init_cipher()
+    
+    def _init_cipher(self) -> Fernet:
+        """Initialize encryption cipher for API key storage"""
+        encryption_key = os.getenv("API_KEY_ENCRYPTION_KEY")
+        if not encryption_key:
+            # Generate and store a new key if not provided
+            encryption_key = Fernet.generate_key().decode()
+            logger.warning("No API_KEY_ENCRYPTION_KEY found. Generated new key. Store this in environment: %s", encryption_key)
+        try:
+            return Fernet(encryption_key.encode() if isinstance(encryption_key, str) else encryption_key)
+        except Exception as e:
+            logger.error(f"Failed to initialize cipher: {e}")
+            raise ValueError("Invalid encryption key")
     
     async def _get_redis(self) -> Redis:
         """Get Redis instance"""
@@ -62,86 +80,127 @@ class CacheService:
         rate_limit_per_min: int,
         ttl: int = 300  # 5 minutes
     ):
-        """Cache API key validation data"""
+        """Cache encrypted API key validation data"""
         redis = await self._get_redis()
-        key = f"apikey:{key_hash}"
+        key = "apikey:{}".format(key_hash)
         
         data = {
             "user_id": user_id,
-            "is_active": str(is_active),
+            "is_active": is_active,
             "environment": environment,
-            "rate_limit_per_min": str(rate_limit_per_min)
+            "rate_limit_per_min": rate_limit_per_min,
+            "cached_at": str(datetime.utcnow())
         }
         
-        await redis.hset(key, mapping=data)
-        await redis.expire(key, ttl)
+        # Encrypt the data before storing
+        try:
+            encrypted_data = self._cipher.encrypt(json.dumps(data).encode())
+            await redis.set(key, encrypted_data.decode(), ex=ttl)
+        except Exception as e:
+            logger.error(f"Failed to cache API key: {e}")
+            raise
     
     async def get_api_key(self, key_hash: str) -> Optional[dict]:
-        """Get cached API key data"""
+        """Get decrypted cached API key data"""
         redis = await self._get_redis()
-        key = f"apikey:{key_hash}"
+        key = "apikey:{}".format(key_hash)
         
-        data = await redis.hgetall(key)
-        if not data:
+        encrypted_data = await redis.get(key)
+        if not encrypted_data:
             return None
         
-        return {
-            "user_id": data.get("user_id"),
-            "is_active": data.get("is_active") == "True",
-            "environment": data.get("environment"),
-            "rate_limit_per_min": int(data.get("rate_limit_per_min", 60))
-        }
+        try:
+            decrypted_data = self._cipher.decrypt(encrypted_data.encode())
+            data = json.loads(decrypted_data.decode())
+            return {
+                "user_id": data.get("user_id"),
+                "is_active": data.get("is_active"),
+                "environment": data.get("environment"),
+                "rate_limit_per_min": data.get("rate_limit_per_min", 60)
+            }
+        except Exception as e:
+            logger.error(f"Failed to decrypt API key: {e}")
+            return None
     
     # ============================================
     # RATE LIMITING
     # ============================================
     
+    # Lua script for atomic rate limiting check
+    _RATE_LIMIT_LUA_SCRIPT = """
+    local key = KEYS[1]
+    local limit = tonumber(ARGV[1])
+    local now = tonumber(ARGV[2])
+    local window = 60
+    
+    -- Remove entries outside the window
+    redis.call('ZREMRANGEBYSCORE', key, 0, now - window)
+    
+    -- Count requests in current window
+    local count = redis.call('ZCARD', key)
+    
+    if count < limit then
+        -- Add current request with unique score
+        redis.call('ZADD', key, now, now .. ':' .. tostring(math.random(100000)))
+        redis.call('EXPIRE', key, window)
+        -- Return: [allowed=1, remaining_requests, reset_at_timestamp]
+        return {1, limit - count - 1, now + window}
+    else
+        -- Return: [allowed=0, remaining_requests=0, reset_at_timestamp]
+        return {0, 0, now + window}
+    end
+    """
+    
     async def check_rate_limit(
         self, 
         api_key_id: str,
         limit_per_minute: int = 60
-    ) -> tuple[bool, int]:
+    ) -> tuple[bool, int, int]:
         """
-        Check if rate limit is exceeded using sliding window
-        Returns: (is_allowed, remaining_requests)
+        Check if rate limit is exceeded using atomic Lua script.
+        Uses sliding window with distributed lock via Lua.
+        
+        Returns: (is_allowed, remaining_requests, reset_at_timestamp)
         """
         redis = await self._get_redis()
         key = f"ratelimit:{api_key_id}:minute"
         
-        now = (await redis.time())[0]  # Current timestamp
-        window_start = now - 60  # 60 seconds ago
+        now = (await redis.time())[0]  # Current server timestamp
         
-        # Remove old entries
-        await redis.zremrangebyscore(key, 0, window_start)
-        
-        # Count requests in current window
-        current_count = await redis.zcard(key)
-        
-        if current_count >= limit_per_minute:
-            return False, 0
-        
-        # Add current request
-        
-        await redis.zadd(key, {f"{now}:{uuid.uuid4().hex[:8]}": now})
-        await redis.expire(key, 60)        
-        remaining = limit_per_minute - current_count - 1
-        return True, remaining
+        try:
+            # Execute Lua script atomically (no race conditions)
+            result = await redis.eval(
+                self._RATE_LIMIT_LUA_SCRIPT,
+                keys=[key],
+                args=[limit_per_minute, now]
+            )
+            
+            is_allowed = bool(result[0])
+            remaining = int(result[1])
+            reset_at = int(result[2])
+            
+            return is_allowed, remaining, reset_at
+        except Exception as e:
+            logger.error(f"Rate limit check failed: {e}")
+            # Fail open - allow request on error
+            return True, limit_per_minute, int(now) + 60
     
     async def get_rate_limit_info(self, api_key_id: str) -> dict:
-        """Get rate limit statistics"""
+        """Get current rate limit statistics"""
         redis = await self._get_redis()
         key = f"ratelimit:{api_key_id}:minute"
         
         now = (await redis.time())[0]
         window_start = now - 60
         
+        # Remove expired entries
         await redis.zremrangebyscore(key, 0, window_start)
         current_count = await redis.zcard(key)
         
         return {
             "requests_in_window": current_count,
             "window_seconds": 60,
-            "resets_at": now + 60
+            "resets_at": int(now + 60)
         }
     
     # ============================================
@@ -158,7 +217,7 @@ class CacheService:
     ):
         """Cache encrypted service credentials"""
         redis = await self._get_redis()
-        key = f"creds:{user_id}:{service_name}:{environment}"
+        key = "creds:{}:{}:{}".format(user_id, service_name, environment)
         
         await redis.set(key, encrypted_credentials, ex=ttl)
     
@@ -170,7 +229,7 @@ class CacheService:
     ) -> Optional[str]:
         """Get cached encrypted credentials"""
         redis = await self._get_redis()
-        key = f"creds:{user_id}:{service_name}:{environment}"
+        key = "creds:{}:{}:{}".format(user_id, service_name, environment)
         
         return await redis.get(key)
     
@@ -182,13 +241,36 @@ class CacheService:
     ):
         """Invalidate cached credentials"""
         redis = await self._get_redis()
-        key = f"creds:{user_id}:{service_name}:{environment}"
+        key = "creds:{}:{}:{}".format(user_id, service_name, environment)
         
         await redis.delete(key)
     
     # ============================================
     # IDEMPOTENCY
     # ============================================
+    
+    async def acquire_idempotency_lock(
+        self,
+        idempotency_key: str,
+        ttl: int = 30
+    ) -> bool:
+        """
+        Acquire lock to prevent duplicate request processing.
+        Returns True if lock acquired, False if already locked (duplicate in progress)
+        """
+        redis = await self._get_redis()
+        lock_key = f"idempotency:lock:{idempotency_key}"
+        
+        # Set lock only if key doesn't exist (nx=True)
+        result = await redis.set(lock_key, "1", ex=ttl, nx=True)
+        return result is not None
+    
+    async def release_idempotency_lock(self, idempotency_key: str):
+        """Release idempotency lock"""
+        redis = await self._get_redis()
+        lock_key = f"idempotency:lock:{idempotency_key}"
+        
+        await redis.delete(lock_key)
     
     async def cache_idempotent_response(
         self,
@@ -199,7 +281,7 @@ class CacheService:
     ):
         """Cache response for idempotent requests"""
         redis = await self._get_redis()
-        key = f"idempotent:{user_id}:{idempotency_key}"
+        key = "idempotent:{}:{}".format(user_id, idempotency_key)
         
         await redis.set(key, json.dumps(response_data), ex=ttl)
     
@@ -210,7 +292,7 @@ class CacheService:
     ) -> Optional[dict]:
         """Get cached idempotent response"""
         redis = await self._get_redis()
-        key = f"idempotent:{user_id}:{idempotency_key}"
+        key = "idempotent:{}:{}".format(user_id, idempotency_key)
         
         data = await redis.get(key)
         if data:
@@ -229,14 +311,14 @@ class CacheService:
     ):
         """Cache user session data"""
         redis = await self._get_redis()
-        key = f"session:{clerk_user_id}"
+        key = "session:{}".format(clerk_user_id)
         
         await redis.set(key, json.dumps(session_data), ex=ttl)
     
     async def get_user_session(self, clerk_user_id: str) -> Optional[dict]:
         """Get cached user session"""
         redis = await self._get_redis()
-        key = f"session:{clerk_user_id}"
+        key = "session:{}".format(clerk_user_id)
         
         data = await redis.get(key)
         if data:

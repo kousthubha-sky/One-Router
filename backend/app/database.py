@@ -14,11 +14,18 @@ database_url = database_url.replace("&channel_binding=require", "")
 engine = create_async_engine(
     database_url,
     echo=settings.DEBUG,
-    pool_size=5,
-    max_overflow=10,
-    pool_timeout=30,
-    pool_recycle=1800,  # Recycle connections every 30 minutes
-    pool_pre_ping=True,  # Test connections before use
+    # Connection pooling configuration for production workloads
+    pool_size=20,                   # Number of connections to keep pooled
+    max_overflow=40,                # Allow up to 40 additional connections for burst traffic
+    pool_timeout=30,                # Wait up to 30 seconds for a connection to become available
+    pool_recycle=3600,              # Recycle connections every hour (prevents idle connection drops)
+    pool_pre_ping=True,             # Test connections before using them (health check)
+    connect_args={
+        "server_settings": {
+            "application_name": "onerouter_backend",
+            "jit": "off"             # Disable JIT compilation for predictable performance
+        }
+    }
 )
 
 # Create async session factory
@@ -38,7 +45,7 @@ async def check_connection_health():
     try:
         from sqlalchemy import text
         async with engine.begin() as conn:
-            result = await conn.execute(text("SELECT version()"))
+            result = await conn.execute(text("SELECT version()"), {})
             version = result.scalar()
             print(f"Database connected: {version[:50]}...")
             return True

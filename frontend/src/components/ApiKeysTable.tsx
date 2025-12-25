@@ -139,8 +139,63 @@ export default function ApiKeysTable({
   onViewActivity,
   loading = false
 }: ApiKeysTableProps) {
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+  const [copyingKeyId, setCopyingKeyId] = useState<string | null>(null);
+
+  /**
+   * Mask the API key prefix for display
+   * Shows only the last 4 characters with bullet points for security
+   * Example: sk-or-v1-••••••••xxxx (for an 8-char prefix)
+   */
+  const maskKeyPrefix = (prefix: string): string => {
+    if (prefix.length <= 4) {
+      return prefix; // Don't mask if 4 chars or less
+    }
+    const bulletCount = prefix.length - 4;
+    return '•'.repeat(bulletCount) + prefix.slice(-4);
+  };
+
+  /**
+   * Copy API key to clipboard with confirmation dialog
+   * Prevents accidental exposure of sensitive credentials
+   */
+  const handleCopyWithConfirmation = async (keyId: string, keyPrefix: string) => {
+    const confirmed = confirm(
+      '⚠️ Copy API Key Prefix?\n\n' +
+      'This will copy your API key prefix to the clipboard.\n' +
+      'The full key will be visible in your clipboard for 30 seconds,\n' +
+      'then automatically cleared for security.\n\n' +
+      'Proceed?'
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setCopyingKeyId(keyId);
+      
+      // Copy to clipboard
+      await navigator.clipboard.writeText(keyPrefix);
+      
+      // Show feedback
+      console.log('API key prefix copied to clipboard');
+      
+      // Auto-clear clipboard after 30 seconds for security
+      const clearClipboardTimeout = setTimeout(async () => {
+        try {
+          await navigator.clipboard.writeText('');
+          console.log('Clipboard cleared for security');
+        } catch (err) {
+          console.warn('Could not auto-clear clipboard:', err);
+        }
+      }, 30000); // 30 seconds
+
+      // Clear the timeout if component unmounts
+      return () => clearTimeout(clearClipboardTimeout);
+    } catch (err) {
+      console.error('Failed to copy to clipboard:', err);
+      alert('Failed to copy. Your browser may not support clipboard access.');
+    } finally {
+      setCopyingKeyId(null);
+    }
   };
 
   if (loading) {
@@ -191,15 +246,16 @@ export default function ApiKeysTable({
                       <div>
                         <p className="text-white font-mono text-sm">{key.key_name}</p>
                         <p className="text-[#666] text-xs mt-1">
-                          sk-or-v1-{key.key_prefix}...
+                          sk-or-v1-{maskKeyPrefix(key.key_prefix)}
                         </p>
                       </div>
                       <button
-                        onClick={() => copyToClipboard(key.key_prefix)}
-                        className="p-1 hover:bg-[#222] rounded transition-colors"
-                        title="Copy prefix"
+                        onClick={() => handleCopyWithConfirmation(key.id, key.key_prefix)}
+                        disabled={copyingKeyId === key.id}
+                        className="p-1 hover:bg-[#222] rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Copy prefix (confirmation required)"
                       >
-                        <Copy className="w-3 h-3 text-[#888]" />
+                        <Copy className={`w-3 h-3 ${copyingKeyId === key.id ? 'text-cyan-500' : 'text-[#888]'}`} />
                       </button>
                     </div>
                   </td>
