@@ -146,6 +146,28 @@ class DuplicateRequestException(OneRouterException):
         )
 
 
+class IdempotencyKeyConflictException(OneRouterException):
+    """Raised when idempotency key is used with different request parameters"""
+    def __init__(self, idempotency_key: str):
+        super().__init__(
+            error_code=ErrorCode.INVALID_REQUEST_FORMAT,
+            message=f"Idempotency key '{idempotency_key}' already used with different request parameters",
+            status_code=422,
+            details={"idempotency_key": idempotency_key}
+        )
+
+
+class IdempotencyKeyExpiredException(OneRouterException):
+    """Raised when trying to use an expired idempotency key"""
+    def __init__(self, idempotency_key: str):
+        super().__init__(
+            error_code=ErrorCode.INVALID_REQUEST_FORMAT,
+            message=f"Idempotency key '{idempotency_key}' has expired",
+            status_code=422,
+            details={"idempotency_key": idempotency_key}
+        )
+
+
 class ProviderNotConfiguredException(OneRouterException):
     def __init__(self, provider: str):
         super().__init__(
