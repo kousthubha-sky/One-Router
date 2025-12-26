@@ -2,6 +2,8 @@ import httpx
 from typing import Dict, Any, Optional
 from pybreaker import CircuitBreaker
 from .base import BaseAdapter
+from .razorpay_transformer import RazorpayTransformer, UnifiedPaymentResponse, UnifiedRefundResponse, UnifiedSubscriptionResponse, UnifiedErrorResponse
+from decimal import Decimal
 
 class RazorpayAdapter(BaseAdapter):
     """Razorpay payment service adapter"""
@@ -13,6 +15,7 @@ class RazorpayAdapter(BaseAdapter):
 
     def __init__(self, credentials: Dict[str, str]):
         super().__init__(credentials)
+        self.transformer = RazorpayTransformer()
 
     async def _get_base_url(self) -> str:
         """Return Razorpay API base URL"""
@@ -71,24 +74,17 @@ class RazorpayAdapter(BaseAdapter):
     async def _create_order_impl(self, amount: float, currency: str = "INR", **kwargs) -> Dict[str, Any]:
         """Implementation of order creation (protected by circuit breaker)"""
         try:
-            # Extract optional parameters
-            receipt = kwargs.get("receipt")
-            notes = kwargs.get("notes")
+            # Create unified request object
+            from .razorpay_transformer import UnifiedPaymentRequest
+            unified_request = UnifiedPaymentRequest(
+                amount=Decimal(str(amount)),
+                currency=currency,
+                receipt=kwargs.get("receipt"),
+                notes=kwargs.get("notes")
+            )
 
-            # Convert amount to paise (Razorpay expects smallest currency unit)
-            amount_paise = round(amount * 100)
-
-            payload = {
-                "amount": amount_paise,
-                "currency": currency,
-                "payment_capture": 1  # Auto-capture payments
-            }
-
-            if receipt:
-                payload["receipt"] = receipt
-
-            if notes:
-                payload["notes"] = notes
+            # Transform to Razorpay format
+            payload = self.transformer.transform_create_order_request(unified_request)
 
             # Get the base URL
             base_url = await self._get_base_url()
@@ -119,18 +115,11 @@ class RazorpayAdapter(BaseAdapter):
                 response.raise_for_status()
                 order_data = response.json()
 
-                # Return normalized response
-                return {
-                    "transaction_id": f"unf_{order_data['id']}",
-                    "provider": "razorpay",
-                    "provider_order_id": order_data['id'],
-                    "amount": amount,
-                    "currency": currency,
-                    "status": "created",
-                    "receipt": order_data.get('receipt'),
-                    "created_at": order_data.get('created_at'),
-                    "provider_data": order_data
-                }
+                # Transform response to unified format
+                unified_response = self.transformer.transform_order_response(order_data)
+                result = unified_response.dict()
+                result["provider_data"] = order_data
+                return result
 
         except httpx.TimeoutException:
             raise Exception("Razorpay API request timed out")
@@ -192,16 +181,22 @@ class RazorpayAdapter(BaseAdapter):
     async def create_refund(self, payment_id: str, amount: float = None):
         """Create a refund (full or partial)"""
         try:
+            # Create unified request object
+            from .razorpay_transformer import UnifiedRefundRequest
+            unified_request = UnifiedRefundRequest(
+                payment_id=payment_id,
+                amount=amount
+            )
+
+            # Transform to Razorpay format
+            payload = self.transformer.transform_create_refund_request(unified_request)
+
             base_url = await self._get_base_url()
             auth = (self.credentials["RAZORPAY_KEY_ID"], self.credentials["RAZORPAY_KEY_SECRET"])
 
-            payload = {"payment_id": payment_id}
-            if amount is not None:
-                payload["amount"] = int(amount * 100)  # Partial refund in paise
-
             async with httpx.AsyncClient(auth=auth, timeout=30.0) as client:
                 response = await client.post(
-                    f"{base_url}/refunds",
+                    f"{base_url}/payments/{payment_id}/refund",
                     json=payload
                 )
 
@@ -215,7 +210,13 @@ class RazorpayAdapter(BaseAdapter):
                     raise Exception(f"Payment {payment_id} not found")
 
                 response.raise_for_status()
-                return response.json()
+                refund_data = response.json()
+
+                # Transform response to unified format
+                unified_response = self.transformer.transform_refund_response(refund_data)
+                result = unified_response.dict()
+                result["provider_data"] = refund_data
+                return result
         except httpx.TimeoutException:
             raise Exception("Razorpay API request timed out")
         except httpx.HTTPError as e:
@@ -288,44 +289,37 @@ class RazorpayAdapter(BaseAdapter):
 
         return hmac.compare_digest(expected_signature, signature)
 
-    async def normalize_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """Convert unified request to Razorpay format"""
-        # Convert amount to paise
-        if "amount" in request:
-            request["amount"] = int(float(request["amount"]) * 100)
 
-        # Add Razorpay-specific defaults
-        request.setdefault("payment_capture", 1)
-        request.setdefault("currency", "INR")
 
-        return request
-
-    async def normalize_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
-        """Convert Razorpay response to unified format"""
-        return {
-            "transaction_id": f"unf_{response['id']}",
-            "provider": "razorpay",
-            "provider_order_id": response['id'],
-            "amount": response['amount'] / 100,  # Convert from paise
-            "currency": response['currency'],
-            "status": response['status'],
-            "created_at": response['created_at'],
-            "receipt": response.get('receipt'),
-            "provider_data": response
-        }
-
-    # Subscription Methods (Pass-Through)
+    # Subscription Methods
     async def create_subscription(self, plan_id: str, customer_notify: bool = True, **kwargs):
-        """Create subscription - direct pass-through to Razorpay"""
-        payload = {
-            "plan_id": plan_id,
-            "customer_notify": customer_notify,
-            "total_count": kwargs.get("total_count", 12),
-            "quantity": kwargs.get("quantity", 1),
-            **kwargs
-        }
+        """Create subscription using transformer"""
+        try:
+            # Create unified request object
+            from .razorpay_transformer import UnifiedSubscriptionRequest
+            unified_request = UnifiedSubscriptionRequest(
+                plan_id=plan_id,
+                customer_notify=customer_notify,
+                total_count=kwargs.get("total_count", 12),
+                quantity=kwargs.get("quantity", 1)
+            )
 
-        return await self.call_api("/v1/subscriptions", method="POST", payload=payload)
+            # Transform to Razorpay format
+            payload = self.transformer.transform_create_subscription_request(unified_request)
+
+            # Add any additional kwargs
+            payload.update(kwargs)
+
+            result = await self.call_api("/v1/subscriptions", method="POST", payload=payload)
+
+            # Transform response to unified format
+            unified_response = self.transformer.transform_subscription_response(result)
+            response_dict = unified_response.dict()
+            response_dict["provider_data"] = result
+            return response_dict
+
+        except Exception as e:
+            raise Exception(f"Failed to create Razorpay subscription: {str(e)}")
 
     async def get_subscription(self, subscription_id: str):
         """Get subscription details"""

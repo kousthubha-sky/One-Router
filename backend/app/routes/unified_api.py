@@ -1,6 +1,7 @@
 import logging
+import json
 from decimal import Decimal, InvalidOperation
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel, Field, validator
@@ -9,6 +10,7 @@ from ..database import get_db
 from ..services.request_router import RequestRouter
 from ..auth.dependencies import get_current_user
 from ..services.transaction_logger import TransactionLogger
+from ..services.idempotency_service import IdempotencyService
 from ..models import ServiceCredential
 from ..exceptions import InvalidAmountException, CurrencyAmountMismatchException
 
@@ -130,25 +132,41 @@ async def create_payment_order(
     from ..models import TransactionLog
     from ..cache import cache_service
     import uuid
-    
+
+    # Initialize idempotency service
+    from ..services.idempotency_service import IdempotencyService
+    idempotency_service = IdempotencyService()
+
     provider = request.provider or "razorpay"
     start_time = time.time()
-    
+
     # Generate or use provided idempotency key
     idempotency_key = request.idempotency_key or f"idempotency_{user['id']}_{int(start_time)}_{uuid.uuid4().hex[:8]}"
     transaction_id = f"txn_{user['id']}_{int(start_time)}_{uuid.uuid4().hex[:8]}"
-    
-    # Check if response is already cached
-    cached_response = await cache_service.get_idempotent_response(user["id"], idempotency_key)
+
+    # For now, use user ID as API key ID (this should be the actual API key ID from auth)
+    api_key_id = str(user['id'])
+
+    # Check if response is already cached in database
+    cached_response = await idempotency_service.get_idempotency_response(api_key_id, idempotency_key)
     if cached_response:
-        return UnifiedPaymentResponse(**cached_response)
-    
-    # Acquire lock to prevent duplicate processing
+        return UnifiedPaymentResponse(**cached_response['response_body'])
+
+    # Acquire lock to prevent duplicate processing (keep using cache for locking)
     lock_acquired = await cache_service.acquire_idempotency_lock(idempotency_key)
     if not lock_acquired:
         raise HTTPException(
             status_code=409,
             detail="Duplicate request in progress. Please retry after a moment."
+        )
+
+    # Validate request hash if key exists
+    request_body_str = json.dumps(request.dict(), sort_keys=True)
+    is_valid = await idempotency_service.validate_request_hash(api_key_id, idempotency_key, request_body_str)
+    if not is_valid:
+        raise HTTPException(
+            status_code=422,
+            detail="Idempotency key already used with different request parameters"
         )
     
     # Create initial log entry within transaction
@@ -202,10 +220,22 @@ async def create_payment_order(
         
         # Commit the transaction
         await db.commit()
-        
-        # Cache the response for idempotent retrieval
-        await cache_service.cache_idempotent_response(user["id"], idempotency_key, result)
-        
+
+        # Store the response for idempotent retrieval in database
+        try:
+            await idempotency_service.store_idempotency_response(
+                db=db,
+                api_key_id=api_key_id,
+                idempotency_key=idempotency_key,
+                endpoint="/payments/orders",
+                request_body=request_body_str,
+                response_body=result,
+                response_status_code=200
+            )
+        except Exception as e:
+            # Log but don't fail the request if idempotency storage fails
+            print(f"Failed to store idempotency response: {e}")
+
         return UnifiedPaymentResponse(**result)
 
     except HTTPException:

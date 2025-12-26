@@ -45,6 +45,14 @@ class Settings:
     # Session Management
     SESSION_TTL_SECONDS: int = int(os.getenv("SESSION_TTL_SECONDS", "3600"))  # 1 hour default
 
+    # Idempotency Settings
+    IDEMPOTENCY_KEY_TTL_HOURS: int = int(os.getenv("IDEMPOTENCY_KEY_TTL_HOURS", "24"))  # 24 hours default
+    IDEMPOTENCY_KEY_REQUIRED_ENDPOINTS: list = [
+        "POST /v1/payments/orders",
+        "POST /v1/refunds",
+        "POST /v1/subscriptions"
+    ]
+
     def __init__(self):
         """Initialize settings and validate/generate encryption key"""
         # Load admin user IDs from environment variable (comma-separated)
