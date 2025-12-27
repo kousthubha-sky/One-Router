@@ -860,7 +860,7 @@
 
 This is a **multi-tenant SaaS platform** with:
 
-✅ **User onboarding** - Upload .env, auto-detect services  
+✅ **User onboarding** - Upload .env, auto-detect servic es  
 ✅ **Credential management** - Encrypted storage  
 ✅ **API gateway** - Route to Razorpay/PayPal/Twilio  
 ✅ **SDK** - Single interface for developers  
