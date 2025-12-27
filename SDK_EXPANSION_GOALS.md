@@ -180,30 +180,29 @@ payment = await client.payments.create(
 - ✅ Added trial periods support to subscription creation
 - ✅ Implemented custom start dates for subscriptions
 - ✅ Enhanced SDK with pause/resume/plan change operations
-- ✅ Added backend API endpoints for subscription lifecycle management
+- ✅ Updated backend API endpoints for subscription lifecycle management
 - ✅ Updated Pydantic models and transformer for enhanced parameters
 - ✅ Comprehensive testing for all subscription enhancements
 
-### Week 4-5: Card Payments Implementation
-- Add enhanced card support
-- Implement EMI options
-- Update both providers
+### Week 8-9: Enhanced Payment Features ✅ COMPLETED
+- ✅ Enhanced refund API with reasons, speed, and notes
+- ✅ Added EMI plan support to payment creation
+- ✅ Implemented card network preferences
+- ✅ Added save_card option for payment method vaulting
+- ✅ Created saved payment methods resource for management
+- ✅ Updated backend models and API endpoints
+- ✅ Comprehensive testing for all enhanced payment features
 
-### Week 6: Testing & Documentation
-- Comprehensive testing
-- Update SDK documentation
-- Create usage examples
-
-## 🎯 Decision Points
-
-1. **Method Parameter Design**: How to structure payment method selection
-2. **Provider Auto-Selection**: When to auto-select vs. require explicit provider
-3. **Error Handling**: How to communicate unsupported method/provider combinations
-4. **Backward Compatibility**: Ensuring existing integrations continue working
+### Week 10-11: Marketplace Features ✅ COMPLETED
+- ✅ Split payments with automatic vendor/fee allocation
+- ✅ Vendor account management (add, list, update)
+- ✅ Platform fee tracking and reporting
+- ✅ Bulk payment processing for marketplaces
+- ✅ Backend API endpoints for marketplace operations
 
 ---
 
 *Created: December 2025*
 *Last Updated: December 2025*
-*Status: Awaiting User Approval*</content>
+*Status: Phase 1 & 2 COMPLETE, Phase 3 IN PROGRESS*</content>
 <parameter name="filePath">SDK_EXPANSION_GOALS.txt
