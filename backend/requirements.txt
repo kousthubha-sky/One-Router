@@ -6,7 +6,7 @@ cors==1.0.1
 httpx==0.25.2
 cryptography==42.0.0
 PyJWT==2.10.1
-sqlalchemy==2.0.23
+sqlalchemy==2.0.36
 alembic==1.12.1
 psycopg2-binary==2.9.7
 pybreaker==0.7.0
