@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: onerouter-backend
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: onerouter-db
+          property: connectionString
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: false
+      - key: API_HOST
+        value: 0.0.0.0
+      - key: FRONTEND_URL
+        value: https://your-frontend-domain.com
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: onerouter-redis
+          property: connectionString
+
+databases:
+  - name: onerouter-db
+    plan: free
+    databaseName: onerouter
+    user: onerouter
+
+redis:
+  - name: onerouter-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
