@@ -416,6 +416,38 @@ class PayPalAdapter(BaseAdapter):
         payload = {"reason": reason}
         return await self.call_api(f"/v1/billing/subscriptions/{subscription_id}/cancel", method="POST", payload=payload)
 
+    async def capture_payment(self, payment_id: str, amount: float, currency: str = "USD"):
+        """Capture payment (PayPal doesn't support capture separately)"""
+        # PayPal doesn't have a separate capture step - authorization and capture happen together
+        # This is a placeholder for API compatibility
+        return {
+            "status": "already_captured",
+            "payment_id": payment_id,
+            "amount_captured": amount,
+            "currency": currency,
+            "message": "PayPal captures payments automatically at authorization"
+        }
+
+    async def pause_subscription(self, subscription_id: str, pause_at: str = "now"):
+        """Pause subscription (PayPal doesn't support pause)"""
+        # PayPal doesn't support pause/resume - only suspend/activate
+        raise Exception("Pause is only supported for Razorpay. For PayPal, use suspend/activate.")
+
+    async def resume_subscription(self, subscription_id: str, resume_at: str = "now"):
+        """Resume paused subscription (PayPal doesn't support resume)"""
+        # PayPal doesn't support pause/resume - only suspend/activate
+        raise Exception("Resume is only supported for Razorpay. For PayPal, use activate.")
+
+    async def change_plan(self, subscription_id: str, new_plan_id: str, prorate: bool = True):
+        """Change subscription plan (PayPal limited support)"""
+        # PayPal doesn't support plan changes directly - requires cancellation and new subscription
+        raise Exception("Plan changes are only supported for Razorpay. For PayPal, cancel and create new subscription.")
+
+    async def create_split_payment(self, amount: float, currency: str, splits: list, description: str = None, metadata: dict = None):
+        """Create split payment (PayPal marketplace feature)"""
+        # PayPal marketplace support would require payout API integration
+        raise Exception("Split payments are only supported for Razorpay currently.")
+
     async def suspend_subscription(self, subscription_id: str, reason: str = ""):
         """Suspend subscription"""
         payload = {"reason": reason}

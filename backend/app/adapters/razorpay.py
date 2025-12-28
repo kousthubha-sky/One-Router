@@ -363,3 +363,27 @@ class RazorpayAdapter(BaseAdapter):
             "prorate": prorate
         }
         return await self.call_api(f"/v1/subscriptions/{subscription_id}", method="PATCH", payload=payload)
+
+    async def create_split_payment(self, amount: float, currency: str, splits: list, description: str = None, metadata: dict = None):
+        """Create split payment for marketplace vendors"""
+        # Razorpay doesn't have native split payment API - this is a mock implementation
+        # In production, you would need to integrate with Razorpay's payment links with vendors
+        split_amounts = sum(s.get("amount", 0) for s in splits)
+
+        if split_amounts > amount:
+            raise Exception("Total split amounts exceed payment amount")
+
+        # Create payment order
+        order = await self.create_order(amount=amount, currency=currency, receipt=f"split_{int(amount)}")
+
+        # Return split payment details
+        return {
+            "payment_order_id": order.get("id"),
+            "amount": amount,
+            "currency": currency,
+            "splits": splits,
+            "description": description,
+            "metadata": metadata,
+            "status": "created",
+            "payment_link": order.get("short_url")
+        }

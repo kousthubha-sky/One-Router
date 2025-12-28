@@ -64,18 +64,32 @@ export default function APIKeysPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [currentEnvironment, setCurrentEnvironment] = useState<'test' | 'live'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('onerouter_environment');
+      return (saved === 'live' || saved === 'test') ? saved : 'test';
+    }
+    return 'test';
+  });
 
   const clientApiCall = useClientApiCall();
+
+  const handleEnvironmentChange = (env: 'test' | 'live') => {
+    setCurrentEnvironment(env);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('onerouter_environment', env);
+    }
+  };
 
   useEffect(() => {
     loadAPIKeys();
     loadServices();
-  }, []);
+  }, [currentEnvironment]);
 
   const loadAPIKeys = async () => {
     try {
       setLoading(true);
-      const response = await clientApiCall('/api/keys');
+      const response = await clientApiCall(`/api/keys?environment=${currentEnvironment}`);
       setApiKeys(response.api_keys || []);
     } catch (error) {
       console.error('Failed to load API keys:', error);
@@ -101,6 +115,7 @@ export default function APIKeysPage() {
         method: 'POST',
         body: JSON.stringify({
           key_name: 'New API Key',
+          environment: currentEnvironment,
           rate_limit_per_min: 60,
           rate_limit_per_day: 10000
         })
@@ -195,21 +210,24 @@ export default function APIKeysPage() {
     <DashboardLayout>
       <div className="text-white font-sans border-t border-white/10">
         <header className="border-[#333] backdrop-blur-sm">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-l border-r border-white/10">
-            <div className="flex justify-between items-center py-6">
-              <div className="flex items-center space-x-4">
-                <GlobalEnvironmentToggle services={services} />
-                <div className="px-4 rounded-full text-sm font-medium text-cyan-500 transition-all duration-300 hover:bg-cyan-500/10">
-                  Free Plan
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-l border-r border-white/10">
+              <div className="flex justify-between items-center py-6">
+                <div className="flex items-center space-x-4">
+                  <GlobalEnvironmentToggle 
+                    services={services} 
+                    onGlobalSwitch={handleEnvironmentChange}
+                  />
+                  <div className="px-4 rounded-full text-sm font-medium text-cyan-500 transition-all duration-300 hover:bg-cyan-500/10">
+                    Free Plan
+                  </div>
+                  <Link href="/api-keys">
+                    <Button className="text-white hover:bg-[#1a1a1a] border-0 transition-all duration-300 hover:shadow-md hover:shadow-blue-300 hover:scale-105">
+                      Manage API Keys
+                    </Button>
+                  </Link>
                 </div>
-                <Link href="/api-keys">
-                  <Button className="text-white hover:bg-[#1a1a1a] border-0 transition-all duration-300 hover:shadow-md hover:shadow-blue-300 hover:scale-105">
-                    Manage API Keys
-                  </Button>
-                </Link>
               </div>
             </div>
-          </div>
         </header>
 
         <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 relative">
@@ -245,6 +263,16 @@ export default function APIKeysPage() {
                 tags: ["Security", "Encryption"],
               },
             ]} />
+
+            {/* Environment indicator */}
+            {apiKeys.length === 0 && (
+              <div className="mb-8 p-4 bg-[#1a1a1a] rounded border border-[#222]">
+                <p className="text-sm text-[#888]">
+                  No API keys in <span className="text-cyan-500 font-medium">{currentEnvironment}</span> environment. 
+                  Create one to get started.
+                </p>
+              </div>
+            )}
 
             {/* New Key Alert */}
             {newKey && (
@@ -290,7 +318,7 @@ export default function APIKeysPage() {
                   <div className="w-8 h-8  flex items-center justify-center ">
                     🔑
                   </div>
-                  Your API Keys
+                  Your API Keys ({currentEnvironment === 'test' ? 'Test' : 'Live'})
                 </h2>
                 <Button
                   onClick={generateAPIKey}

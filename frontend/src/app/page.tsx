@@ -37,22 +37,28 @@ export default function Home() {
 
               {/* Middle - Navigation Links */}
               <nav className="hidden lg:flex flex-1 items-center justify-center gap-4 xl:gap-12 border-r border-[#222] px-4 xl:px-8">
-                <a href="#docs" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
-                  docs
-                </a>
-                <a href="#changelog" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
-                  changelog
-                </a>
-                <a href="#blog" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
-                  blog
-                </a>
-                <a href="#community" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
-                  community
-                </a>
-                <a href="#enterprise" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
-                  enterprise
-                </a>
-              </nav>
+                 <Link href="/docs" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
+                   docs
+                 </Link>
+                 <a href="/privacy" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
+                   privacy
+                 </a>
+                 <a href="/terms" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
+                   terms
+                 </a>
+                 <Link href="/pricing" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
+                   pricing
+                 </Link>
+                 <a href="/contact" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
+                   contact
+                 </a>
+                 <a href="/community" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
+                   community
+                 </a>
+                 <a href="/enterprise" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
+                   enterprise
+                 </a>
+               </nav>
 
               {/* Right - Auth & GitHub */}
               <div className="flex items-center gap-2 md:gap-4 lg:gap-6 justify-end flex-1 pl-4 md:pl-8">
@@ -88,42 +94,25 @@ export default function Home() {
             </div>
 
             {/* Mobile Menu - Dropdown */}
-            {mobileMenuOpen && (
-              <div className="lg:hidden absolute top-16 left-0 right-0 bg-black border-b border-[#222] px-4 py-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                <a href="#docs" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
-                  docs
-                </a>
-                <a href="#changelog" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
-                  changelog
-                </a>
-                <a href="#blog" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
-                  blog
-                </a>
-                <a href="#community" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
-                  community
-                </a>
-                <a href="#enterprise" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2">
-                  enterprise
-                </a>
-                
-                <div className="pt-4 flex flex-col gap-2">
-                  <SignedOut>
-                    <SignInButton mode="modal">
-                      <Button className="w-full bg-white text-black hover:bg-gray-200 font-mono font-bold text-xs px-3 py-2 rounded transition-all duration-200 transform hover:scale-105">
-                        Sign In
-                      </Button>
-                    </SignInButton>
-                  </SignedOut>
-                  <SignedIn>
-                    <Link href="/dashboard">
-                      <Button className="w-full bg-white text-black hover:bg-gray-200 font-mono font-bold text-xs px-3 py-2 rounded transition-all duration-200 transform hover:scale-105">
-                        Dashboard
-                      </Button>
-                    </Link>
-                  </SignedIn>
-                </div>
-              </div>
-            )}
+             {mobileMenuOpen && (
+               <div className="lg:hidden absolute top-16 left-0 right-0 bg-black border-b border-[#222] px-4 py-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                 <Link href="/docs" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
+                   docs
+                 </Link>
+                 <Link href="/privacy" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
+                   privacy
+                 </Link>
+                 <Link href="/terms" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
+                   terms
+                 </Link>
+                 <Link href="/pricing" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
+                   pricing
+                 </Link>
+                 <Link href="/contact" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
+                   contact
+                 </Link>
+               </div>
+             )}
           </div>
         </header>
 

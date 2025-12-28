@@ -2,11 +2,13 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   rewrites: async () => {
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || 'http://localhost:8000';
+    const apiUrl = new URL(apiBaseUrl);
     return {
       beforeFiles: [
         {
           source: "/api/:path*",
-          destination: "http://localhost:8000/api/:path*",
+          destination: `${apiUrl.origin}/api/:path*`,
         },
       ],
     };

@@ -583,6 +583,29 @@ class CreateSubscriptionRequest(BaseModel):
     idempotency_key: Optional[str] = None  # For idempotent request handling
 
 
+@router.get("/subscriptions")
+async def list_subscriptions(
+    user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    List user's subscriptions
+
+    GET /v1/subscriptions
+
+    Note: Since subscriptions are managed by payment providers and not stored locally,
+    this endpoint currently returns an empty list. Users should track their subscription
+    IDs from creation responses and use the individual subscription endpoints.
+    """
+    # TODO: Implement subscription listing from payment providers
+    # For now, return empty list since subscriptions are not stored locally
+    # and payment providers don't provide list APIs
+    return {
+        "subscriptions": [],
+        "message": "Subscription listing is not yet implemented. Please track subscription IDs from creation responses."
+    }
+
+
 @router.post("/subscriptions")
 async def create_subscription(
     request: CreateSubscriptionRequest,

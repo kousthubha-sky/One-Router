@@ -190,8 +190,8 @@ class CredentialManager:
         user_id: str,
         key_name: str = "Default Key",
         key_environment: str = "test",  # New parameter for environment
-        rate_limit_per_min: int = None,  # Make optional to use environment defaults
-        rate_limit_per_day: int = None,  # Make optional to use environment defaults
+        rate_limit_per_min: Optional[int] = None,  # Make optional to use environment defaults
+        rate_limit_per_day: Optional[int] = None,  # Make optional to use environment defaults
         expires_at: Optional[datetime] = None
     ) -> Dict[str, Any]:
         """Generate a new API key for a user with environment support"""
@@ -239,14 +239,17 @@ class CredentialManager:
             "created_at": api_key_record.created_at.isoformat() if api_key_record.created_at else None
         }
 
-    async def get_user_api_keys(self, db: AsyncSession, user_id: str) -> List[Dict[str, Any]]:
-        """Get all API keys for a user"""
+    async def get_user_api_keys(self, db: AsyncSession, user_id: str, environment: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get API keys for a user, optionally filtered by environment"""
         from ..models import ApiKey
         from sqlalchemy import select
 
-        result = await db.execute(
-            select(ApiKey).where(ApiKey.user_id == user_id)
-        )
+        query = select(ApiKey).where(ApiKey.user_id == user_id)
+
+        if environment:
+            query = query.where(ApiKey.environment == environment)
+
+        result = await db.execute(query)
         api_keys = result.scalars().all()
 
         return [{

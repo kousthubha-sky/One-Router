@@ -5,15 +5,17 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { UserButton } from '@clerk/nextjs';
 import {
-  Key,
-  Webhook,
-  BarChart3,
-  Settings,
-  FileCode,
-  Zap,
-  Menu,
-  X
-} from 'lucide-react';
+   Key,
+   Webhook,
+   BarChart3,
+   Settings,
+   FileCode,
+   Zap,
+   Menu,
+   X,
+   Building2,
+   Calendar
+ } from 'lucide-react';
 import {
   NavigationMenu,
   NavigationMenuList,
@@ -32,6 +34,8 @@ interface NavItem {
 
 const productsItems: NavItem[] = [
   { href: '/services', label: 'Services', icon: <Zap className="w-4 h-4" /> },
+  { href: '/marketplace', label: 'Marketplace', icon: <Building2 className="w-4 h-4" /> },
+  { href: '/subscriptions', label: 'Subscriptions', icon: <Calendar className="w-4 h-4" /> },
   { href: '/api-keys', label: 'API Keys', icon: <Key className="w-4 h-4" /> },
   { href: '/webhooks', label: 'Webhooks', icon: <Webhook className="w-4 h-4" /> },
   { href: '/analytics', label: 'Analytics', icon: <BarChart3 className="w-4 h-4" /> },

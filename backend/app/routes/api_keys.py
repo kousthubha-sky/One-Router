@@ -40,18 +40,24 @@ class ApiKeyResponse(BaseModel):
 
 @router.get("")
 async def list_api_keys(
+    environment: Optional[str] = Query(None, description="Filter by environment (test/live)"),
     user: Dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
-    """List all API keys for the current user"""
+    """List API keys for current user, optionally filtered by environment"""
     try:
+        print(f"[DEBUG] list_api_keys called with environment: {environment}")
         credential_manager = CredentialManager()
-        api_keys = await credential_manager.get_user_api_keys(db, user["id"])
+        api_keys = await credential_manager.get_user_api_keys(db, user["id"], environment)
+        print(f"[DEBUG] Returning {len(api_keys)} keys for environment: {environment or 'all'}")
+        for key in api_keys:
+            print(f"[DEBUG] Key: {key['key_name']}, Env: {key['environment']}")
         
         return {
             "success": True,
             "api_keys": api_keys,
-            "count": len(api_keys)
+            "count": len(api_keys),
+            "environment": environment or "all"
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

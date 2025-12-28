@@ -144,19 +144,6 @@ export function GlobalEnvironmentToggle({ services, onGlobalSwitch }: GlobalEnvi
       onGlobalSwitch?.(targetEnvironment);
       console.log('All services switched successfully');
 
-      // Soft reload - use SWR-like refetch instead of hard page reload
-      // This preserves user state while getting fresh data
-      // The parent component should have access to a mutate function for /api/services
-      // For now, do a gentle refresh of just the services data
-      // Note: Ideally this would be passed as a prop from parent component that uses SWR
-      try {
-        // Refresh the page data without full reload
-        // This gives users fresh data without losing form state
-        window.location.href = window.location.href;
-      } catch (err) {
-        console.warn('Could not trigger data refresh:', err);
-      }
-
     } catch (error) {
       console.error("Failed to switch all services:", error);
       // Reset on error - let it recalculate from services
