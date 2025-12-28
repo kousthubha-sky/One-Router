@@ -45,9 +45,12 @@ async def check_connection_health():
     try:
         from sqlalchemy import text
         async with engine.begin() as conn:
-            result = await conn.execute(text("SELECT version()"), {})
+            result = await conn.execute(text("SELECT version()"))
             version = result.scalar()
-            print(f"Database connected: {version[:50]}...")
+            if version:
+                print(f"Database connected: {str(version)[:50]}...")
+            else:
+                print("Database connected (version unknown)")
             return True
     except Exception as e:
         print(f"Database connection failed: {e}")
