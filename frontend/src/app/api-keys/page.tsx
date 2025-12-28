@@ -1,16 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useClientApiCall } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+
 import { Button } from '@/components/ui/button';
-import { Copy, Key, Plus, Trash2, Shield, AlertTriangle } from 'lucide-react';
+import { Copy, Key, Plus, Shield, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import DashboardLayout from '@/components/DashboardLayout';
 import { GlobalEnvironmentToggle } from '@/components/GlobalEnvironmentToggle';
 import { BentoGrid } from '@/components/ui/bento-grid';
-import { FeatureCard } from '@/components/ui/grid-feature-cards';
+
 import ApiKeysTable from '@/components/ApiKeysTable';
 import { EditApiKeyModal, ActivityModal } from '@/components/ApiKeyModals';
 
@@ -72,41 +72,38 @@ export default function APIKeysPage() {
     return 'test';
   });
 
-  const clientApiCall = useClientApiCall();
-
-  const handleEnvironmentChange = (env: 'test' | 'live') => {
-    setCurrentEnvironment(env);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('onerouter_environment', env);
-    }
+  const handleEnvironmentChange = (newEnvironment: "test" | "live") => {
+    setCurrentEnvironment(newEnvironment);
   };
 
-  useEffect(() => {
-    loadAPIKeys();
-    loadServices();
-  }, [currentEnvironment]);
+  const clientApiCall = useClientApiCall();
 
-  const loadAPIKeys = async () => {
+  const loadAPIKeys = useCallback(async () => {
     try {
       setLoading(true);
       const response = await clientApiCall(`/api/keys?environment=${currentEnvironment}`);
-      setApiKeys(response.api_keys || []);
+      setApiKeys((response as { api_keys: APIKey[] }).api_keys || []);
     } catch (error) {
       console.error('Failed to load API keys:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [clientApiCall, currentEnvironment]);
 
-  const loadServices = async () => {
+  const loadServices = useCallback(async () => {
     try {
       const response = await clientApiCall('/api/services');
-      setServices(response.services || []);
+      setServices((response as { services: Service[] }).services || []);
     } catch (error) {
       console.error('Failed to load services:', error);
       setServices([]);
     }
-  };
+  }, [clientApiCall]);
+
+  useEffect(() => {
+    loadAPIKeys();
+    loadServices();
+  }, [currentEnvironment, loadAPIKeys, loadServices]);
 
   const generateAPIKey = async () => {
     setGenerating(true);
@@ -120,7 +117,7 @@ export default function APIKeysPage() {
           rate_limit_per_day: 10000
         })
       });
-      setNewKey(data.api_key);
+      setNewKey((data as { api_key: string }).api_key);
       loadAPIKeys();
     } catch (error) {
       console.error('Failed to generate API key:', error);

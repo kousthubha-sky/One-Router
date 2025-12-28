@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useMarketplaceAPI, CreateVendorRequest } from '@/lib/api-marketplace';
+import { useMarketplaceAPI } from '@/lib/api-marketplace';
 
 interface VendorModalProps {
   isOpen: boolean;

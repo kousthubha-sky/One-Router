@@ -1,16 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useClientApiCall } from '@/lib/api-client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, Settings, ExternalLink, Loader2, Zap } from 'lucide-react';
+import { CheckCircle2, Settings, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import DashboardLayout from '@/components/DashboardLayout';
 import { GlobalEnvironmentToggle } from '@/components/GlobalEnvironmentToggle';
 import { BentoGrid } from '@/components/ui/bento-grid';
-import { FeatureCard } from '@/components/ui/grid-feature-cards';
 
 interface Service {
   id: string;
@@ -21,39 +18,32 @@ interface Service {
   created_at: string;
 }
 
-interface Environment {
-  configured: boolean;
-  last_used: string | null;
-}
+
 
 export default function ServicesPage() {
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
-  const [environments, setEnvironments] = useState<Record<string, { test: Environment; live: Environment }>>({});
-  const [servicesData, setServicesData] = useState<any[]>([]);
+  // const [environments, setEnvironments] = useState<Record<string, { test: Environment; live: Environment }>>({});
+  const [servicesData, setServicesData] = useState<Service[]>([]);
   const apiClient = useClientApiCall();
 
-  useEffect(() => {
-    loadServices();
-  }, []);
-
-  const loadServices = async () => {
+  const loadServices = useCallback(async () => {
     try {
       setLoading(true);
       const response = await apiClient('/api/services');
-      setServices(response.services || []);
-      setServicesData(response.services || []);
+      setServices((response as { services: Service[] }).services || []);
+      setServicesData((response as { services: Service[] }).services || []);
 
       // Load environment status for each service
-      const envPromises = response.services.map((service: Service) =>
-        apiClient(`/api/services/${service.service_name}/environments`)
-          .then(env => ({ [service.service_name]: env }))
-          .catch(() => ({ [service.service_name]: { test: { configured: false, last_used: null }, live: { configured: false, last_used: null } } }))
-      );
+      // const envPromises = response.services.map((service: Service) =>
+      //   apiClient(`/api/services/${service.service_name}/environments`)
+      //     .then(env => ({ [service.service_name]: env }))
+      //     .catch(() => ({ [service.service_name]: { test: { configured: false, last_used: null }, live: { configured: false, last_used: null } } }))
+      // );
 
-      const envResults = await Promise.all(envPromises);
-      const envMap = Object.assign({}, ...envResults);
-      setEnvironments(envMap);
+      // const envResults = await Promise.all(envPromises);
+      // const envMap = Object.assign({}, ...envResults);
+      // setEnvironments(envMap);
     } catch (error) {
       console.error('Failed to load services:', error);
       setServices([]);
@@ -61,19 +51,23 @@ export default function ServicesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiClient]);
 
-  const switchEnvironment = async (serviceName: string, newEnv: 'test' | 'live') => {
-    try {
-      await apiClient(`/api/services/${serviceName}/switch-environment`, {
-        method: 'POST',
-        body: JSON.stringify({ environment: newEnv })
-      });
-      await loadServices();
-    } catch (error) {
-      console.error('Failed to switch environment:', error);
-    }
-  };
+  useEffect(() => {
+    loadServices();
+  }, [loadServices]);
+
+  // const switchEnvironment = async (serviceName: string, newEnv: 'test' | 'live') => {
+  //   try {
+  //     await apiClient(`/api/services/${serviceName}/switch-environment`, {
+  //       method: 'POST',
+  //       body: JSON.stringify({ environment: newEnv })
+  //     });
+  //     await loadServices();
+  //   } catch (error) {
+  //     console.error('Failed to switch environment:', error);
+  //   }
+  // };
 
   if (loading) {
     return (
@@ -123,12 +117,12 @@ export default function ServicesPage() {
             </div>
 
             {/* Services Metrics */}
-            <BentoGrid items={[
+              <BentoGrid items={[
               {
                 title: "Connected Services",
                 meta: `${services.length} active`,
                 description: "Payment providers and integrations configured",
-                icon: <Zap className="w-4 h-4 text-cyan-500" />,
+                icon: <CheckCircle2 className="w-4 h-4 text-cyan-500" />,
                 status: "Active",
                 tags: ["Integration", "Payments"],
                 colSpan: 2,

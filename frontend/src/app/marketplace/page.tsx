@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,26 +8,26 @@ import { Plus, DollarSign, Building2, ExternalLink } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { GlobalEnvironmentToggle } from '@/components/GlobalEnvironmentToggle';
 import { BentoGrid } from '@/components/ui/bento-grid';
-import { FeatureCard } from '@/components/ui/grid-feature-cards';
 import { VendorModal } from '@/components/VendorModal';
 import { useMarketplaceAPI, Vendor } from '@/lib/api-marketplace';
 import { useClientApiCall } from '@/lib/api-client';
 import Link from 'next/link';
 
+interface Service {
+  id: string;
+  service_name: string;
+  environment: string;
+}
+
 export default function MarketplacePage() {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [services, setServices] = useState<any[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
   const marketplaceAPI = useMarketplaceAPI();
   const apiClient = useClientApiCall();
 
-  useEffect(() => {
-    loadVendors();
-    loadServices();
-  }, []);
-
-  const loadVendors = async () => {
+  const loadVendors = useCallback(async () => {
     try {
       setLoading(true);
       const response = await marketplaceAPI.listVendors();
@@ -38,17 +38,22 @@ export default function MarketplacePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [marketplaceAPI]);
 
-  const loadServices = async () => {
+  const loadServices = useCallback(async () => {
     try {
       const response = await apiClient('/api/services');
-      setServices(response.services || []);
+      setServices((response as { services: Service[] }).services || []);
     } catch (error) {
       console.error('Failed to load services:', error);
       setServices([]);
     }
-  };
+  }, [apiClient]);
+
+  useEffect(() => {
+    loadVendors();
+    loadServices();
+  }, [loadVendors, loadServices]);
 
   const handleVendorCreated = () => {
     loadVendors();

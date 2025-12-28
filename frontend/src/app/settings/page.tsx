@@ -1,33 +1,53 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useUser } from '@clerk/nextjs';
+import { useClientApiCall } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Settings, User, Key, Bell, Shield, Trash2 } from 'lucide-react';
+import { User, Shield } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { GlobalEnvironmentToggle } from '@/components/GlobalEnvironmentToggle';
 import { BentoGrid } from '@/components/ui/bento-grid';
 import Link from 'next/link';
 
+interface Service {
+  id: string;
+  service_name: string;
+  environment: string;
+}
+
 export default function SettingsPage() {
   const { user } = useUser();
-  const [notifications, setNotifications] = useState({
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(true);
+  const apiClient = useClientApiCall();
+  const [notifications, setNotifications] = useState<{
+    email: boolean;
+    webhook: boolean;
+    sms: boolean;
+  }>({
     email: true,
     webhook: false,
     sms: false,
   });
-  const [services, setServices] = useState<any[]>([]);
 
-  const loadServices = async () => {
+  const loadServices = useCallback(async () => {
     try {
-      // For now, we'll use a placeholder since we don't have the API client in settings
-      setServices([]);
+      setLoading(true);
+      const response = await apiClient('/api/services');
+      setServices((response as { services: Service[] }).services || []);
     } catch (error) {
       console.error('Failed to load services:', error);
       setServices([]);
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [apiClient]);
+
+  useEffect(() => {
+    loadServices();
+  }, [loadServices]);
 
   return (
     <DashboardLayout>

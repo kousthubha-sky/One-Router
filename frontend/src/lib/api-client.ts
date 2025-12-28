@@ -3,7 +3,7 @@ import { useAuth } from '@clerk/nextjs';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 // Client-side API calls for client components
-export function useClientApiCall(): (endpoint: string, options?: RequestInit) => Promise<any> {
+export function useClientApiCall(): (endpoint: string, options?: RequestInit) => Promise<unknown> {
   const { getToken } = useAuth();
 
   return async function clientApiCall(endpoint: string, options?: RequestInit) {
@@ -14,7 +14,7 @@ export function useClientApiCall(): (endpoint: string, options?: RequestInit) =>
     const method = options?.method || 'GET';
 
     // For state-changing operations, we need CSRF tokens
-    let headers: Record<string, string> = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(token && { Authorization: `Bearer ${token}` }),
       ...(options?.headers as Record<string, string> || {}),

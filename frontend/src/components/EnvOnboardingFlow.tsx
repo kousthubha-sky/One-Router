@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -28,21 +28,16 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
   const [file, setFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [parsing, setParsing] = useState(false);
-  const [parsed, setParsed] = useState(false);
-  const [detectedServices, setDetectedServices] = useState<DetectedService[]>([]);
-   const [step, setStep] = useState<"check-existing" | "upload" | "review" | "complete">("check-existing");
-   const [sessionId, setSessionId] = useState<string | null>(null);
-   const [existingServices, setExistingServices] = useState<DetectedService[]>([]);
-   const [detectedEnvironment, setDetectedEnvironment] = useState<"test" | "live" | null>(null);
-   const [checkingExisting, setCheckingExisting] = useState(true);
-   const [editingKey, setEditingKey] = useState<{ service: string; key: string; value: string } | null>(null);
+    const [parsed, setParsed] = useState(false);
+   const [detectedServices, setDetectedServices] = useState<DetectedService[]>([]);
+    const [step, setStep] = useState<"check-existing" | "upload" | "review" | "complete">("check-existing");
+    const [sessionId, setSessionId] = useState<string | null>(null);
+    const [existingServices, setExistingServices] = useState<DetectedService[]>([]);
+    const [detectedEnvironment, setDetectedEnvironment] = useState<"test" | "live" | null>(null);
+    const [checkingExisting, setCheckingExisting] = useState(true);
+     const [editingKey, setEditingKey] = useState<{ service: string; key: string; value: string } | null>(null);
 
-   // Check existing services on mount
-   useEffect(() => {
-     checkExistingServices();
-   }, []);
-
-   const checkExistingServices = async () => {
+     const checkExistingServices = async () => {
      try {
        const token = await getToken();
        if (!token) return;
@@ -73,11 +68,16 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
      } catch (error) {
        console.error('Error checking existing services:', error);
      } finally {
-       setCheckingExisting(false);
-     }
-   };
+        setCheckingExisting(false);
+      }
+    };
 
-   const detectEnvironmentVariables = async () => {
+    // Check existing services on mount
+    useEffect(() => {
+      checkExistingServices();
+    }, []);
+
+    const detectEnvironmentVariables = async () => {
      try {
        // This is a simplified detection - in production, you might check actual environment variables
        // For now, we'll detect based on existing service configurations
@@ -93,16 +93,16 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
            const envResponse = await fetch(`${API_BASE_URL}/api/services/${encodeURIComponent(service.name)}/environments`, {
              headers: {
                'Authorization': `Bearer ${token}`,
-             },
-           });
-           if (envResponse.ok) {
+              },
+            });
+            if (envResponse.ok) {
              const envData = await envResponse.json();
              if (envData.live?.configured) {
                hasLiveCredentials = true;
                break;
              }
            }
-         } catch (error) {
+          } catch {
            // Ignore errors for individual services
          }
        }
@@ -112,29 +112,29 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
        console.error('Error detecting environment:', error);
        setDetectedEnvironment("test"); // Default to test
      }
-   };
+    };
 
-   const handleKeyEdit = (serviceName: string, keyName: string) => {
-     setEditingKey({ service: serviceName, key: keyName, value: "" });
-   };
+    const handleKeyEdit = (serviceName: string, keyName: string) => {
+      setEditingKey({ service: serviceName, key: keyName, value: "" });
+    };
 
-   const handleKeyEditSubmit = () => {
-     // Here you would typically send the updated key to the backend
-     setEditingKey(null);
-   };
+    const handleKeyEditSubmit = () => {
+      // Here you would typically send the updated key to the backend
+      setEditingKey(null);
+    };
 
-   const handleExistingCheckComplete = () => {
+    const handleExistingCheckComplete = () => {
      setStep("upload");
    };
 
    // Supported services
-  const SUPPORTED_SERVICES = {
-    razorpay: { patterns: ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"], features: ["Payments", "Refunds", "Webhooks"] },
-    stripe: { patterns: ["STRIPE_SECRET_KEY", "STRIPE_PUBLISHABLE_KEY"], features: ["Payments", "Subscriptions", "Refunds"] },
-    paypal: { patterns: ["PAYPAL_CLIENT_ID", "PAYPAL_CLIENT_SECRET"], features: ["Payments", "Payouts"] },
-    twilio: { patterns: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"], features: ["SMS", "Calls", "Verification"] },
-    aws_s3: { patterns: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_S3_BUCKET"], features: ["Storage", "File Upload", "CDN"] },
-  };
+    const SUPPORTED_SERVICES = {
+      razorpay: { patterns: ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"], features: ["Payments", "Refunds", "Webhooks"] },
+      stripe: { patterns: ["STRIPE_SECRET_KEY", "STRIPE_PUBLISHABLE_KEY"], features: ["Payments", "Subscriptions", "Refunds"] },
+      paypal: { patterns: ["PAYPAL_CLIENT_ID", "PAYPAL_CLIENT_SECRET"], features: ["Payments", "Payouts"] },
+      twilio: { patterns: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"], features: ["SMS", "Calls", "Verification"] },
+      aws_s3: { patterns: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_S3_BUCKET"], features: ["Storage", "File Upload", "CDN"] },
+    };
 
   const parseEnvFile = async (fileContent: string) => {
     setParsing(true);
@@ -773,7 +773,7 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
                   <span className="text-transparent bg-gradient-to-r from-cyan-500 to-blue-500 bg-clip-text">Onboarding Complete!</span>
                 </h1>
                 <p className="text-[#888] text-lg max-w-2xl mx-auto leading-relaxed">
-                  Your services are configured and ready to use. You're all set to start processing payments.
+                  Your services are configured and ready to use. You&apos;re all set to start processing payments.
                 </p>
               </div>
               <div className="flex justify-center">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useClientApiCall } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,8 +9,13 @@ import { Webhook, Send, CheckCircle, XCircle, Clock } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { GlobalEnvironmentToggle } from '@/components/GlobalEnvironmentToggle';
 import { BentoGrid } from '@/components/ui/bento-grid';
-import { FeatureCard } from '@/components/ui/grid-feature-cards';
 import Link from 'next/link';
+
+interface Service {
+  id: string;
+  service_name: string;
+  environment: string;
+}
 
 interface WebhookEvent {
   id: string;
@@ -25,16 +30,10 @@ export default function WebhooksPage() {
   const [events, setEvents] = useState<WebhookEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [testStatus, setTestStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
-  const [services, setServices] = useState<any[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
   const apiClient = useClientApiCall();
 
-  useEffect(() => {
-    loadWebhookConfig();
-    loadWebhookLogs();
-    loadServices();
-  }, []);
-
-  const loadWebhookConfig = async () => {
+  const loadWebhookConfig = useCallback(async () => {
     try {
       const response = await apiClient('/api/webhooks/configure');
       // Handle webhook configuration
@@ -42,26 +41,32 @@ export default function WebhooksPage() {
     } catch (error) {
       console.error('Failed to load webhook config:', error);
     }
-  };
+  }, [apiClient]);
 
-  const loadWebhookLogs = async () => {
+  const loadWebhookLogs = useCallback(async () => {
     try {
       const response = await apiClient('/api/webhooks/logs?limit=50');
-      setEvents(response.events || []);
+      setEvents((response as { events: WebhookEvent[] }).events || []);
     } catch (error) {
       console.error('Failed to load webhook logs:', error);
     }
-  };
+  }, [apiClient]);
 
-  const loadServices = async () => {
+  const loadServices = useCallback(async () => {
     try {
       const response = await apiClient('/api/services');
-      setServices(response.services || []);
+      setServices((response as { services: Service[] }).services || []);
     } catch (error) {
       console.error('Failed to load services:', error);
       setServices([]);
     }
-  };
+  }, [apiClient]);
+
+  useEffect(() => {
+    loadWebhookConfig();
+    loadWebhookLogs();
+    loadServices();
+  }, [loadWebhookConfig, loadWebhookLogs, loadServices]);
 
   const saveWebhookUrl = async () => {
     if (!webhookUrl) return;
@@ -95,7 +100,7 @@ export default function WebhooksPage() {
       });
       setTestStatus('success');
       setTimeout(() => setTestStatus('idle'), 3000);
-    } catch (error) {
+    } catch {
       setTestStatus('error');
       setTimeout(() => setTestStatus('idle'), 3000);
     }

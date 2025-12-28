@@ -1,55 +1,58 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState, useEffect, useCallback } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Plus, Calendar, Filter, X } from 'lucide-react';
 import  DashboardLayout  from '@/components/DashboardLayout';
 import { GlobalEnvironmentToggle } from '@/components/GlobalEnvironmentToggle';
 import { BentoGrid } from '@/components/ui/bento-grid';
-import { FeatureCard } from '@/components/ui/grid-feature-cards';
 import { SubscriptionCard } from '@/components/SubscriptionCard';
-import { useSubscriptionAPI, Subscription } from '@/lib/api-subscriptions';
+import { Subscription } from '@/lib/api-subscriptions';
 import Link from 'next/link';
 import { useClientApiCall} from '@/lib/api-client';
+
+interface Service {
+  id: string;
+  service_name: string;
+  environment: string;
+}
 
 export default function SubscriptionsPage() {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [services, setServices] = useState<any[]>([]);
-  const subscriptionAPI = useSubscriptionAPI();
+  const [services, setServices] = useState<Service[]>([]);
+  // const subscriptionAPI = useSubscriptionAPI();
   const apiClient = useClientApiCall();
 
-  useEffect(() => {
-    loadServices();
-    loadSubscriptions();
-  }, []);
-
-  const loadServices = async () => {
+  const loadServices = useCallback(async () => {
     try {
       const response = await apiClient('/api/services');
-      setServices(response.services || []);
+      setServices((response as { services: Service[] }).services || []);
     } catch (error) {
       console.error('Failed to load services:', error);
       setServices([]);
     }
-  };
+  }, [apiClient]);
 
-  const loadSubscriptions = async () => {
+  const loadSubscriptions = useCallback(async () => {
     try {
       setLoading(true);
       // Replace this with your actual API call when the endpoint is ready
       const response = await apiClient('/v1/subscriptions');
-      setSubscriptions(response.subscriptions || []);
+      setSubscriptions((response as { subscriptions: Subscription[] }).subscriptions || []);
     } catch (error) {
       console.error('Failed to load subscriptions:', error);
       setSubscriptions([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiClient]);
+
+  useEffect(() => {
+    loadServices();
+    loadSubscriptions();
+  }, [loadServices, loadSubscriptions]);
 
   // Calculate counts from subscriptions
   const activeCount = subscriptions.filter(sub => sub.status === 'active').length;

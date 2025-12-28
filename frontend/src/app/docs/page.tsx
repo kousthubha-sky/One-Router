@@ -13,16 +13,9 @@ import {
   Github,
   ExternalLink,
   CheckCircle,
-  AlertTriangle,
-  Copy,
-  Play,
   Terminal,
   Database,
-  Key,
-  Users,
-  CreditCard,
-  Webhook,
-  Settings
+  Key
 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -30,7 +23,7 @@ import { useState } from 'react';
 interface DocSection {
   id: string;
   title: string;
-  icon: any;
+  icon: React.ComponentType<{ className?: string }>;
   content: React.ReactNode;
 }
 

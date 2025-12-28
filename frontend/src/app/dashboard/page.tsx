@@ -3,15 +3,12 @@ import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Shield, Key, BarChart3, Link as LinkIcon, CheckCircle2, Zap, Cpu, Fingerprint, Pencil, Settings2, Sparkles } from "lucide-react";
+import { Shield, Key, BarChart3, Link as LinkIcon, CheckCircle2, Pencil, Sparkles } from "lucide-react";
 import Link from "next/link";
 import DashboardLayout from "@/components/DashboardLayout";
-import { EnvironmentToggle } from "@/components/EnvironmentToggle";
 import { GlobalEnvironmentToggle } from "@/components/GlobalEnvironmentToggle";
 import { EditServiceModal } from "@/components/EditServiceModal";
 import { BentoGrid } from "@/components/ui/bento-grid";
-import { FeatureCard } from "@/components/ui/grid-feature-cards";
-import { Navbar } from "@/components/vercel-navbar";
 
 interface Service {
   id: string;

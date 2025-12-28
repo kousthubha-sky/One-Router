@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useClientApiCall } from '@/lib/api-client';
@@ -22,22 +22,19 @@ export function EnvironmentToggle({ service }: EnvironmentToggleProps) {
   const apiClient = useClientApiCall();
   const { isSignedIn } = useAuth();
 
-  useEffect(() => {
-    if (isSignedIn) {
-      loadEnvironmentStatus();
-    }
-  }, [service, isSignedIn]);
-
-  const loadEnvironmentStatus = async () => {
+  const loadEnvironmentStatus = useCallback(async () => {
     try {
       const response = await apiClient(`/api/services/${service}/environments`);
-      setEnvironments(response);
+      setEnvironments(response as {
+        test: { configured: boolean; last_used: string | null };
+        live: { configured: boolean; last_used: string | null };
+      });
 
       // Load user preference
       try {
         const prefsResponse = await apiClient('/api/user/environment-preferences');
-        const userEnv = prefsResponse.environments[service];
-        if (userEnv) {
+        const userEnv = (prefsResponse as { environments: Record<string, string> }).environments[service];
+        if (userEnv === 'test' || userEnv === 'live') {
           setEnvironment(userEnv);
         }
       } catch (prefsError) {
@@ -54,7 +51,13 @@ export function EnvironmentToggle({ service }: EnvironmentToggleProps) {
       });
       setEnvironment('test');
     }
-  };
+  }, [apiClient, service]);
+
+  useEffect(() => {
+    if (isSignedIn) {
+      loadEnvironmentStatus();
+    }
+  }, [service, isSignedIn, loadEnvironmentStatus]);
 
   const switchEnvironment = async (newEnv: 'test' | 'live') => {
     if (newEnv === environment) return;

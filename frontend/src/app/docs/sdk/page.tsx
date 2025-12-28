@@ -5,19 +5,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   Code,
-  Book,
   Terminal,
-  ExternalLink,
   CheckCircle,
-  AlertTriangle,
   Github,
   Play,
   Database,
-  Key,
-  CreditCard,
-  Webhook,
-  Settings,
-  Copy
+  AlertTriangle
 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -33,9 +26,7 @@ export default function SDKDocsPage() {
     { id: 'error-handling', title: 'Error Handling', icon: AlertTriangle }
   ];
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-  };
+
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -171,7 +162,7 @@ function InstallationSection() {
           <div>
             <h3 className="text-lg font-semibold text-cyan-400 mb-3">Verify Installation</h3>
             <div className="bg-[#1a1a1a] border border-[#222] rounded p-4">
-              <pre className="text-sm text-cyan-400">python -c "import onerouter; print('OneRouter SDK installed successfully!')"</pre>
+              <pre className="text-sm text-cyan-400">python -c &quot;import onerouter; print(&apos;OneRouter SDK installed successfully!&apos;)&quot;</pre>
             </div>
           </div>
         </CardContent>
@@ -705,13 +696,13 @@ function ErrorHandlingSection() {
             <div className="p-4 bg-[#1a1a1a] rounded border border-red-500/30">
               <h4 className="text-red-400 font-medium mb-2">ValidationError</h4>
               <p className="text-sm text-[#888]">Invalid request parameters or missing required fields.</p>
-              <pre className="text-xs text-red-400 mt-2">Field: 'amount', Message: 'Amount must be positive'</pre>
+               <pre className="text-xs text-red-400 mt-2">Field: &apos;amount&apos;, Message: &apos;Amount must be positive&apos;</pre>
             </div>
 
             <div className="p-4 bg-[#1a1a1a] rounded border border-red-500/30">
               <h4 className="text-red-400 font-medium mb-2">APIError</h4>
               <p className="text-sm text-[#888]">API returned an error response from the server.</p>
-              <pre className="text-xs text-red-400 mt-2">Code: 'INSUFFICIENT_FUNDS', Message: 'Payment failed'</pre>
+               <pre className="text-xs text-red-400 mt-2">Code: &apos;INSUFFICIENT_FUNDS&apos;, Message: &apos;Payment failed&apos;</pre>
             </div>
 
             <div className="p-4 bg-[#1a1a1a] rounded border border-red-500/30">

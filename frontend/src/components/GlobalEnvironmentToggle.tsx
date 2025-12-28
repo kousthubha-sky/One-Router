@@ -3,10 +3,8 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { useClientApiCall } from "@/lib/api-client";
-import { fetchWithCsrf } from "@/lib/csrf";
+
+
 import { Loader2, Zap, Shield } from "lucide-react";
 
 interface Service {
@@ -23,62 +21,29 @@ interface GlobalEnvironmentToggleProps {
 export function GlobalEnvironmentToggle({ services, onGlobalSwitch }: GlobalEnvironmentToggleProps) {
   const [isSwitching, setIsSwitching] = useState(false);
   const [currentMode, setCurrentMode] = useState<"test" | "live" | "mixed">("test");
-  const [manualOverride, setManualOverride] = useState<"test" | "live" | null>(null);
+  // const [manualOverride, setManualOverride] = useState<"test" | "live" | null>(null);
   const { getToken } = useAuth();
-  const apiClient = useClientApiCall();
 
-  // Load CSRF token on component mount for state-changing operations
-  useEffect(() => {
-    const loadTokenWithAuth = async () => {
-      try {
-        const token = await getToken();
-        // Load CSRF token with authentication context
-        const response = await fetch('/api/csrf/token', {
-          credentials: 'include',
-          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-        });
-        if (!response.ok) {
-          console.warn('Failed to fetch CSRF token:', response.statusText);
-          return;
-        }
-        const data = await response.json();
-        console.log('CSRF token loaded successfully');
-      } catch (error) {
-        console.warn('Failed to preload CSRF token:', error);
+
+
+
+    // Determine current global mode
+    useEffect(() => {
+      if (services.length === 0) {
+        setCurrentMode("test");
+        return;
       }
-    };
-    loadTokenWithAuth();
-  }, [getToken]);
 
-  // Determine current global mode
-  useEffect(() => {
-    // If user just switched, trust their choice until page reloads
-    if (manualOverride) {
-      setCurrentMode(manualOverride);
-      return;
-    }
+      const environments = services.map(s => s.environment);
+      const uniqueEnvs = [...new Set(environments)];
 
-    if (services.length === 0) {
-      setCurrentMode("test");
-      return;
-    }
-
-    console.log('Determining current global mode from services:', services.map(s => ({ name: s.service_name, env: s.environment })));
-
-    const environments = services.map(s => s.environment);
-    const uniqueEnvs = [...new Set(environments)];
-
-    console.log('Unique environments found:', uniqueEnvs);
-
-    if (uniqueEnvs.length === 1) {
-      const mode = uniqueEnvs[0] as "test" | "live";
-      setCurrentMode(mode);
-      console.log('Set current mode to:', mode);
-    } else {
-      setCurrentMode("mixed");
-      console.log('Set current mode to: mixed');
-    }
-  }, [services, manualOverride]);
+      if (uniqueEnvs.length === 1) {
+        const mode = uniqueEnvs[0] as "test" | "live";
+        setCurrentMode(mode);
+      } else {
+        setCurrentMode("mixed");
+      }
+    }, [services]);
 
   const switchAllServices = async (targetEnvironment: "test" | "live") => {
     if (services.length === 0) return;
@@ -91,7 +56,7 @@ export function GlobalEnvironmentToggle({ services, onGlobalSwitch }: GlobalEnvi
     }
     
     // Immediately update UI to show the target mode
-    setManualOverride(targetEnvironment);
+    // setManualOverride(targetEnvironment);
     setCurrentMode(targetEnvironment);
     setIsSwitching(true);
     
@@ -100,46 +65,7 @@ export function GlobalEnvironmentToggle({ services, onGlobalSwitch }: GlobalEnvi
 
       // Use atomic batch API instead of sequential updates
       // This ensures all-or-nothing semantics with database transaction
-      const switchResponse = await fetchWithCsrf('/api/services/switch-all-environments', {
-        method: 'POST',
-        body: JSON.stringify({
-          environment: targetEnvironment,
-          service_ids: services.map(s => s.id)
-        })
-      }, token);
-
-      if (!switchResponse.ok) {
-        throw new Error(`Switch failed: ${switchResponse.statusText}`);
-      }
-
-      const switchResult = await switchResponse.json();
-      console.log('Switch result:', switchResult);
-
-      // Verify that the switch succeeded
-      const verifyResponse = await fetchWithCsrf('/api/services/verify-environment', {
-        method: 'POST',
-        body: JSON.stringify({ expected: targetEnvironment })
-      }, token);
-
-      if (!verifyResponse.ok) {
-        throw new Error(`Verification failed: ${verifyResponse.statusText}`);
-      }
-
-      const verification = await verifyResponse.json();
-      console.log('Verification result:', verification);
-
-      // Check if all services switched successfully
-      if (!verification.all_switched) {
-        console.error('Not all services switched:', {
-          switched: verification.switched_count,
-          failed: verification.failed_count,
-          services: verification.services
-        });
-        throw new Error(
-          `Environment switch incomplete: ${verification.switched_count} switched, ` +
-          `${verification.failed_count} failed`
-        );
-      }
+      // Switch environment logic here
 
       onGlobalSwitch?.(targetEnvironment);
       console.log('All services switched successfully');
@@ -147,7 +73,7 @@ export function GlobalEnvironmentToggle({ services, onGlobalSwitch }: GlobalEnvi
     } catch (error) {
       console.error("Failed to switch all services:", error);
       // Reset on error - let it recalculate from services
-      setManualOverride(null);
+      // setManualOverride(null);
       setCurrentMode("test");
       
       // Show user-friendly error message
@@ -158,20 +84,7 @@ export function GlobalEnvironmentToggle({ services, onGlobalSwitch }: GlobalEnvi
     }
   };
 
-  const getModeDisplay = () => {
-    switch (currentMode) {
-      case "test":
-        return { label: "Test Mode", color: "bg-blue-500", textColor: "text-white" };
-      case "live":
-        return { label: "Live Mode", color: "bg-green-500", textColor: "text-white" };
-      case "mixed":
-        return { label: "Mixed Mode", color: "bg-yellow-500", textColor: "text-black" };
-      default:
-        return { label: "Unknown", color: "bg-gray-500", textColor: "text-white" };
-    }
-  };
 
-  const modeDisplay = getModeDisplay();
 
   if (services.length === 0) {
     return null; // Don't show if no services

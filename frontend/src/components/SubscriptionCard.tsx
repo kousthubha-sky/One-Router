@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Pause, Play, X, RefreshCw, Calendar, DollarSign } from 'lucide-react';
+import { Pause, Play, X, RefreshCw, Calendar } from 'lucide-react';
 import { useSubscriptionAPI, Subscription } from '@/lib/api-subscriptions';
 
 interface SubscriptionCardProps {

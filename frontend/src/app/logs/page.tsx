@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useClientApiCall } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,7 +9,6 @@ import { FileCode, CheckCircle, XCircle, Clock, Search } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { GlobalEnvironmentToggle } from '@/components/GlobalEnvironmentToggle';
 import { BentoGrid } from '@/components/ui/bento-grid';
-import { FeatureCard } from '@/components/ui/grid-feature-cards';
 import Link from 'next/link';
 
 interface Transaction {
@@ -24,43 +23,53 @@ interface Transaction {
   created_at: string;
 }
 
+interface Service {
+  id: string;
+  service_name: string;
+  environment: string;
+}
+
 export default function LogsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [services, setServices] = useState<any[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
   const apiClient = useClientApiCall();
 
-  useEffect(() => {
-    loadTransactions();
-    loadServices();
-  }, [filter]);
-
-  const loadTransactions = async () => {
+  const loadTransactions = useCallback(async () => {
     try {
       setLoading(true);
       // This endpoint needs to be created in the backend
       // For now, we'll use a placeholder
       const response = await apiClient('/api/analytics/logs?limit=100');
-      setTransactions(response.logs || []);
+      setTransactions((response as { logs: Transaction[] }).logs || []);
     } catch (error) {
       console.error('Failed to load transactions:', error);
       setTransactions([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiClient]);
 
-  const loadServices = async () => {
+  const loadServices = useCallback(async () => {
     try {
       const response = await apiClient('/api/services');
-      setServices(response.services || []);
+      setServices((response as { services: Service[] }).services || []);
     } catch (error) {
       console.error('Failed to load services:', error);
       setServices([]);
     }
-  };
+  }, [apiClient]);
+
+  useEffect(() => {
+    loadTransactions();
+    loadServices();
+  }, [loadTransactions, loadServices]);
+
+  useEffect(() => {
+    loadTransactions();
+  }, [filter, loadTransactions]);
 
   const filteredTransactions = transactions.filter(tx => {
     const matchesFilter = filter === 'all' || tx.status === filter;

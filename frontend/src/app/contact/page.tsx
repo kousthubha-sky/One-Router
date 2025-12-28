@@ -36,7 +36,7 @@ export default function ContactPage() {
       } else {
         setError('Failed to send message. Please try again.');
       }
-    } catch (err) {
+    } catch {
       setError('An error occurred. Please try again.');
     }
   };
@@ -51,7 +51,7 @@ export default function ContactPage() {
       <header className="border-b border-[#222]">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <h1 className="text-3xl font-bold">Contact Us</h1>
-          <p className="text-[#888] mt-2">We're here to help</p>
+          <p className="text-[#888] mt-2">We&apos;re here to help</p>
         </div>
       </header>
 
@@ -69,9 +69,9 @@ export default function ContactPage() {
                     <MessageSquare className="w-8 h-8 text-green-500" />
                   </div>
                   <h3 className="text-2xl font-bold text-green-500 mb-2">Message Sent!</h3>
-                  <p className="text-[#888]">
-                    Thank you for reaching out. We&apos;ll get back to you within 24 hours.
-                  </p>
+                   <p className="text-[#888]">
+                     Thank you for reaching out. We&apos;ll get back to you within 24 hours.
+                   </p>
                   <Button
                     onClick={() => setSubmitted(false)}
                     variant="outline"

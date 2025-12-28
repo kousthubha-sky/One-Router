@@ -11,7 +11,15 @@ const PricingCard = ({
   highlight, 
   popular = false,
   buttonLabel = 'Get Started'
-}: any) => (
+}: {
+  title: string;
+  price: string;
+  description: string;
+  features: { text: string; highlight?: boolean }[];
+  highlight?: boolean;
+  popular?: boolean;
+  buttonLabel?: string;
+}) => (
   <Card className={`bg-[#1a1a1a] border-2 transition-all duration-300 ${
         highlight ? 'border-cyan-500 shadow-lg shadow-cyan-500/20 scale-105' : 
         popular ? 'border-cyan-400 shadow-lg shadow-cyan-400/20' : 
@@ -29,7 +37,7 @@ const PricingCard = ({
         </div>
         <p className="text-[#888] mb-6">{description}</p>
         <ul className="space-y-3 mb-6">
-          {features.map((feature: any, index: number) => (
+          {features.map((feature, index: number) => (
             <li key={index} className="flex items-start gap-3">
               <Check className={`w-5 h-5 shrink-0 ${feature.highlight ? 'text-cyan-500' : 'text-[#666]'}`} />
               <span className="text-[#888] text-sm">{feature.text}</span>
@@ -49,7 +57,11 @@ const PricingCard = ({
     </Card>
 );
 
-const FeatureItem = ({ icon: Icon, title, description }: any) => (
+const FeatureItem = ({ icon: Icon, title, description }: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+}) => (
   <div className="p-6 border-b border-[#222] last:border-0">
     <div className="flex items-start gap-4">
       <div className="flex shrink-0">
@@ -307,7 +319,7 @@ export default function PricingPage() {
             <div>
               <h3 className="text-lg font-semibold text-white mb-2">What happens if I exceed API limits?</h3>
               <p className="text-[#888]">
-                We'll notify you before limits are reached. You can upgrade your plan or configure custom rate limits for Enterprise.
+                We&apos;ll notify you before limits are reached. You can upgrade your plan or configure custom rate limits for Enterprise.
               </p>
             </div>
           </CardContent>

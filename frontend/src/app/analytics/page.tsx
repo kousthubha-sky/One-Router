@@ -1,12 +1,12 @@
 // frontend/src/app/analytics/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Activity, TrendingUp, Clock, DollarSign, AlertCircle, BarChart3 } from "lucide-react";
+import { Activity, TrendingUp, Clock, DollarSign, BarChart3 } from "lucide-react";
 import { useClientApiCall } from "@/lib/api-client";
 import DashboardLayout from "@/components/DashboardLayout";
 import { GlobalEnvironmentToggle } from "@/components/GlobalEnvironmentToggle";
@@ -30,21 +30,22 @@ interface TimeSeriesData {
   daily_volume: Array<{ date: string; calls: number; errors: number; avg_response_time: number }>;
 }
 
+interface Service {
+  id: string;
+  service_name: string;
+  environment: string;
+}
+
 export default function AnalyticsPage() {
   const [period, setPeriod] = useState("30d");
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
   const [timeSeries, setTimeSeries] = useState<TimeSeriesData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [services, setServices] = useState<any[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
 
   const apiClient = useClientApiCall();
 
-  useEffect(() => {
-    loadAnalytics();
-    loadServices();
-  }, [period]);
-
-  const loadAnalytics = async () => {
+  const loadAnalytics = useCallback(async () => {
     try {
       setLoading(true);
       const [overviewRes, timeSeriesRes] = await Promise.all([
@@ -52,24 +53,29 @@ export default function AnalyticsPage() {
         apiClient(`/api/analytics/timeseries?period=${period}`)
       ]);
 
-      setOverview(overviewRes);
-      setTimeSeries(timeSeriesRes);
+      setOverview(overviewRes as AnalyticsOverview);
+      setTimeSeries(timeSeriesRes as TimeSeriesData);
     } catch (error) {
       console.error("Failed to load analytics:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiClient, period]);
 
-  const loadServices = async () => {
+  const loadServices = useCallback(async () => {
     try {
       const response = await apiClient('/api/services');
-      setServices(response.services || []);
+      setServices((response as { services: Service[] }).services || []);
     } catch (error) {
       console.error('Failed to load services:', error);
       setServices([]);
     }
-  };
+  }, [apiClient]);
+
+  useEffect(() => {
+    loadAnalytics();
+    loadServices();
+  }, [period, loadAnalytics, loadServices]);
 
   if (loading) {
     return (

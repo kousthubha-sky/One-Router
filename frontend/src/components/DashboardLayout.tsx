@@ -24,7 +24,7 @@ import {
   NavigationMenuContent,
   navigationMenuTriggerStyle,
 } from "@/components/ui/navigation-menu"
-import { useEffect } from 'react';
+
 
 interface NavItem {
   href: string;
