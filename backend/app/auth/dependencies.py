@@ -56,13 +56,44 @@ class APIKeyAuth:
 api_key_auth = APIKeyAuth()
 
 # Dependency for API key protected routes
-async def get_api_user(authorization: str = Header(...)) -> dict:
-    """Get user from API key for SDK calls"""
+async def get_api_user(authorization: str = Header(...), db: AsyncSession = Depends(get_db)) -> dict:
+    """Get user and API key from API key for SDK calls"""
     # Expect: Authorization: Bearer <api_key>
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid Authorization header format")
-    api_key = authorization.split(" ", 1)[1]
-    return await api_key_auth.validate_api_key(api_key)
+    api_key = authorization.split(" ",1)[1]
+    
+    # Hash the API key
+    import hashlib
+    key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+    
+    # Look up API key in database
+    from ..models import ApiKey, User
+    result = await db.execute(
+        select(ApiKey).where(
+            ApiKey.key_hash == key_hash,
+            ApiKey.is_active == True
+        )
+    )
+    api_key_obj = result.scalar_one_or_none()
+    
+    if not api_key_obj:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    
+    # Get user
+    result = await db.execute(select(User).where(User.id == api_key_obj.user_id))
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    
+    return {
+        "id": str(user.id),
+        "clerk_user_id": user.clerk_user_id,
+        "email": user.email,
+        "name": user.name,
+        "api_key": api_key_obj
+    }
 
 # Dependency for protected routes
 async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)):

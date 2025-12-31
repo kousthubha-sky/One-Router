@@ -15,6 +15,7 @@ from .models import User
 from .routes.onboarding import router as onboarding_router
 from .routes.unified_api import router as unified_api_router
 from .routes.services import router as services_router
+from .routes.service_discovery import router as service_discovery_router
 from .cache import init_redis, close_redis, cache_service
 from .exceptions import OneRouterException, ErrorResponse, ErrorDetail, ErrorCode
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -237,6 +238,9 @@ async def csrf_validation_middleware(request: Request, call_next):
         "/openapi.json",
         "/api/onboarding",  # Registration/signup endpoints
         "/v1/payment",  # Public payment endpoint (uses API key auth instead)
+        "/v1/sms",  # Communications endpoint (uses API key auth)
+        "/v1/email",  # Communications endpoint (uses API key auth)
+        "/v1/services",  # Service discovery (read-only)
     ]
     
     if any(path.startswith(skip_path) for skip_path in skip_paths):
@@ -435,6 +439,13 @@ app.include_router(api_keys_router, tags=["api-keys"])
 # Import and include CSRF router
 from .routes.csrf import router as csrf_router
 app.include_router(csrf_router, tags=["security"])
+
+# Import and include service discovery router
+app.include_router(service_discovery_router, prefix="/v1", tags=["service-discovery"])
+
+# Import and include communications router
+from .routes.communications import router as communications_router
+app.include_router(communications_router, prefix="/v1", tags=["communications"])
 
 # Health check endpoint
 @app.get("/")

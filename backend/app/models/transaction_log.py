@@ -11,6 +11,7 @@ class TransactionLog(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     api_key_id = Column(UUID(as_uuid=True), ForeignKey("api_keys.id"), nullable=True)
     transaction_id = Column(String, unique=True, nullable=False)
+    idempotency_key = Column(String, nullable=True)
     service_name = Column(String, nullable=False)
     provider_txn_id = Column(String, nullable=True)
     endpoint = Column(String, nullable=False)
@@ -21,6 +22,8 @@ class TransactionLog(Base):
     response_time_ms = Column(Integer, nullable=True)
     status = Column(String, nullable=False)
     error_message = Column(Text, nullable=True)
+    cost = Column(Integer, nullable=True)
+    currency = Column(String, nullable=True)
     ip_address = Column(String, nullable=True)
     user_agent = Column(Text, nullable=True)
     environment = Column(String, nullable=False)
@@ -30,4 +33,5 @@ class TransactionLog(Base):
         Index('idx_transaction_logs_user_created', 'user_id', 'created_at'),
         Index('idx_transaction_logs_transaction_id', 'transaction_id'),
         Index('idx_transaction_logs_service_name', 'service_name'),
+        Index('idx_transaction_logs_idempotency_key', 'idempotency_key'),
     )
