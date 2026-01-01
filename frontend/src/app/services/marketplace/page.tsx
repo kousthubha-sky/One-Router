@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { MessageSquare, Mail, CreditCard, Server, Shield, Search, CheckCircle2 } from 'lucide-react';
+import { MessageSquare, Mail, CreditCard, Server, Shield, Search, CheckCircle2, X } from 'lucide-react';
 import Link from 'next/link';
 
 interface ServiceCard {
@@ -120,6 +120,7 @@ const CATEGORIES: Record<string, Category> = {
 export default function ServiceMarketplace() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [connectedServices, setConnectedServices] = useState<Set<string>>(new Set());
 
   const getServiceIcon = (serviceName: string): unknown => {
     const iconMap: Record<string, unknown> = {
@@ -134,6 +135,22 @@ export default function ServiceMarketplace() {
   };
 
   const categoryEntries: [string, Category][] = Object.entries(CATEGORIES);
+
+  const { data: connectedServicesData, refetch } = useQuery({
+    queryKey: ['connected-services'],
+    queryFn: async () => {
+      try {
+        const response = await fetch('/api/services');
+        if (!response.ok) throw new Error('Failed to fetch services');
+        return await response.json();
+      } catch (error) {
+        console.error('Error fetching services:', error);
+        return [];
+      }
+    }
+  });
+
+  const connectedServices = new Set(connectedServicesData?.services || []);
 
   const filteredServices = categoryEntries
     .flatMap(([_name, category]) => (selectedCategory === 'all' || category.name === selectedCategory ? category.services : []))
@@ -221,11 +238,25 @@ export default function ServiceMarketplace() {
                 <Card key={service.name} className="bg-[#1a1a1a] border-[#333] hover:border-[#00A3FF] transition-all duration-200">
                   <CardHeader>
                     <div className="flex items-start justify-between mb-3">
-                      
-                      <span className="px-3 py-1 bg-[#222] border border-[#333] rounded-full text-xs text-[#888]">
-                        {service.category}
-                      </span>
-                    </div>
+                      <div className="flex items-center gap-2">
+                        <ServiceIcon className="w-8 h-8 text-[#00A3FF]" />
+                        <span className="px-3 py-1 bg-[#222] border border-[#333] rounded-full text-xs text-[#888]">
+                          {service.category}
+                        </span>
+                        {connectedServices.has(service.name) && (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              await disconnectService(service.name);
+                              refetch();
+                            }}
+                            className="p-1 text-[#666] hover:text-red-400 transition-colors"
+                            title="Disconnect service"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     <CardTitle className="text-white capitalize">
                       {service.name}
                     </CardTitle>
