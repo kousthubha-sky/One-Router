@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { MessageSquare, Mail, CreditCard, Server, Shield, Search, CheckCircle2 } from 'lucide-react';
@@ -51,7 +50,8 @@ const CATEGORIES: Record<string, Category> = {
           currency: 'USD'
         }
       }
-    ]
+    ],
+    name: ''
   },
   payments: {
     icon: '💳',
@@ -78,7 +78,8 @@ const CATEGORIES: Record<string, Category> = {
           currency: 'USD'
         }
       }
-    ]
+    ],
+    name: ''
   },
   storage: {
     icon: '💾',
@@ -94,7 +95,8 @@ const CATEGORIES: Record<string, Category> = {
           currency: 'USD'
         }
       }
-    ]
+    ],
+    name: ''
   },
   auth: {
     icon: '🔐',
@@ -110,7 +112,8 @@ const CATEGORIES: Record<string, Category> = {
           currency: 'USD'
         }
       }
-    ]
+    ],
+    name: ''
   }
 };
 
@@ -118,8 +121,8 @@ export default function ServiceMarketplace() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  const getServiceIcon = (serviceName: string) => {
-    const iconMap: Record<string, any> = {
+  const getServiceIcon = (serviceName: string): unknown => {
+    const iconMap: Record<string, unknown> = {
       twilio: MessageSquare,
       resend: Mail,
       razorpay: CreditCard,
@@ -127,21 +130,25 @@ export default function ServiceMarketplace() {
       aws_s3: Server,
       clerk: Shield,
     };
-    return iconMap[serviceName] || Server;
+    return iconMap[serviceName] ?? Server;
   };
 
-  const filteredServices = Object.values(CATEGORIES)
-    .flatMap(cat => (selectedCategory === 'all' || cat.name === selectedCategory ? cat.services : []))
-    .filter(service => {
-      const matchesSearch = searchQuery === '' ||
-        service.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        service.category.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesSearch;
+  const categoryEntries: [string, Category][] = Object.entries(CATEGORIES);
+
+  const filteredServices = categoryEntries
+    .flatMap(([_name, category]) => (selectedCategory === 'all' || category.name === selectedCategory ? category.services : []))
+    .filter((service): service is ServiceCard => {
+      if (!searchQuery) return true;
+      const searchLower = searchQuery.toLowerCase();
+      return (
+        service.name.toLowerCase().includes(searchLower) ||
+        service.category.toLowerCase().includes(searchLower)
+      );
     });
 
   return (
-    <div className="min-h-screen bg-[#0f0f0f]">
-      <div className="border-b border-[#333] bg-[#1a1a1a]">
+    <div className="min-h-screen bg-gradient-to-br from-[#0f0f0f] to-[#1a1a1a]">
+      <div className="border-b border-[#333]">
         <div className="container mx-auto px-6 py-8">
           <h1 className="text-4xl font-bold text-white mb-2">
             Service Marketplace
@@ -153,7 +160,7 @@ export default function ServiceMarketplace() {
       </div>
 
       <div className="container mx-auto px-6 py-6">
-        <div className="flex gap-4 mb-8">
+        <div className="flex flex-col md:flex-row gap-4 mb-8">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#888] w-5 h-5" />
             <input
@@ -161,14 +168,14 @@ export default function ServiceMarketplace() {
               placeholder="Search services..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 bg-[#222] border border-[#333] rounded-lg text-white placeholder:text-[#666]"
+              className="w-full pl-12 pr-4 py-3 bg-[#222] border border-[#333] rounded-lg text-white placeholder:text-[#666] focus:outline-none focus:border-[#00A3FF]"
             />
           </div>
 
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-6 py-3 bg-[#222] border border-[#333] rounded-lg text-white"
+            className="px-6 py-3 bg-[#222] border border-[#333] rounded-lg text-white focus:outline-none focus:border-[#00A3FF]"
           >
             <option value="all">All Categories</option>
             {Object.keys(CATEGORIES).map(cat => (
@@ -180,11 +187,11 @@ export default function ServiceMarketplace() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
-          {Object.entries(CATEGORIES).map(([name, category]) => (
+          {categoryEntries.map(([name, category]) => (
             <div
               key={name}
               onClick={() => setSelectedCategory(name)}
-              className={`p-6 rounded-lg border cursor-pointer
+              className={`p-6 rounded-lg border cursor-pointer transition-all duration-200
                 ${selectedCategory === name
                   ? 'bg-[#00A3FF] border-[#00A3FF]'
                   : 'bg-[#1a1a1a] border-[#333] hover:border-[#666]'
@@ -195,7 +202,7 @@ export default function ServiceMarketplace() {
                 {name}
               </h3>
               <p className="text-[#888] text-sm">
-                {category.services.length} services available
+                {category.services.length} service{category.services.length !== 1 ? 's' : ''} available
               </p>
             </div>
           ))}
@@ -211,10 +218,10 @@ export default function ServiceMarketplace() {
             {filteredServices.map((service) => {
               const ServiceIcon = getServiceIcon(service.name);
               return (
-                <Card key={service.name} className="bg-[#1a1a1a] border-[#333] hover:border-[#00A3FF]">
+                <Card key={service.name} className="bg-[#1a1a1a] border-[#333] hover:border-[#00A3FF] transition-all duration-200">
                   <CardHeader>
                     <div className="flex items-start justify-between mb-3">
-                      <ServiceIcon className="w-8 h-8 text-[#00A3FF]" />
+                      
                       <span className="px-3 py-1 bg-[#222] border border-[#333] rounded-full text-xs text-[#888]">
                         {service.category}
                       </span>
@@ -255,14 +262,14 @@ export default function ServiceMarketplace() {
                             ${service.pricing.base.toFixed(4)}
                           </span>
                           <span className="text-[#888] text-sm">
-                            {formatUnit(service.pricing.unit)}
+                            {formatUnit(service.pricing.unit ?? '')}
                           </span>
                         </div>
                       </div>
                     )}
 
                     <Link href={`/services/${service.name}/configure`}>
-                      <Button className="w-full bg-[#00A3FF] hover:bg-[#0082CC] text-white">
+                      <Button className="w-full bg-[#00A3FF] hover:bg-[#0082CC] text-white transition-colors">
                         Configure Service
                       </Button>
                     </Link>
@@ -292,5 +299,5 @@ function formatUnit(unit: string): string {
     per_gb: '/ GB',
     per_user: '/ user',
   };
-  return unitMap[unit] || `/${unit}`;
+  return unitMap[unit] ?? `/${unit}`;
 }

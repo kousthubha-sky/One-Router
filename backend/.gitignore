@@ -38,3 +38,6 @@ parsed_sessions.json
 test.env
 
 .pytest_cache/
+
+
+.mypy_cache/
