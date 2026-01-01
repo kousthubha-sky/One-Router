@@ -42,21 +42,3 @@ export async function generateAPIKey() {
 export async function getAPIKeys() {
   return serverApiCall('/api/keys');
 }
-
-export async function getServiceCredentials() {
-  return serverApiCall('/api/services');
-}
-
-export async function disconnectService(serviceName: string, environment: string) {
-  return serverApiCall(`/api/services/${serviceName}`, {
-    method: 'DELETE',
-    body: JSON.stringify({ environment })
-  });
-}
-
-export async function reconnectService(serviceName: string, environment: string, credentials: Record<string, string>) {
-  return serverApiCall(`/api/services/${serviceName}`, {
-    method: 'POST',
-    body: JSON.stringify({ environment, credentials })
-  });
-}
