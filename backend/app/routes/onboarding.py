@@ -14,6 +14,10 @@ from ..services.env_parser import EnvParserService, ServiceDetection
 from ..services.credential_manager import CredentialManager
 from ..config import settings
 from ..cache import cache_service
+
+def get_credential_environment() -> str:
+    """Determine the credential environment based on deployment settings"""
+    return "live" if settings.ENVIRONMENT == "production" else "test"
 import secrets
 import time
 import json
@@ -435,7 +439,7 @@ async def configure_services(
                     credentials=credentials,
                     features=features,
                     feature_metadata=feature_metadata,
-                    environment="test"
+                    environment=get_credential_environment()
                 )
 
                 stored_services.append(StoredService(
@@ -479,7 +483,7 @@ async def get_user_services(
         services = await credential_manager.get_user_credentials(
             db=db,
             user_id=user["id"],
-            environment="test"
+            environment=get_credential_environment()
         )
 
         return {
