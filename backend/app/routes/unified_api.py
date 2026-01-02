@@ -181,58 +181,13 @@ async def create_payment_order(
 
         result = await adapter.create_order(**order_kwargs)
 
-        # Log transaction (async, don't block response)
-        response_time_ms = int((time.time() - start_time) * 1000)
-
-        log_entry = TransactionLog(
-            user_id=user_id,
-            api_key_id=api_key_obj.id,
-            transaction_id=transaction_id,
-            service_name=provider,
-            endpoint="/payments/orders",
-            http_method="POST",
-            request_payload=request.dict(),
-            response_payload=result,
-            response_status=200,
-            response_time_ms=response_time_ms,
-            status="completed",
-            environment=environment,
-            idempotency_key=request.idempotency_key
-        )
-
-        db.add(log_entry)
-        await db.commit()
-
         return UnifiedPaymentResponse(**result)
 
     except HTTPException:
         raise
 
     except Exception as e:
-        # Log error
         logger.exception(f"Payment creation failed: {e}")
-
-        response_time_ms = int((time.time() - start_time) * 1000)
-
-        log_entry = TransactionLog(
-            user_id=user_id,
-            api_key_id=api_key_obj.id,
-            transaction_id=transaction_id,
-            service_name=provider,
-            endpoint="/payments/orders",
-            http_method="POST",
-            request_payload=request.dict(),
-            response_payload={"error": str(e)},
-            response_status=500,
-            response_time_ms=response_time_ms,
-            status="failed",
-            error_message=str(e),
-            environment=environment
-        )
-
-        db.add(log_entry)
-        await db.commit()
-
         raise HTTPException(
             status_code=500,
             detail=f"Payment creation failed: {str(e)}"
