@@ -5,6 +5,12 @@ export interface PaymentOrderRequest {
   method?: string;
   receipt?: string;
   notes?: Record<string, any>;
+  idempotency_key?: string;
+  upi_app?: string;
+  emi_plan?: string;
+  card_network?: string;
+  wallet_provider?: string;
+  bank_code?: string;
 }
 
 export interface PaymentOrder {
@@ -49,10 +55,13 @@ export interface RefundResponse {
 
 export interface SubscriptionRequest {
   plan_id: string;
+  provider?: string;
   customer_notify?: boolean;
   total_count?: number;
+  quantity?: number;
   trial_days?: number;
-  notes?: string;
+  start_date?: string;
+  idempotency_key?: string;
 }
 
 export interface Subscription {
@@ -96,7 +105,10 @@ export interface PaymentLink {
 
 export interface SmsRequest {
   to: string;
-  message: string;
+  body: string;
+  from_number?: string;
+  provider?: string;
+  idempotency_key?: string;
 }
 
 export interface SmsResponse {
