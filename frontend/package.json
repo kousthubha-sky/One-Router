@@ -29,6 +29,7 @@
     "framer-motion": "^12.23.26",
     "lucide-react": "^0.561.0",
     "next": "^16.0.10",
+    "onerouterjs-sdk": "file:../onerouter-js",
     "react": "19.2.1",
     "react-dom": "19.2.1",
     "react-hook-form": "^7.69.0",

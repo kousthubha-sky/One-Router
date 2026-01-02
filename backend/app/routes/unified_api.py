@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, validator
 from typing import Optional, Dict, Any, Annotated, List
 from ..database import get_db
 from ..services.request_router import RequestRouter
-from ..auth.dependencies import get_current_user
+from ..auth.dependencies import get_current_user, get_api_user
 from ..services.transaction_logger import TransactionLogger
 from ..services.idempotency_service import IdempotencyService
 from ..models import ServiceCredential
@@ -132,7 +132,7 @@ class UnifiedPaymentResponse(BaseModel):
 @router.post("/payments/orders", response_model=UnifiedPaymentResponse)
 async def create_payment_order(
     request: PaymentOrderRequest,
-    user = Depends(get_current_user),
+    auth_data = Depends(get_api_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Create payment order (unified API) with proper transaction management and idempotency"""
@@ -157,11 +157,11 @@ async def create_payment_order(
     start_time = time.time()
 
     # Generate or use provided idempotency key
-    idempotency_key = request.idempotency_key or f"idempotency_{user['id']}_{int(start_time)}_{uuid.uuid4().hex[:8]}"
-    transaction_id = f"txn_{user['id']}_{int(start_time)}_{uuid.uuid4().hex[:8]}"
+    idempotency_key = request.idempotency_key or f"idempotency_{auth_data['id']}_{int(start_time)}_{uuid.uuid4().hex[:8]}"
+    transaction_id = f"txn_{auth_data['id']}_{int(start_time)}_{uuid.uuid4().hex[:8]}"
 
-    # For now, use user ID as API key ID (this should be the actual API key ID from auth)
-    api_key_id = str(user['id'])
+    # Use actual API key ID from auth data
+    api_key_id = str(auth_data['api_key'].id)
 
     # Check if response is already cached in database
     cached_response = await idempotency_service.get_idempotency_response(api_key_id, idempotency_key)
@@ -333,7 +333,7 @@ async def create_payment_order(
 @router.get("/payments/orders/{transaction_id}")
 async def get_payment_order(
     transaction_id: str,
-    user = Depends(get_current_user),
+    auth_data = Depends(get_api_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Get payment order details"""
@@ -346,7 +346,7 @@ async def get_payment_order(
         # Log the incoming request
         await transaction_logger.log_request(
             db=db,
-            user_id=user["id"],
+            user_id=auth_data["id"],
             method="GET",
             endpoint=f"/payments/orders/{transaction_id}",
             request_data={"transaction_id": transaction_id},
@@ -609,7 +609,7 @@ async def list_subscriptions(
 @router.post("/subscriptions")
 async def create_subscription(
     request: CreateSubscriptionRequest,
-    user = Depends(get_current_user),
+    auth_data = Depends(get_api_user),
     db: AsyncSession = Depends(get_db)
 ):
     """

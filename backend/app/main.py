@@ -237,7 +237,8 @@ async def csrf_validation_middleware(request: Request, call_next):
         "/redoc",
         "/openapi.json",
         "/api/onboarding",  # Registration/signup endpoints
-        "/v1/payment",  # Public payment endpoint (uses API key auth instead)
+        "/v1/payments",  # Payment endpoints (uses API key auth)
+        "/v1/subscriptions",  # Subscription endpoints (uses API key auth)
         "/v1/sms",  # Communications endpoint (uses API key auth)
         "/v1/email",  # Communications endpoint (uses API key auth)
         "/v1/services",  # Service discovery (read-only)

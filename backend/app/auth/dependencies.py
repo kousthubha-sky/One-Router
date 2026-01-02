@@ -56,12 +56,18 @@ class APIKeyAuth:
 api_key_auth = APIKeyAuth()
 
 # Dependency for API key protected routes
-async def get_api_user(authorization: str = Header(...), db: AsyncSession = Depends(get_db)) -> dict:
+async def get_api_user(authorization: Optional[str] = Header(None, alias="Authorization"), platform_key: Optional[str] = Header(None, alias="X-Platform-Key"), db: AsyncSession = Depends(get_db)) -> dict:
     """Get user and API key from API key for SDK calls"""
-    # Expect: Authorization: Bearer <api_key>
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid Authorization header format")
-    api_key = authorization.split(" ",1)[1]
+    api_key = None
+
+    # Try Authorization header first (Bearer token format)
+    if authorization and authorization.startswith("Bearer "):
+        api_key = authorization.split(" ", 1)[1]
+    # Fallback to X-Platform-Key header (SDK format)
+    elif platform_key:
+        api_key = platform_key
+    else:
+        raise HTTPException(status_code=401, detail="Authorization header (Bearer token) or X-Platform-Key header required")
     
     # Hash the API key
     import hashlib
