@@ -725,7 +725,7 @@ async def create_subscription(
 async def get_subscription(
     subscription_id: str,
     provider: Optional[str] = None,
-    user = Depends(get_current_user),
+    auth_data = Depends(get_api_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Get subscription details (pass-through)"""

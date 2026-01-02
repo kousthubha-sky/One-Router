@@ -239,6 +239,10 @@ async def csrf_validation_middleware(request: Request, call_next):
         "/api/onboarding",  # Registration/signup endpoints
         "/v1/payments",  # Payment endpoints (uses API key auth)
         "/v1/subscriptions",  # Subscription endpoints (uses API key auth)
+        "/api/v1/payment",  # Alternative payment path
+        "/api/v1/payment/",  # Payment with ID
+        "/api/v1/subscription",  # Alternative subscription path
+        "/api/v1/subscriptions",  # Alternative subscriptions path
         "/v1/sms",  # Communications endpoint (uses API key auth)
         "/v1/email",  # Communications endpoint (uses API key auth)
         "/v1/services",  # Service discovery (read-only)
