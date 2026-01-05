@@ -64,11 +64,11 @@ export default function MarketplacePage() {
       <div className="text-white font-sans border-t border-white/10">
         <header className="border-[#333] backdrop-blur-sm">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-l border-r border-white/10">
-            <div className="flex justify-between items-center py-6">
-              <div className="flex items-center space-x-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 py-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto">
                 <GlobalEnvironmentToggle services={services} />
-                <Link href="/api-keys">
-                  <Button className="text-white hover:bg-[#1a1a1a] border-0">
+                <Link href="/api-keys" className="w-full sm:w-auto">
+                  <Button className="text-white hover:bg-[#1a1a1a] border-0 w-full sm:w-auto">
                     Manage API Keys
                   </Button>
                 </Link>
@@ -105,7 +105,7 @@ export default function MarketplacePage() {
           </div>
 
           {/* Action Bar */}
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <div>
               <h1 className="text-2xl font-bold">Marketplace Vendors</h1>
               <p className="text-[#888] text-sm mt-1">
@@ -114,7 +114,7 @@ export default function MarketplacePage() {
             </div>
             <Button
               onClick={() => setIsModalOpen(true)}
-              className="bg-cyan-500 hover:bg-cyan-600 text-white"
+              className="bg-cyan-500 hover:bg-cyan-600 text-white w-full sm:w-auto"
             >
               <Plus className="w-4 h-4 mr-2" />
               Add Vendor

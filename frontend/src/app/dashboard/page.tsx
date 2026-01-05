@@ -87,19 +87,19 @@ export default async function DashboardPage() {
       <div className=" text-white font-sans border-t border-white/10">
         <header className=" border-[#333] backdrop-blur-sm">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-l border-r border-white/10 ">
-            <div className="flex justify-between items-center py-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 py-6">
 
-               <div className="flex items-center space-x-4">
-                 <GlobalEnvironmentToggle services={services} />
-                 <div className="px-4 rounded-full text-sm font-medium text-cyan-500 transition-all duration-300 hover:bg-cyan-500/10">
-                   Free Plan
-                 </div>
-                 <Link href="/api-keys">
-                   <Button className="text-white hover:bg-[#1a1a1a] border-0 transition-all duration-300 hover:shadow-md hover:shadow-blue-300 hover:scale-105">
-                     Manage API Keys
-                   </Button>
-                 </Link>
-               </div>
+               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto">
+                  <GlobalEnvironmentToggle services={services} />
+                  <div className="px-4 rounded-full text-sm font-medium text-cyan-500 transition-all duration-300 hover:bg-cyan-500/10">
+                    Free Plan
+                  </div>
+                  <Link href="/api-keys" className="w-full sm:w-auto">
+                    <Button className="text-white hover:bg-[#1a1a1a] border-0 transition-all duration-300 hover:shadow-md hover:shadow-blue-300 hover:scale-105 w-full sm:w-auto">
+                      Manage API Keys
+                    </Button>
+                  </Link>
+                </div>
             </div>
           </div>
         </header>

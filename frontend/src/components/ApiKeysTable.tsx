@@ -220,95 +220,172 @@ export default function ApiKeysTable({
 
   return (
     <div className="">
-      <div className="bg-black border border-[#222] rounded-2xl  transition-all duration-300">
+      <div className="bg-black border border-[#222] rounded-2xl transition-all duration-300">
         <CardContent className="p-0">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-[#222] bg-black">
-                <th className="px-6 py-4 text-left text-sm font-semibold text-white">Key</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-white">Usage</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-white">Limit</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-white">Status</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-white">Created</th>
-                <th className="px-6 py-4 text-right text-sm font-semibold text-white">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {apiKeys.map((key, index) => (
-                <tr
-                  key={key.id}
-                  className={`border-b border-[#222] hover:bg-[#111] transition-colors ${
-                    index === apiKeys.length - 1 ? 'border-b-0' : ''
-                  }`}
-                >
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div>
-                        <p className="text-white font-mono text-sm">{key.key_name}</p>
-                        <p className="text-[#666] text-xs mt-1">
-                          sk-or-v1-{maskKeyPrefix(key.key_prefix)}
-                        </p>
+          <div className="hidden md:block">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-[#222] bg-black">
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-white">Key</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-white">Usage</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-white">Limit</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-white">Status</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-white">Created</th>
+                  <th className="px-6 py-4 text-right text-sm font-semibold text-white">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {apiKeys.map((key, index) => (
+                  <tr
+                    key={key.id}
+                    className={`border-b border-[#222] hover:bg-[#111] transition-colors ${
+                      index === apiKeys.length - 1 ? 'border-b-0' : ''
+                    }`}
+                  >
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div>
+                          <p className="text-white font-mono text-sm">{key.key_name}</p>
+                          <p className="text-[#666] text-xs mt-1">
+                            sk-or-v1-{maskKeyPrefix(key.key_prefix)}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleCopyWithConfirmation(key.id, key.key_prefix)}
+                          disabled={copyingKeyId === key.id}
+                          className="p-1 hover:bg-[#222] rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Copy prefix (confirmation required)"
+                        >
+                          <Copy className={`w-3 h-3 ${copyingKeyId === key.id ? 'text-cyan-500' : 'text-[#888]'}`} />
+                        </button>
                       </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-white">
+                        ${((key.usage as Record<string, number> | undefined)?.total_cost || 0).toFixed(3)}
+                      </p>
+                      <p className="text-[#666] text-xs mt-1">
+                        {((key.usage as Record<string, number> | undefined)?.request_count || 0)} requests
+                      </p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-white">
+                        <p className="text-sm">{key.rate_limit_per_min}/min</p>
+                        <p className="text-[#666] text-xs mt-1">{key.rate_limit_per_day}/day</p>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <Badge
+                        className={`${
+                          key.is_active
+                            ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                            : 'bg-gray-500/20 text-gray-400 border-gray-500/30'
+                        } border`}
+                      >
+                        {key.is_active ? 'Active' : 'Disabled'}
+                      </Badge>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-[#888] text-sm">
+                        {new Date(key.created_at).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })}
+                      </p>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <DropdownMenu
+                        keyId={key.id}
+                        isActive={key.is_active}
+                        onEdit={onEdit}
+                        onDisable={onDisable}
+                        onEnable={onEnable}
+                        onDelete={onDelete}
+                        onViewActivity={onViewActivity}
+                        apiKey={key}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="md:hidden space-y-4 p-4">
+            {apiKeys.map((key, index) => (
+              <div
+                key={key.id}
+                className={`border border-[#222] rounded-xl p-4 hover:bg-[#111] transition-colors ${
+                  index === apiKeys.length - 1 ? '' : ''
+                }`}
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <p className="text-white font-mono text-sm font-semibold">{key.key_name}</p>
                       <button
                         onClick={() => handleCopyWithConfirmation(key.id, key.key_prefix)}
                         disabled={copyingKeyId === key.id}
                         className="p-1 hover:bg-[#222] rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Copy prefix (confirmation required)"
                       >
                         <Copy className={`w-3 h-3 ${copyingKeyId === key.id ? 'text-cyan-500' : 'text-[#888]'}`} />
                       </button>
                     </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <p className="text-white">
+                    <p className="text-[#666] text-xs">
+                      sk-or-v1-{maskKeyPrefix(key.key_prefix)}
+                    </p>
+                  </div>
+                  <Badge
+                    className={`${
+                      key.is_active
+                        ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                        : 'bg-gray-500/20 text-gray-400 border-gray-500/30'
+                    } border`}
+                  >
+                    {key.is_active ? 'Active' : 'Disabled'}
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <p className="text-[#666] text-xs mb-1">Usage</p>
+                    <p className="text-white text-sm font-medium">
                       ${((key.usage as Record<string, number> | undefined)?.total_cost || 0).toFixed(3)}
                     </p>
                     <p className="text-[#666] text-xs mt-1">
                       {((key.usage as Record<string, number> | undefined)?.request_count || 0)} requests
                     </p>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-white">
-                      <p className="text-sm">{key.rate_limit_per_min}/min</p>
-                      <p className="text-[#666] text-xs mt-1">{key.rate_limit_per_day}/day</p>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <Badge
-                      className={`${
-                        key.is_active
-                          ? 'bg-green-500/20 text-green-400 border-green-500/30'
-                          : 'bg-gray-500/20 text-gray-400 border-gray-500/30'
-                      } border`}
-                    >
-                      {key.is_active ? 'Active' : 'Disabled'}
-                    </Badge>
-                  </td>
-                  <td className="px-6 py-4">
-                    <p className="text-[#888] text-sm">
-                      {new Date(key.created_at).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric'
-                      })}
-                    </p>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <DropdownMenu
-                      keyId={key.id}
-                      isActive={key.is_active}
-                      onEdit={onEdit}
-                      onDisable={onDisable}
-                      onEnable={onEnable}
-                      onDelete={onDelete}
-                      onViewActivity={onViewActivity}
-                      apiKey={key}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                  <div>
+                    <p className="text-[#666] text-xs mb-1">Limit</p>
+                    <p className="text-white text-sm">{key.rate_limit_per_min}/min</p>
+                    <p className="text-[#666] text-xs">{key.rate_limit_per_day}/day</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-3 border-t border-[#222]">
+                  <p className="text-[#666] text-xs">
+                    Created {new Date(key.created_at).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric'
+                    })}
+                  </p>
+                  <DropdownMenu
+                    keyId={key.id}
+                    isActive={key.is_active}
+                    onEdit={onEdit}
+                    onDisable={onDisable}
+                    onEnable={onEnable}
+                    onDelete={onDelete}
+                    onViewActivity={onViewActivity}
+                    apiKey={key}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
         </CardContent>
       </div>
     </div>

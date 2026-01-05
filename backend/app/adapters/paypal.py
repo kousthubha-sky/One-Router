@@ -223,12 +223,12 @@ class PayPalAdapter(BaseAdapter):
 
                 # Safely extract id
                 id_val = order_response.get('id')
-                if id_val:
-                    transaction_id = f"unf_{id_val}"
-                    provider_order_id = id_val
-                else:
-                    transaction_id = None
-                    provider_order_id = None
+                if not id_val:
+                    # This should never happen, but handle it gracefully
+                    raise Exception("PayPal order creation failed: No order ID returned")
+
+                transaction_id = f"unf_{id_val}"
+                provider_order_id = id_val
 
                 # Return normalized response
                 return {
@@ -276,6 +276,8 @@ class PayPalAdapter(BaseAdapter):
 
     async def normalize_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """Convert unified request to PayPal format"""
+        return request
+
     async def normalize_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
         """Convert PayPal response to unified format"""
         # Extract amount from purchase_units

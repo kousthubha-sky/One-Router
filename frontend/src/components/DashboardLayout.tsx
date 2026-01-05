@@ -54,20 +54,33 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-black text-white">
       {/* Top Navigation Bar */}
       <nav className="fixed top-0 left-0 right-0 z-50  backdrop-blur-sm ">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 bg-[#0a0a0a] rounded-2xl lg:px-8">
-          <div className="flex justify-between items-center h-16">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 bg-[#0a0a0a] rounded-2xl lg:px-8">
+          <div className="flex justify-between items-center h-14 sm:h-16">
             {/* Logo */}
-            <Link href="/dashboard" className="flex items-center gap-3 group shrink-0">
-              <div className="w-8 h-8 bg-gradient-to-br from-black  to-cyan-600 rounded-2xl flex items-center justify-center shadow-lg transition-all duration-300 hover:shadow-cyan-500/25 hover:scale-110">
-                
+            <Link href="/dashboard" className="flex items-center gap-2 sm:gap-3 group shrink-0">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-br from-black  to-cyan-600 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg transition-all duration-300 hover:shadow-cyan-500/25 hover:scale-110">
+
               </div>
-              <span className="hidden sm:inline font-bold font-sans text-lg text-cyan-200 group-hover:text-cyan-400 transition-colors duration-300">
+              <span className="hidden sm:inline font-bold font-sans text-base sm:text-lg text-cyan-200 group-hover:text-cyan-400 transition-colors duration-300">
                 OneRouter
               </span>
             </Link>
 
+             {/* Mobile Menu Button */}
+             <button
+               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+               className="lg:hidden p-2 hover:bg-white/10 rounded-lg transition-all duration-300 ml-2"
+               aria-label="Toggle menu"
+             >
+               {mobileMenuOpen ? (
+                 <X className="w-5 h-5" />
+               ) : (
+                 <Menu className="w-5 h-5" />
+               )}
+             </button>
+
              {/* Navigation Menu - Desktop */}
-             <NavigationMenu className="hidden lg:flex flex-1 justify-start ml-8 font-sans" suppressHydrationWarning>
+             <NavigationMenu className="hidden lg:flex flex-1 justify-start ml-4 sm:ml-8 font-sans" suppressHydrationWarning>
                <NavigationMenuList>
                  {/* Home Link */}
                  <NavigationMenuItem>
@@ -153,21 +166,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 </NavigationMenuList>
               </NavigationMenu>
 
-             {/* Mobile Menu Button */}
-             <button
-               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-               className="lg:hidden p-2 hover:bg-white/10 rounded-lg transition-all duration-300"
-             >
-               {mobileMenuOpen ? (
-                 <X className="w-5 h-5" />
-               ) : (
-                 <Menu className="w-5 h-5" />
-               )}
-             </button>
-
              {/* User Menu */}
-            <div className="flex items-center gap-4 ml-auto flex-shrink-0">
-              <div className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-white/5 transition-all duration-300 group">
+            <div className="hidden sm:flex items-center gap-2 sm:gap-4 ml-auto flex-shrink-0">
+              <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 rounded-lg hover:bg-white/5 transition-all duration-300 group">
                 <UserButton afterSignOutUrl="/" />
                 <div className="hidden sm:block">
                   <p className="text-xs font-medium text-white group-hover:text-cyan-400 transition-colors duration-300">
@@ -181,37 +182,39 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           {/* Mobile Menu */}
           {mobileMenuOpen && (
             <div className="lg:hidden pb-4 border-t border-white/10 mt-4">
-              <div className="space-y-2">
-                <Link href="/" className="block px-4 py-2 rounded-lg hover:bg-white/10 transition-all">
+              <div className="space-y-1">
+                <Link href="/" className="block px-4 py-3 rounded-lg hover:bg-white/10 transition-all text-base font-medium">
                   Home
                 </Link>
-                <Link href="/dashboard" className="block px-4 py-2 rounded-lg hover:bg-white/10 transition-all">
+                <Link href="/dashboard" className="block px-4 py-3 rounded-lg hover:bg-white/10 transition-all text-base font-medium">
                   Dashboard
                 </Link>
-                <div className="px-4 py-2 text-sm font-medium text-cyan-400">Products</div>
+                <div className="px-4 py-2 text-sm font-semibold text-cyan-400 mt-2">Products</div>
                 {productsItems.map((item) => (
                   <Link
                     key={item.href}
                     href={item.href}
-                    className="block px-8 py-2 text-sm rounded-lg hover:bg-white/10 transition-all"
+                    className="block px-6 sm:px-8 py-3 text-sm rounded-lg hover:bg-white/10 transition-all flex items-center gap-3"
                   >
+                    <span className="text-cyan-500">{item.icon}</span>
                     {item.label}
                   </Link>
                 ))}
-                <div className="px-4 py-2 text-sm font-medium text-cyan-400">Resources</div>
+                <div className="px-4 py-2 text-sm font-semibold text-cyan-400 mt-2">Resources</div>
                 {resourcesItems.map((item) => (
                   <Link
                     key={item.href}
                     href={item.href}
-                    className="block px-8 py-2 text-sm rounded-lg hover:bg-white/10 transition-all"
+                    className="block px-6 sm:px-8 py-3 text-sm rounded-lg hover:bg-white/10 transition-all flex items-center gap-3"
                   >
+                    <span className="text-gray-300">{item.icon}</span>
                     {item.label}
                   </Link>
                 ))}
-                <button className="block w-full text-left px-4 py-2 rounded-lg hover:bg-white/10 transition-all">
+                <button className="block w-full text-left px-4 py-3 rounded-lg hover:bg-white/10 transition-all text-base font-medium">
                   Pricing
                 </button>
-                <button className="block w-full text-left px-4 py-2 rounded-lg hover:bg-white/10 transition-all">
+                <button className="block w-full text-left px-4 py-3 rounded-lg hover:bg-white/10 transition-all text-base font-medium">
                   Docs
                 </button>
               </div>

@@ -208,17 +208,17 @@ export default function APIKeysPage() {
       <div className="text-white font-sans border-t border-white/10">
         <header className="border-[#333] backdrop-blur-sm">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-l border-r border-white/10">
-              <div className="flex justify-between items-center py-6">
-                <div className="flex items-center space-x-4">
-                  <GlobalEnvironmentToggle 
-                    services={services} 
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 py-6">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto">
+                  <GlobalEnvironmentToggle
+                    services={services}
                     onGlobalSwitch={handleEnvironmentChange}
                   />
                   <div className="px-4 rounded-full text-sm font-medium text-cyan-500 transition-all duration-300 hover:bg-cyan-500/10">
                     Free Plan
                   </div>
-                  <Link href="/api-keys">
-                    <Button className="text-white hover:bg-[#1a1a1a] border-0 transition-all duration-300 hover:shadow-md hover:shadow-blue-300 hover:scale-105">
+                  <Link href="/api-keys" className="w-full sm:w-auto">
+                    <Button className="text-white hover:bg-[#1a1a1a] border-0 transition-all duration-300 hover:shadow-md hover:shadow-blue-300 hover:scale-105 w-full sm:w-auto">
                       Manage API Keys
                     </Button>
                   </Link>
@@ -274,31 +274,31 @@ export default function APIKeysPage() {
             {/* New Key Alert */}
             {newKey && (
               <Card className="bg-[#0a0a0a] border border-[#222] mb-8 hover:border-cyan-500 transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/10">
-                <CardContent className="p-6">
+                <CardContent className="p-4 sm:p-6">
                   <div className="flex items-start gap-4">
                     <div className="flex shrink-0">
                       <AlertTriangle className="h-6 w-6 text-cyan-500" />
                     </div>
                     <div className="flex-1">
-                      <h3 className="text-lg font-medium text-cyan-500 mb-2">
+                      <h3 className="text-base sm:text-lg font-medium text-cyan-500 mb-2">
                         New API Key Generated
                       </h3>
-                      <div className="flex items-center gap-2 font-mono bg-[#1a1a1a] p-4 rounded border border-[#222] mb-4">
-                        <code className="flex-1 text-cyan-500 text-sm">{newKey}</code>
+                      <div className="flex items-center gap-2 font-mono bg-[#1a1a1a] p-3 sm:p-4 rounded border border-[#222] mb-4 overflow-hidden">
+                        <code className="flex-1 text-cyan-500 text-xs sm:text-sm truncate">{newKey}</code>
                         <button
                           onClick={() => navigator.clipboard.writeText(newKey)}
-                          className="px-3 py-2 bg-cyan-500 text-black rounded hover:bg-cyan-600 transition-colors text-sm font-medium"
+                          className="px-2 sm:px-3 py-2 bg-cyan-500 text-black rounded hover:bg-cyan-600 transition-colors text-xs sm:text-sm font-medium shrink-0"
                         >
-                          <Copy className="w-4 h-4" />
+                          <Copy className="w-3 h-3 sm:w-4 sm:h-4" />
                         </button>
                       </div>
-                      <p className="text-[#888] text-sm mb-4">
+                      <p className="text-[#888] text-xs sm:text-sm mb-4">
                         <strong>Important:</strong> Copy this key now. It will not be shown again for security reasons.
                       </p>
                       <Button
                         onClick={() => setNewKey(null)}
                         variant="outline"
-                        className="bg-transparent border-[#222] text-white hover:border-cyan-500"
+                        className="bg-transparent border-[#222] text-white hover:border-cyan-500 w-full sm:w-auto"
                       >
                         Dismiss
                       </Button>
@@ -310,7 +310,7 @@ export default function APIKeysPage() {
 
             {/* API Keys Table */}
             <div className="mb-8">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
                 <h2 className="text-xl font-semibold text-white flex items-center gap-3">
                   <div className="w-8 h-8  flex items-center justify-center ">
                     🔑
@@ -320,7 +320,7 @@ export default function APIKeysPage() {
                 <Button
                   onClick={generateAPIKey}
                   disabled={generating}
-                  className="bg-cyan-500 text-black hover:bg-cyan-600 px-6 py-2"
+                  className="bg-cyan-500 text-black hover:bg-cyan-600 px-6 py-2 w-full sm:w-auto"
                 >
                   {generating ? (
                     <>
@@ -348,10 +348,10 @@ export default function APIKeysPage() {
             </div>
 
             {/* Security Features */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <Card className="bg-[#0a0a0a] border border-[#222] hover:border-cyan-500 transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/10">
                 <CardHeader className="pb-4">
-                  <CardTitle className="text-white flex items-center gap-3 text-xl">
+                  <CardTitle className="text-white flex items-center gap-3 text-lg sm:text-xl">
                     <div className="w-8 h-8 bg-cyan-500/20 rounded-lg flex items-center justify-center border border-cyan-500/30">
                       🔒
                     </div>
@@ -359,13 +359,13 @@ export default function APIKeysPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-[#888]">Your keys are encrypted at rest with military-grade security</p>
+                  <p className="text-[#888] text-sm">Your keys are encrypted at rest with military-grade security</p>
                 </CardContent>
               </Card>
 
               <Card className="bg-[#0a0a0a] border border-[#222] hover:border-cyan-500 transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/10">
                 <CardHeader className="pb-4">
-                  <CardTitle className="text-white flex items-center gap-3 text-xl">
+                  <CardTitle className="text-white flex items-center gap-3 text-lg sm:text-xl">
                     <div className="w-8 h-8 bg-cyan-500/20 rounded-lg flex items-center justify-center border border-cyan-500/30">
                       ⚡
                     </div>
@@ -373,13 +373,13 @@ export default function APIKeysPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-[#888]">Automatic rate limiting protection prevents abuse</p>
+                  <p className="text-[#888] text-sm">Automatic rate limiting protection prevents abuse</p>
                 </CardContent>
               </Card>
 
               <Card className="bg-[#0a0a0a] border border-[#222] hover:border-cyan-500 transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/10">
                 <CardHeader className="pb-4">
-                  <CardTitle className="text-white flex items-center gap-3 text-xl">
+                  <CardTitle className="text-white flex items-center gap-3 text-lg sm:text-xl">
                     <div className="w-8 h-8 bg-cyan-500/20 rounded-lg flex items-center justify-center border border-cyan-500/30">
                       📊
                     </div>
@@ -387,7 +387,7 @@ export default function APIKeysPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-[#888]">Complete access logs available for compliance</p>
+                  <p className="text-[#888] text-sm">Complete access logs available for compliance</p>
                 </CardContent>
               </Card>
             </div>

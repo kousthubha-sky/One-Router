@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any
+import httpx
 
 class BaseAdapter(ABC):
     """Abstract base class with generic API proxy support"""
@@ -11,6 +12,29 @@ class BaseAdapter(ABC):
     @abstractmethod
     async def _get_base_url(self) -> str:
         """Return service base URL"""
+        pass
+
+    @abstractmethod
+    async def _get_auth_headers(self) -> Dict[str, str]:
+        """Get authentication headers for API calls"""
+        pass
+
+    @abstractmethod
+    async def validate_credentials(self) -> bool:
+        """Validate stored credentials work"""
+        pass
+
+    async def normalize_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert unified request to provider format"""
+        return request
+
+    async def normalize_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert provider response to unified format"""
+        return response
+
+    @abstractmethod
+    async def get_order(self, order_id: str) -> Dict[str, Any]:
+        """Get order details"""
         pass
 
     async def call_api(
@@ -46,40 +70,3 @@ class BaseAdapter(ABC):
 
             response.raise_for_status()
             return response.json()
-
-    @abstractmethod
-    async def _get_auth_headers(self) -> Dict[str, str]:
-        """Get authentication headers for API calls"""
-        pass
-        self.base_url = None
-
-    @abstractmethod
-    async def _get_base_url(self) -> str:
-        """Return service base URL"""
-        pass
-
-    @abstractmethod
-    async def validate_credentials(self) -> bool:
-        """Validate stored credentials work"""
-        pass
-
-    async def normalize_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """Convert unified request to provider format"""
-        pass
-
-    async def normalize_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
-        """Convert provider response to unified format"""
-        pass
-
-    @abstractmethod
-    async def get_order(self, order_id: str) -> Dict[str, Any]:
-        """Get order details"""
-        pass
-
-    async def normalize_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """Convert unified request to provider format"""
-        return request
-
-    async def normalize_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
-        """Convert provider response to unified format"""
-        return response

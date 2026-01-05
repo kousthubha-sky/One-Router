@@ -324,9 +324,9 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
       {/* Progress Steps */}
       <div className="px-4 sm:px-6 lg:px-8 py-8 border-b border-[#222]">
         <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-center gap-3 md:gap-6">
+          <div className="flex items-center justify-center gap-2 md:gap-6 overflow-x-auto pb-2 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 scrollbar-hide">
             <div className={cn(
-              "flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-medium transition-all duration-300",
+              "flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-3 rounded-xl border text-sm font-medium transition-all duration-300 flex-shrink-0",
               step === "check-existing"
                 ? "border-cyan-500 bg-cyan-500/10 text-cyan-500 shadow-lg shadow-cyan-500/20"
                 : "border-[#333] text-[#888] hover:border-cyan-500/50"
@@ -335,9 +335,9 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
               <span className="hidden sm:inline">Check Existing</span>
               <span className="sm:hidden">Check</span>
             </div>
-            <div className={cn("h-[2px] transition-all duration-300", step === "upload" || step === "review" || step === "complete" ? "bg-cyan-500 w-6 md:w-8" : "bg-[#333] w-4 md:w-6")} />
+            <div className={cn("h-[2px] transition-all duration-300 w-4 md:w-6 lg:w-8 flex-shrink-0", step === "upload" || step === "review" || step === "complete" ? "bg-cyan-500" : "bg-[#333]")} />
             <div className={cn(
-              "flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-medium transition-all duration-300",
+              "flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-3 rounded-xl border text-sm font-medium transition-all duration-300 flex-shrink-0",
               step === "upload"
                 ? "border-cyan-500 bg-cyan-500/10 text-cyan-500 shadow-lg shadow-cyan-500/20"
                 : step === "review" || step === "complete"
@@ -348,9 +348,9 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
               <span className="hidden sm:inline">Upload .env</span>
               <span className="sm:hidden">Upload</span>
             </div>
-            <div className={cn("h-[2px] transition-all duration-300", step === "review" || step === "complete" ? "bg-cyan-500 w-6 md:w-8" : "bg-[#333] w-4 md:w-6")} />
+            <div className={cn("h-[2px] transition-all duration-300 w-4 md:w-6 lg:w-8 flex-shrink-0", step === "review" || step === "complete" ? "bg-cyan-500" : "bg-[#333]")} />
             <div className={cn(
-              "flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-medium transition-all duration-300",
+              "flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-3 rounded-xl border text-sm font-medium transition-all duration-300 flex-shrink-0",
               step === "review"
                 ? "border-cyan-500 bg-cyan-500/10 text-cyan-500 shadow-lg shadow-cyan-500/20"
                 : step === "complete"
@@ -361,9 +361,9 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
               <span className="hidden sm:inline">Review Services</span>
               <span className="sm:hidden">Review</span>
             </div>
-            <div className={cn("h-[2px] transition-all duration-300", step === "complete" ? "bg-cyan-500 w-6 md:w-8" : "bg-[#333] w-4 md:w-6")} />
+            <div className={cn("h-[2px] transition-all duration-300 w-4 md:w-6 lg:w-8 flex-shrink-0", step === "complete" ? "bg-cyan-500" : "bg-[#333]")} />
             <div className={cn(
-              "flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-medium transition-all duration-300",
+              "flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-3 rounded-xl border text-sm font-medium transition-all duration-300 flex-shrink-0",
               step === "complete"
                 ? "border-cyan-500 bg-cyan-500/10 text-cyan-500 shadow-lg shadow-cyan-500/20"
                 : "border-[#333] text-[#888] hover:border-cyan-500/50"

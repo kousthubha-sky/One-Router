@@ -59,7 +59,7 @@ export function FeaturesSectionWithHoverEffects() {
     },
   ];
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 relative z-10 py-6 sm:py-10 px-2 sm:px-4 max-w-7xl mx-auto gap-4 sm:gap-0">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 relative z-10 py-6 sm:py-10 px-2 sm:px-4 max-w-7xl mx-auto gap-4 sm:gap-0">
       {features.map((feature, index) => (
         <Feature key={feature.title} {...feature} index={index} />
       ))}
