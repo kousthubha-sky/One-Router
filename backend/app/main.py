@@ -431,6 +431,18 @@ async def root():
         "status": "running"
     }
 
+@app.get("/api/health/simple")
+async def simple_health_check():
+    """
+    Simple health check for cron jobs and monitoring.
+    No authentication required. Returns basic status.
+    """
+    return {
+        "status": "healthy",
+        "message": "API is running",
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
 @app.get("/api/health")
 async def health_check(db: AsyncSession = Depends(get_db)):
     """Health check including database and Redis status"""
