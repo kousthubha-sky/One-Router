@@ -204,7 +204,8 @@ function InstallationSection() {
                 <h4 className="text-white font-medium">Production</h4>
                 <Badge className="bg-green-500/20 text-green-400">Live</Badge>
               </div>
-              <code className="text-sm text-white">https://one-backend.stack-end.com</code>
+              <code className="text-sm text-white">https://api.yourdomain.com</code>
+              <p className="text-[#666] text-xs mt-2">Replace with your actual production URL</p>
             </div>
           </div>
         </CardContent>
@@ -230,9 +231,10 @@ function QuickStartSection() {
             <pre className="text-sm text-cyan-400">{`from onerouter import OneRouter
 
 # Initialize with your API key
+import os
 client = OneRouter(
     api_key="unf_live_your_api_key_here",
-    base_url="https://one-backend.stack-end.com"
+    base_url=os.getenv("ONEROUTER_BASE_URL", "http://localhost:8000")
 )
 
 # Send SMS
@@ -240,15 +242,7 @@ sms = client.sms.send(
     to="+1234567890",
     body="Hello from OneRouter!"
 )
-print(f"SMS sent: {sms['message_id']}")
-
-# Create Payment
-payment = client.payments.create(
-    amount=1000,  # ₹10.00
-    currency="INR",
-    customer_id="cust_123"
-)
-print(f"Payment created: {payment['transaction_id']}")`}
+print(f"SMS sent: {sms['message_id']}")`}
           </pre>
           </div>
         </CardContent>
@@ -279,7 +273,7 @@ print(f"Payment created: {payment['transaction_id']}")`}
                 <pre className="text-sm text-cyan-400">
                 {`# .env file
                     ONEROUTER_API_KEY=unf_live_your_key_here
-                    ONEROUTER_BASE_URL=https://one-backend.stack-end.com
+                    ONEROUTER_BASE_URL=http://localhost:8000
                     ONEROUTER_TIMEOUT=30
                     ONEROUTER_MAX_RETRIES=3`}
                 </pre>
@@ -292,7 +286,7 @@ print(f"Payment created: {payment['transaction_id']}")`}
                   {`import os from onerouter import OneRouter
                     client = OneRouter(
                         api_key=os.getenv("ONEROUTER_API_KEY"),
-                        base_url=os.getenv("ONEROUTER_BASE_URL", "https://one-backend.stack-end.com"),
+                        base_url=os.getenv("ONEROUTER_BASE_URL", "http://localhost:8000"),
                         timeout=int(os.getenv("ONEROUTER_TIMEOUT", "30")),
                         max_retries=int(os.getenv("ONEROUTER_MAX_RETRIES", "3"))
                     )`}
@@ -501,12 +495,13 @@ function ExamplesSection() {
           <h3 className="text-lg font-semibold text-cyan-400 mb-4">E-commerce Payment Flow</h3>
           <div className="bg-[#1a1a1a] border border-[#222] rounded p-4">
             <pre className="text-sm text-cyan-400">{`from onerouter import OneRouter
+import os
 
 class PaymentService:
     def __init__(self, api_key):
         self.client = OneRouter(
             api_key=api_key,
-            base_url="https://one-backend.stack-end.com"
+            base_url=os.getenv("ONEROUTER_BASE_URL", "http://localhost:8000")
         )
 
     def create_checkout(self, cart_items, customer_email, customer_phone):
@@ -691,6 +686,7 @@ function ErrorHandlingSection() {
 from onerouter.exceptions import ValidationError, APIError, RateLimitError, NetworkError
 import time
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -698,7 +694,7 @@ class OneRouterClient:
     def __init__(self, api_key):
         self.client = OneRouter(
             api_key=api_key,
-            base_url="https://one-backend.stack-end.com",
+            base_url=os.getenv("ONEROUTER_BASE_URL", "http://localhost:8000"),
             max_retries=3
         )
         self.retry_delay = 1

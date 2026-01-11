@@ -11,10 +11,8 @@ export default function DocsPage() {
     { id: 'quickstart', title: 'Quick Start', icon: '⚡' },
     { id: 'sdk', title: 'Python SDK', icon: '🐍' },
     { id: 'js-sdk', title: 'JavaScript SDK', icon: '⚛️' },
-    { id: 'sms', title: 'SMS', icon: '📱' },
-    { id: 'email', title: 'Email', icon: '📧' },
-    { id: 'payments', title: 'Payments', icon: '💳' },
-    { id: 'api', title: 'REST API', icon: '🌐' },
+    { id: 'management', title: 'Management API', icon: '🔧' },
+    { id: 'api', title: 'REST API Reference', icon: '🌐' },
     { id: 'troubleshooting', title: 'Troubleshooting', icon: '🔧' }
   ];
 
@@ -97,29 +95,9 @@ export default function DocsPage() {
                 </div>
 
                 <div className="mb-6">
-                  <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">Services</h3>
-                  <ul className="space-y-1">
-                    {sections.slice(4, 7).map(section => (
-                      <li key={section.id}>
-                        <button
-                          onClick={() => setActiveSection(section.id)}
-                          className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                            activeSection === section.id
-                              ? 'text-white'
-                              : 'text-gray-400 hover:text-white'
-                          }`}
-                        >
-                          {section.title}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="mb-6">
                   <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">Reference</h3>
                   <ul className="space-y-1">
-                    {sections.slice(7).map(section => (
+                    {sections.slice(5).map(section => (
                       <li key={section.id}>
                         <button
                           onClick={() => setActiveSection(section.id)}
@@ -150,6 +128,7 @@ export default function DocsPage() {
               {activeSection === 'email' && <EmailSection />}
               {activeSection === 'payments' && <PaymentsSection />}
               {activeSection === 'api' && <APISection />}
+              {activeSection === 'management' && <ManagementAPISection />}
               {activeSection === 'troubleshooting' && <TroubleshootingSection />}
             </div>
           </main>
@@ -202,21 +181,18 @@ function OverviewSection() {
             <ul className="text-gray-300 text-sm space-y-2">
               <li>• Razorpay</li>
               <li>• PayPal</li>
-              <li>• Stripe</li>
             </ul>
           </div>
           <div className="border border-gray-800 rounded-lg p-4">
             <h3 className="text-lg font-semibold text-white mb-3">📱 SMS</h3>
             <ul className="text-gray-300 text-sm space-y-2">
               <li>• Twilio</li>
-              <li>• AWS SNS</li>
             </ul>
           </div>
           <div className="border border-gray-800 rounded-lg p-4">
             <h3 className="text-lg font-semibold text-white mb-3">📧 Email</h3>
             <ul className="text-gray-300 text-sm space-y-2">
               <li>• Resend</li>
-              <li>• SendGrid</li>
             </ul>
           </div>
         </div>
@@ -376,14 +352,18 @@ function QuickStartSection() {
           </div>
           <p className="text-gray-300 mb-4">Upload your provider credentials through the dashboard. We encrypt and store them securely.</p>
           <div className="space-y-2">
-            <p className="text-gray-400 text-sm">Supported providers:</p>
+            <p className="text-gray-400 text-sm">Supported providers and required credentials:</p>
             <ul className="text-gray-300 text-sm space-y-1 ml-4">
-              <li>• Razorpay: RZP_KEY_ID, RZP_KEY_SECRET</li>
+              <li>• Razorpay: RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET</li>
               <li>• PayPal: PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET</li>
-              <li>• Stripe: STRIPE_SECRET_KEY</li>
               <li>• Twilio: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN</li>
               <li>• Resend: RESEND_API_KEY</li>
             </ul>
+          </div>
+          <div className="mt-4 p-4 bg-cyan-900/20 border border-cyan-500/30 rounded-lg">
+            <p className="text-cyan-400 text-sm">
+              <strong>Note:</strong> Configure credentials in the dashboard at <code className="text-cyan-300">/onboarding</code> or upload a .env file.
+            </p>
           </div>
         </div>
 
@@ -530,8 +510,14 @@ function SDKSection() {
           <div>
             <h4 className="text-white font-medium mb-2">Production</h4>
             <div className="border border-gray-700 rounded p-3">
-              <code className="text-white">https://one-backend.stack-end.com</code>
+              <code className="text-white">https://api.yourdomain.com</code>
             </div>
+            <p className="text-gray-400 text-sm mt-2">Replace with your actual production API URL</p>
+          </div>
+          <div className="bg-cyan-900/20 border border-cyan-500/30 rounded p-4">
+            <p className="text-cyan-400 text-sm">
+              <strong>Tip:</strong> Always use environment variables for URLs to easily switch between environments.
+            </p>
           </div>
         </div>
       </div>
@@ -543,13 +529,13 @@ function SDKSection() {
           <pre className="text-white text-sm overflow-x-auto">
 {`from onerouter import OneRouter
 
-# Production Setup
+# Production Setup - Use your actual production URL
+import os
 client = OneRouter(
     api_key="unf_live_your_production_key_here",
-    base_url="https://one-backend.stack-end.com",
-    timeout=30,        # seconds
-    max_retries=3,     # automatic retries on failure
-    environment="production"
+    base_url=os.getenv("ONEROUTER_BASE_URL", "https://api.yourdomain.com"),
+    timeout=30,
+    max_retries=3
 )
 
 # Development Setup
@@ -557,8 +543,7 @@ client = OneRouter(
     api_key="unf_test_your_test_key_here",
     base_url="http://localhost:8000",
     timeout=60,
-    max_retries=5,
-    environment="development"
+    max_retries=5
 )`}
           </pre>
         </div>
@@ -782,8 +767,9 @@ function JSSDKSection() {
           <div>
             <h4 className="text-white font-medium mb-2">Production</h4>
             <div className="border border-gray-700 rounded p-3">
-              <code className="text-white">https://one-backend.stack-end.com</code>
+              <code className="text-white">https://api.yourdomain.com</code>
             </div>
+            <p className="text-gray-400 text-sm mt-2">Replace with your actual production API URL</p>
           </div>
         </div>
       </div>
@@ -795,10 +781,10 @@ function JSSDKSection() {
           <pre className="text-white text-sm overflow-x-auto">
 {`import { OneRouter } from '@onerouter/sdk';
 
-// Production
+// Production - Use environment variable or actual URL
 const client = new OneRouter({
-  apiKey: 'unf_live_your_production_key',
-  baseURL: 'https://one-backend.stack-end.com',
+  apiKey: process.env.ONEROUTER_API_KEY || 'unf_live_your_production_key',
+  baseURL: process.env.ONEROUTER_BASE_URL || 'https://api.yourdomain.com',
   timeout: 30000,
   maxRetries: 3
 });
@@ -1230,8 +1216,14 @@ function APISection() {
           <div>
             <h4 className="text-white font-medium mb-2">Production</h4>
             <div className="border border-gray-700 rounded p-3">
-              <code className="text-white">https://one-backend.stack-end.com/v1</code>
+              <code className="text-white">https://api.yourdomain.com/v1</code>
             </div>
+            <p className="text-gray-400 text-sm mt-2">Replace with your actual production API URL</p>
+          </div>
+          <div className="bg-cyan-900/20 border border-cyan-500/30 rounded p-4">
+            <p className="text-cyan-400 text-sm">
+              <strong>Full API Docs:</strong> Visit <code className="text-cyan-300">/docs</code> on your API server for interactive Swagger documentation.
+            </p>
           </div>
         </div>
       </div>
@@ -1242,11 +1234,11 @@ function APISection() {
           <pre className="text-white text-sm overflow-x-auto">
 {`# Bearer Token Authentication
 curl -H "Authorization: Bearer unf_live_your_api_key_here" \
-     https://one-backend.stack-end.com/v1/sms
+     http://localhost:8000/v1/sms
 
 # Or API Key in header
 curl -H "X-API-Key: unf_live_your_api_key_here" \
-     https://one-backend.stack-end.com/v1/sms`}
+     http://localhost:8000/v1/sms`}
           </pre>
         </div>
         <p className="text-gray-400 text-sm mt-4">
@@ -1265,7 +1257,7 @@ curl -H "X-API-Key: unf_live_your_api_key_here" \
             </div>
             <div className="border border-gray-700 rounded p-4 bg-gray-900">
               <pre className="text-white text-sm overflow-x-auto">
-{`curl -X POST https://one-backend.stack-end.com/v1/sms \
+{`curl -X POST http://localhost:8000/v1/sms \
   -H "Authorization: Bearer unf_live_xxx" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1288,12 +1280,12 @@ curl -H "X-API-Key: unf_live_your_api_key_here" \
             <h4 className="text-white font-medium mb-2">Get SMS Status</h4>
             <div className="flex items-center gap-2 mb-2">
               <span className="text-blue-400 font-mono">GET</span>
-              <code className="text-white">{`/v1/sms/{message_id}`}</code>
+              <code className="white">{`/v1/sms/{message_id}`}</code>
             </div>
             <div className="border border-gray-700 rounded p-4 bg-gray-900">
               <pre className="text-white text-sm overflow-x-auto">
 {`curl -H "Authorization: Bearer unf_live_xxx" \
-     https://one-backend.stack-end.com/v1/sms/SM1234567890`}
+     http://localhost:8000/v1/sms/SM1234567890`}
               </pre>
             </div>
           </div>
@@ -1304,14 +1296,14 @@ curl -H "X-API-Key: unf_live_your_api_key_here" \
         <h3 className="text-xl font-semibold text-white mb-4">Payment Endpoints</h3>
         <div className="space-y-4">
           <div>
-            <h4 className="text-white font-medium mb-2">Create Payment</h4>
+            <h4 className="text-white font-medium mb-2">Create Payment Order</h4>
             <div className="flex items-center gap-2 mb-2">
               <span className="text-green-400 font-mono">POST</span>
-              <code className="text-white">/v1/payments</code>
+              <code className="text-white">/v1/payments/orders</code>
             </div>
             <div className="border border-gray-700 rounded p-4 bg-gray-900">
               <pre className="text-white text-sm overflow-x-auto">
-{`curl -X POST https://one-backend.stack-end.com/v1/payments \
+{`curl -X POST http://localhost:8000/v1/payments/orders \
   -H "Authorization: Bearer unf_live_xxx" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1339,7 +1331,15 @@ curl -H "X-API-Key: unf_live_your_api_key_here" \
             <h4 className="text-white font-medium mb-2">Get Payment</h4>
             <div className="flex items-center gap-2 mb-2">
               <span className="text-blue-400 font-mono">GET</span>
-              <code className="text-white">{`/v1/payments/{transaction_id}`}</code>
+              <code className="text-white">{`/v1/payments/orders/{transaction_id}`}</code>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-white font-medium mb-2">Capture Payment</h4>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-green-400 font-mono">POST</span>
+              <code className="text-white">{`/v1/payments/capture`}</code>
             </div>
           </div>
 
@@ -1347,7 +1347,7 @@ curl -H "X-API-Key: unf_live_your_api_key_here" \
             <h4 className="text-white font-medium mb-2">Refund Payment</h4>
             <div className="flex items-center gap-2 mb-2">
               <span className="text-green-400 font-mono">POST</span>
-              <code className="text-white">{`/v1/payments/{transaction_id}/refund`}</code>
+              <code className="text-white">{`/v1/payments/refunds`}</code>
             </div>
           </div>
         </div>
@@ -1364,7 +1364,7 @@ curl -H "X-API-Key: unf_live_your_api_key_here" \
             </div>
             <div className="border border-gray-700 rounded p-4 bg-gray-900">
               <pre className="text-white text-sm overflow-x-auto">
-{`curl -X POST https://one-backend.stack-end.com/v1/email \
+{`curl -X POST http://localhost:8000/v1/email \
   -H "Authorization: Bearer unf_live_xxx" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1422,6 +1422,189 @@ curl -H "X-API-Key: unf_live_your_api_key_here" \
         <p className="text-gray-400 text-sm mt-4">
           Rate limits are applied per API key. Contact support for higher limits.
         </p>
+      </div>
+
+      {/* Link to Interactive API Docs */}
+      <div className="border border-cyan-500/30 rounded-lg p-6 bg-cyan-900/10">
+        <h3 className="text-xl font-semibold text-cyan-400 mb-4">Interactive API Documentation</h3>
+        <p className="text-gray-300 mb-4">
+          For complete, interactive API documentation with try-it-out functionality, visit the Swagger UI:
+        </p>
+        <div className="bg-[#1a1a1a] border border-cyan-500/30 rounded p-4">
+          <code className="text-cyan-400">http://localhost:8000/docs</code>
+        </div>
+        <p className="text-gray-400 text-sm mt-4">
+          The Swagger documentation includes all endpoints, request/response schemas, and allows you to test API calls directly from your browser.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// Management API Section
+function ManagementAPISection() {
+  return (
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-3xl font-bold text-white mb-4">Management API</h1>
+        <p className="text-gray-300 leading-relaxed">
+          Manage your OneRouter account, API keys, and connected services programmatically.
+        </p>
+      </div>
+
+      <div className="border border-gray-800 rounded-lg p-6">
+        <h3 className="text-xl font-semibold text-white mb-4">API Keys Management</h3>
+        <div className="space-y-6">
+          <div>
+            <h4 className="text-white font-medium mb-2">List API Keys</h4>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-blue-400 font-mono">GET</span>
+              <code className="text-white">/api/keys</code>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-white font-medium mb-2">Create API Key</h4>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-green-400 font-mono">POST</span>
+              <code className="text-white">/api/keys</code>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-white font-medium mb-2">Delete API Key</h4>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-red-400 font-mono">DELETE</span>
+              <code className="text-white">{`/api/keys/{key_id}`}</code>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-white font-medium mb-2">Disable/Enable API Key</h4>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-green-400 font-mono">POST</span>
+              <code className="text-white">{`/api/keys/{key_id}/disable`}</code>
+              <span className="text-green-400 font-mono">POST</span>
+              <code className="text-white">{`/api/keys/{key_id}/enable`}</code>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="border border-gray-800 rounded-lg p-6">
+        <h3 className="text-xl font-semibold text-white mb-4">Connected Services Management</h3>
+        <div className="space-y-6">
+          <div>
+            <h4 className="text-white font-medium mb-2">List Connected Services</h4>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-blue-400 font-mono">GET</span>
+              <code className="text-white">/api/services</code>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-white font-medium mb-2">Get Service Status</h4>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-blue-400 font-mono">GET</span>
+              <code className="text-white">{`/api/services/{service_name}/status`}</code>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-white font-medium mb-2">Update Service Credentials</h4>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-yellow-400 font-mono">PUT</span>
+              <code className="text-white">{`/api/services/{service_name}/credentials`}</code>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-white font-medium mb-2">Delete/Disconnect Service</h4>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-red-400 font-mono">DELETE</span>
+              <code className="text-white">{`/api/services/{service_name}`}</code>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-white font-medium mb-2">Disconnect All Services</h4>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-red-400 font-mono">DELETE</span>
+              <code className="text-white">/api/services</code>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="border border-gray-800 rounded-lg p-6">
+        <h3 className="text-xl font-semibold text-white mb-4">Environment Management</h3>
+        <div className="space-y-6">
+          <div>
+            <h4 className="text-white font-medium mb-2">Get Service Environments</h4>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-blue-400 font-mono">GET</span>
+              <code className="text-white">{`/api/{service_name}/environments`}</code>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-white font-medium mb-2">Switch Service Environment</h4>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-green-400 font-mono">POST</span>
+              <code className="text-white">{`/api/{service_name}/switch-environment`}</code>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-white font-medium mb-2">Switch All Environments</h4>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-green-400 font-mono">POST</span>
+              <code className="text-white">/api/services/switch-all-environments</code>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="border border-gray-800 rounded-lg p-6">
+        <h3 className="text-xl font-semibold text-white mb-4">Onboarding</h3>
+        <div className="space-y-6">
+          <div>
+            <h4 className="text-white font-medium mb-2">Parse .env File</h4>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-green-400 font-mono">POST</span>
+              <code className="text-white">/api/onboarding/parse</code>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-white font-medium mb-2">Configure Services</h4>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-green-400 font-mono">POST</span>
+              <code className="text-white">/api/onboarding/configure</code>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-white font-medium mb-2">Get User Services</h4>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-blue-400 font-mono">GET</span>
+              <code className="text-white">/api/onboarding/services</code>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-cyan-900/10 border border-cyan-500/30 rounded-lg p-6">
+        <h3 className="text-xl font-semibold text-cyan-400 mb-4">Authentication Required</h3>
+        <p className="text-gray-300 mb-4">
+          All management API endpoints require authentication with a valid API key.
+        </p>
+        <div className="bg-[#1a1a1a] border border-gray-700 rounded p-4">
+          <pre className="text-white text-sm">
+{`curl -H "Authorization: Bearer unf_live_your_api_key" \
+     http://localhost:8000/api/services`}
+          </pre>
+        </div>
       </div>
     </div>
   );
