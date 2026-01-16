@@ -7,6 +7,7 @@ from cryptography.fernet import Fernet
 # Load environment variables
 load_dotenv()
 
+
 class Settings:
     """Application settings"""
 
@@ -15,7 +16,7 @@ class Settings:
     DEBUG: bool = os.getenv("DEBUG", "true").lower() == "true"
 
     # Database
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "")
+    DATABASE_URL: str
 
     # Clerk Authentication
     CLERK_SECRET_KEY: str = os.getenv("CLERK_SECRET_KEY", "")
@@ -43,23 +44,37 @@ class Settings:
     ALLOWED_EXTENSIONS: set = {".env", ".txt"}
 
     # Session Management
-    SESSION_TTL_SECONDS: int = int(os.getenv("SESSION_TTL_SECONDS", "3600"))  # 1 hour default
+    SESSION_TTL_SECONDS: int = int(
+        os.getenv("SESSION_TTL_SECONDS", "3600")
+    )  # 1 hour default
 
     # Idempotency Settings
-    IDEMPOTENCY_KEY_TTL_HOURS: int = int(os.getenv("IDEMPOTENCY_KEY_TTL_HOURS", "24"))  # 24 hours default
+    IDEMPOTENCY_KEY_TTL_HOURS: int = int(
+        os.getenv("IDEMPOTENCY_KEY_TTL_HOURS", "24")
+    )  # 24 hours default
     IDEMPOTENCY_KEY_REQUIRED_ENDPOINTS: list = [
         "POST /v1/payments/orders",
         "POST /v1/refunds",
-        "POST /v1/subscriptions"
+        "POST /v1/subscriptions",
     ]
 
     def __init__(self):
         """Initialize settings and validate/generate encryption key"""
         # Load admin user IDs from environment variable (comma-separated)
         admin_ids_env = os.getenv("ADMIN_USER_IDS", "")
-        self.ADMIN_USER_IDS = [uid.strip() for uid in admin_ids_env.split(",") if uid.strip()]
-        
+        self.ADMIN_USER_IDS = [
+            uid.strip() for uid in admin_ids_env.split(",") if uid.strip()
+        ]
+
         self._validate_and_setup_encryption_key()
+        # handeling the issue of missing Connection string
+        DB_URL = os.getenv("DATABASE_URL")
+        
+        if DB_URL:
+            self.DATABASE_URL = DB_URL
+        else:
+            print("No connection string found for DB")
+            exit()
 
     def _validate_and_setup_encryption_key(self):
         """Validate or generate encryption key based on environment"""
@@ -67,8 +82,9 @@ class Settings:
             if self.ENVIRONMENT == "development":
                 # Generate a new AES256 key for development
                 import os
+
                 key_bytes = os.urandom(32)
-                self.ENCRYPTION_KEY = base64.b64encode(key_bytes).decode('utf-8')
+                self.ENCRYPTION_KEY = base64.b64encode(key_bytes).decode("utf-8")
                 print(f"Generated development AES256 encryption key")
             else:
                 raise RuntimeError(
@@ -87,7 +103,11 @@ class Settings:
                         f"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
                     )
                 # Verify it's a valid Fernet key by testing it
-                Fernet(self.ENCRYPTION_KEY.encode() if isinstance(self.ENCRYPTION_KEY, str) else self.ENCRYPTION_KEY)
+                Fernet(
+                    self.ENCRYPTION_KEY.encode()
+                    if isinstance(self.ENCRYPTION_KEY, str)
+                    else self.ENCRYPTION_KEY
+                )
             except Exception as e:
                 raise ValueError(
                     f"Invalid ENCRYPTION_KEY format: {str(e)}. "
@@ -107,6 +127,7 @@ class Settings:
             raise ValueError("ENCRYPTION_KEY is required")
 
         return True
+
 
 # Global settings instance
 settings = Settings()
