@@ -52,7 +52,7 @@ export default function SubscriptionsPage() {
   useEffect(() => {
     loadServices();
     loadSubscriptions();
-  }, [loadServices, loadSubscriptions]);
+  }, []);
 
   // Calculate counts from subscriptions
   const activeCount = subscriptions.filter(sub => sub.status === 'active').length;
