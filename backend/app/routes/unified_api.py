@@ -238,41 +238,41 @@ async def create_subscription(
         customer_id = request_body.get("customer_id")
         plan_id = request_body.get("plan_id")
         billing_cycle = request_body.get("billing_cycle", "monthly")
-        
-        if not provider or not customer_id or not plan_id:
+
+        if not provider or not plan_id:
             raise HTTPException(
                 status_code=400,
-                detail="provider, customer_id, and plan_id are required"
+                detail="provider and plan_id are required"
             )
-        
+
         # Get the adapter for the provider
         adapter = await request_router.get_adapter(user_id, provider, db)
-        
+
         # Call the create_subscription method on the adapter
         # Different providers have different signatures, so we need to handle each
         if provider.lower() == "razorpay":
             result = await adapter.create_subscription(
-                customer_id=customer_id,
                 plan_id=plan_id,
                 quantity=1
             )
         elif provider.lower() == "paypal":
-            result = await adapter.create_subscription(
-                customer_id=customer_id,
-                plan_id=plan_id,
-                start_time=None
-            )
+            kwargs = {
+                "plan_id": plan_id,
+                "start_time": None
+            }
+            if customer_id:
+                kwargs["subscriber"] = {"payer_id": customer_id}
+            result = await adapter.create_subscription(**kwargs)
         else:
             raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
-        
+
         return result
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.exception(f"Error creating subscription: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create subscription: {str(e)}")
-
+        raise HTTPException(status_code=500, detail=f"Failed to create subscription
 
 @router.get("/subscriptions/{subscription_id}")
 async def get_subscription(
