@@ -238,24 +238,27 @@ async def create_subscription(
         customer_id = request_body.get("customer_id")
         plan_id = request_body.get("plan_id")
         billing_cycle = request_body.get("billing_cycle", "monthly")
-
+ 
         if not provider or not plan_id:
             raise HTTPException(
                 status_code=400,
                 detail="provider and plan_id are required"
             )
-
-        # Get the adapter for the provider
+        provider = provider.lower()
+ 
+         # Get the adapter for the provider
         adapter = await request_router.get_adapter(user_id, provider, db)
-
+ 
         # Call the create_subscription method on the adapter
         # Different providers have different signatures, so we need to handle each
-        if provider.lower() == "razorpay":
+
+        if provider == "razorpay":
             result = await adapter.create_subscription(
                 plan_id=plan_id,
                 quantity=1
             )
-        elif provider.lower() == "paypal":
+
+        elif provider == "paypal":
             kwargs = {
                 "plan_id": plan_id,
                 "start_time": None
@@ -272,7 +275,7 @@ async def create_subscription(
         raise
     except Exception as e:
         logger.exception(f"Error creating subscription: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create subscription
+        raise HTTPException(status_code=500, detail=f"Failed to create subscription: {str(e)}")
 
 @router.get("/subscriptions/{subscription_id}")
 async def get_subscription(
