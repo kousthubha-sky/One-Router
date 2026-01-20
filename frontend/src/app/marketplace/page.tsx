@@ -53,7 +53,7 @@ export default function MarketplacePage() {
   useEffect(() => {
     loadVendors();
     loadServices();
-  }, [loadVendors, loadServices]);
+  }, []);
 
   const handleVendorCreated = () => {
     loadVendors();

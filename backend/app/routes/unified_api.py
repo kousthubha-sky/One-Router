@@ -193,6 +193,90 @@ async def create_payment_order(
             detail=f"Payment creation failed: {str(e)}"
         )
 
+@router.get("/subscriptions")
+async def list_subscriptions(
+    user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """List all subscriptions for the authenticated user"""
+    try:
+        user_id = user["id"]
+        
+        # Get all active service credentials for this user
+        result = await db.execute(
+            select(ServiceCredential).where(
+                ServiceCredential.user_id == user_id,
+                ServiceCredential.is_active == True
+            )
+        )
+        credentials = result.scalars().all()
+        
+        # Since adapters don't have list_subscriptions method yet,
+        # return empty list - this endpoint is a placeholder for future implementation
+        subscriptions = []
+        
+        return {
+            "subscriptions": subscriptions,
+            "total_count": len(subscriptions)
+        }
+
+    except Exception as e:
+        logger.exception(f"Error listing subscriptions: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to list subscriptions: {str(e)}")
+
+
+@router.post("/subscriptions")
+async def create_subscription(
+    request_body: dict,
+    user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a new subscription"""
+    try:
+        user_id = user["id"]
+        provider = request_body.get("provider")
+        customer_id = request_body.get("customer_id")
+        plan_id = request_body.get("plan_id")
+        billing_cycle = request_body.get("billing_cycle", "monthly")
+ 
+        if not provider or not plan_id:
+            raise HTTPException(
+                status_code=400,
+                detail="provider and plan_id are required"
+            )
+        provider = provider.lower()
+ 
+         # Get the adapter for the provider
+        adapter = await request_router.get_adapter(user_id, provider, db)
+ 
+        # Call the create_subscription method on the adapter
+        # Different providers have different signatures, so we need to handle each
+
+        if provider == "razorpay":
+            result = await adapter.create_subscription(
+                plan_id=plan_id,
+                quantity=1
+            )
+
+        elif provider == "paypal":
+            kwargs = {
+                "plan_id": plan_id,
+                "start_time": None
+            }
+            if customer_id:
+                kwargs["subscriber"] = {"payer_id": customer_id}
+            result = await adapter.create_subscription(**kwargs)
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error creating subscription: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create subscription: {str(e)}")
+
 @router.get("/subscriptions/{subscription_id}")
 async def get_subscription(
     subscription_id: str,
@@ -202,10 +286,11 @@ async def get_subscription(
 ):
     """Get subscription details (pass-through)"""
     try:
+        user_id = auth_data["id"]
         if not provider:
             provider = _detect_provider_from_id(subscription_id)
 
-        adapter = await request_router.get_adapter(user["id"], provider, db)
+        adapter = await request_router.get_adapter(user_id, provider, db)
         result = await adapter.get_subscription(subscription_id)
 
         return result
@@ -218,7 +303,7 @@ async def cancel_subscription(
     subscription_id: str,
     provider: Optional[str] = None,
     cancel_at_cycle_end: bool = False,
-    reason: str = "",
+    reason: Optional[str] = None,
     user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -229,10 +314,13 @@ async def cancel_subscription(
 
         adapter = await request_router.get_adapter(user["id"], provider, db)
 
+        # Different providers have different signatures
         if provider == "razorpay":
-            result = await adapter.cancel_subscription(subscription_id, cancel_at_cycle_end)
-        else:  # paypal
-            result = await adapter.cancel_subscription(subscription_id, reason or "")
+            # Razorpay uses cancel_at_cycle_end boolean parameter
+            result = await adapter.cancel_subscription(subscription_id, cancel_at_cycle_end)  # type: ignore
+        else:  
+            # PayPal uses reason string parameter
+            result = await adapter.cancel_subscription(subscription_id, reason or "")  # type: ignore
 
         return result
 
@@ -319,6 +407,42 @@ async def change_subscription_plan(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# ========================================
+# MARKETPLACE ENDPOINTS
+# ========================================
+
+@router.get("/marketplace/vendors")
+async def list_vendors(
+    user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """List all marketplace vendors for the authenticated user"""
+    try:
+        user_id = user["id"]
+        
+        # Get all active service credentials for this user
+        result = await db.execute(
+            select(ServiceCredential).where(
+                ServiceCredential.user_id == user_id,
+                ServiceCredential.is_active == True
+            )
+        )
+        credentials = result.scalars().all()
+        
+        # Since adapters don't have list_vendors method yet,
+        # return empty list - this endpoint is a placeholder for future implementation
+        vendors = []
+        
+        return {
+            "vendors": vendors,
+            "total_count": len(vendors)
+        }
+
+    except Exception as e:
+        logger.exception(f"Error listing vendors: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to list vendors: {str(e)}")
+
 
 # ========================================
 # GENERIC PROXY ROUTE
@@ -527,10 +651,20 @@ async def create_payment_link(
             await db.flush()
             
             adapter = await request_router.get_adapter(user["id"], provider, db)
-            if not hasattr(adapter, 'create_payment_link'):
-                raise HTTPException(status_code=400, detail="Payment links not supported for this provider")
             
-            result = await adapter.create_payment_link(amount, description, customer_email)
+            # Check if adapter supports create_payment_link
+            if not hasattr(adapter, 'create_payment_link'):
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Payment links not supported for {provider} provider"
+                )
+            
+            # Call create_payment_link with proper signature
+            result = await adapter.create_payment_link(  # type: ignore
+                amount=amount, 
+                description=description, 
+                customer_email=customer_email  # type: ignore
+            )
             
             response_time_ms = int((time.time() - start_time) * 1000)
             

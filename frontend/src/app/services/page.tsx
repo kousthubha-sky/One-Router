@@ -55,7 +55,7 @@ export default function ServicesPage() {
 
   useEffect(() => {
     loadServices();
-  }, [loadServices]);
+  }, []);
 
   // const switchEnvironment = async (serviceName: string, newEnv: 'test' | 'live') => {
   //   try {
