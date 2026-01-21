@@ -1,16 +1,75 @@
+'use client';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
+import { SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/nextjs';
+import { Github } from 'lucide-react';
 
 export default function TermsPage() {
   return (
-    <div className="min-h-screen bg-black text-white font-sans">
-      {/* Header */}
+    <div className="min-h-screen bg-black text-white">
+      {/* Navbar */}
+      <header className="sticky top-0 z-50 bg-black border-b border-[#222]">
+        <div className="w-full h-16 flex items-center border-l border-r border-[#222] relative">
+          {/* Vertical gridlines - hidden on mobile */}
+          <div className="absolute inset-0 pointer-events-none hidden md:flex">
+            <div className="flex-1 border-r border-[#222]"></div>
+            <div className="flex-1 border-r border-[#222]"></div>
+            <div className="flex-1 border-r border-[#222]"></div>
+          </div>
+
+          <div className="w-full h-full flex justify-between items-center px-4 md:px-8 relative z-10">
+            {/* Left - Logo */}
+            <div className="flex items-center gap-2 border-r border-[#222] pr-4 md:pr-8 flex-1">
+              <div className="w-8 h-8 bg-linear-to-br from-black to-cyan-600 rounded-2xl flex items-center justify-center shadow-lg transition-all duration-300 hover:shadow-cyan-500/25 hover:scale-110"></div>
+              <Link href="/" className="font-bold text-sm md:text-lg font-mono cursor-pointer hover:opacity-80 transition">
+                <span className="text-white">One</span>
+                <span className="text-cyan-400">Router</span>
+              </Link>
+            </div>
+
+            {/* Middle - Navigation Links */}
+            <nav className="hidden lg:flex flex-1 items-center justify-center gap-4 xl:gap-12 border-r border-[#222] px-4 xl:px-8">
+              <Link href="/docs" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">docs</Link>
+              <Link href="/privacy" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">privacy</Link>
+              <Link href="/terms" className="text-cyan-400 underline decoration-[#00ff88] transition-all duration-300 font-mono text-xs xl:text-sm">terms</Link>
+              <Link href="/pricing" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">pricing</Link>
+              <Link href="/contact" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">contact</Link>
+            </nav>
+
+            {/* Right - Auth & GitHub */}
+            <div className="flex items-center gap-2 md:gap-4 lg:gap-6 justify-end flex-1 pl-4 md:pl-8">
+              <a href="https://github.com" className="text-[#888] hover:text-white transition-all duration-300 hover:scale-110">
+                <Github className="w-4 md:w-5 h-4 md:h-5" />
+              </a>
+
+              <SignedOut>
+                <SignInButton mode="modal">
+                  <Button className="bg-white text-black hover:bg-gray-200 font-mono font-bold text-xs md:text-sm px-3 md:px-6 py-2 rounded transition-all duration-300 transform hover:scale-105 hidden sm:block">
+                    Sign In
+                  </Button>
+                </SignInButton>
+              </SignedOut>
+              <SignedIn>
+                <Link href="/dashboard">
+                  <Button className="bg-white text-black hover:bg-gray-200 font-mono font-bold text-xs md:text-sm px-3 md:px-6 py-2 rounded transition-all duration-300 transform hover:scale-105 hidden sm:block">
+                    Dashboard
+                  </Button>
+                </Link>
+                <UserButton />
+              </SignedIn>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Page Header */}
       <header className="border-b border-[#222]">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <h1 className="text-3xl font-bold">Terms of Service</h1>
-          <p className="text-[#888] mt-2">Last Updated: December 28, 2025</p>
+          <p className="text-[#888] mt-2">Last Updated: January 2026</p>
         </div>
       </header>
 
@@ -438,7 +497,7 @@ export default function TermsPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border-2 border-cyan-500/50 mb-8">
+        <Card className="bg-linear-to-r from-cyan-500/20 to-blue-500/20 border-2 border-cyan-500/50 mb-8">
           <CardContent className="p-8 text-center">
             <h2 className="text-2xl font-bold text-white mb-3">Questions?</h2>
             <p className="text-[#888] mb-6 max-w-2xl mx-auto">

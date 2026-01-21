@@ -15,13 +15,14 @@ export default function DocsPage() {
   const [activeSection, setActiveSection] = useState('overview');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const sections = [
-    { id: 'overview', title: 'Overview', icon: '🚀' },
-    { id: 'quickstart', title: 'Quick Start', icon: '⚡' },
-    { id: 'sdk', title: 'Python SDK', icon: '🐍' },
-    { id: 'js-sdk', title: 'JavaScript SDK', icon: '⚛️' },
-    { id: 'management', title: 'Management API', icon: '🔧' },
-    { id: 'api', title: 'REST API Reference', icon: '🌐' },
-    { id: 'troubleshooting', title: 'Troubleshooting', icon: '🔧' }
+    { id: 'overview', title: 'Overview' },
+    { id: 'quickstart', title: 'Quick Start' },
+    { id: 'integrations', title: 'Integrations' },
+    { id: 'sdk', title: 'Python SDK' },
+    { id: 'js-sdk', title: 'JavaScript SDK' },
+    { id: 'api', title: 'REST API' },
+    { id: 'management', title: 'Management API' },
+    { id: 'troubleshooting', title: 'Troubleshooting' }
   ];
 
   return (
@@ -31,7 +32,7 @@ export default function DocsPage() {
         <header className="sticky top-0 z-50 bg-black border-b border-[#222]">
           <div className="w-full h-16 flex items-center border-l border-r border-[#222] relative">
             {/* Vertical gridlines - hidden on mobile */}
-            <div className="absolute inset-0 flex pointer-events-none hidden md:flex">
+            <div className="absolute inset-0 pointer-events-none hidden md:flex">
               <div className="flex-1 border-r border-[#222]"></div>
               <div className="flex-1 border-r border-[#222]"></div>
               <div className="flex-1 border-r border-[#222]"></div>
@@ -40,12 +41,12 @@ export default function DocsPage() {
             <div className="w-full h-full flex justify-between items-center px-4 md:px-8 relative z-10">
               {/* Left - Logo */}
               <div className="flex items-center gap-2 border-r border-[#222] pr-4 md:pr-8 flex-1">
-                <div className="w-8 h-8 bg-gradient-to-br from-black  to-cyan-600 rounded-2xl flex items-center justify-center shadow-lg transition-all duration-300 hover:shadow-cyan-500/25 hover:scale-110">
-                  </div>
+                <div className="w-8 h-8 bg-linear-to-br from-black  to-cyan-600 rounded-2xl flex items-center justify-center shadow-lg transition-all duration-300 hover:shadow-cyan-500/25 hover:scale-110">
+                </div>
                 <div className="font-bold text-sm md:text-lg font-mono">
                   
-                  <span className="text-white">ONE</span>
-                  <span className="text-cyan-400">ROUTER</span>
+                  <span className="text-white font-sans" >One</span>
+                  <span className="text-cyan-400 font-sans">Router</span>
                 </div>
               </div>
 
@@ -66,12 +67,7 @@ export default function DocsPage() {
                  <a href="/contact" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
                    contact
                  </a>
-                 <a href="/community" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
-                   community
-                 </a>
-                 <a href="/enterprise" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
-                   enterprise
-                 </a>
+                 
                </nav>
 
               {/* Right - Auth & GitHub */}
@@ -133,7 +129,7 @@ export default function DocsPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Sidebar - Hidden on mobile when not expanded */}
-          <aside className="hidden lg:block w-64 flex-shrink-0">
+          <aside className="hidden lg:block w-64 shrink-0">
             <nav className="sticky top-8">
               <div className="space-y-1">
                 <div className="mb-6">
@@ -206,7 +202,7 @@ export default function DocsPage() {
                 <button
                   key={section.id}
                   onClick={() => setActiveSection(section.id)}
-                  className={`flex-shrink-0 px-4 py-2 rounded-full text-sm transition-colors ${
+                  className={`shrink-0 px-4 py-2 rounded-full text-sm transition-colors ${
                     activeSection === section.id
                       ? 'bg-cyan-500 text-white'
                       : 'bg-gray-800 text-gray-400 hover:text-white'
@@ -219,15 +215,13 @@ export default function DocsPage() {
           </div>
 
           {/* Main Content */}
-          <main className="flex-1 min-h-[600px] w-full">
+          <main className="flex-1 w-full" style={{minHeight: '600px'}}>
             <div className="border border-gray-800 rounded-lg p-4 sm:p-6 lg:p-8">
-              {activeSection === 'overview' && <OverviewSection />}
+            {activeSection === 'overview' && <OverviewSection />}
               {activeSection === 'quickstart' && <QuickStartSection />}
+              {activeSection === 'integrations' && <IntegrationsSection />}
               {activeSection === 'sdk' && <SDKSection />}
               {activeSection === 'js-sdk' && <JSSDKSection />}
-              {activeSection === 'sms' && <SMSSection />}
-              {activeSection === 'email' && <EmailSection />}
-              {activeSection === 'payments' && <PaymentsSection />}
               {activeSection === 'api' && <APISection />}
               {activeSection === 'management' && <ManagementAPISection />}
               {activeSection === 'troubleshooting' && <TroubleshootingSection />}
@@ -246,32 +240,32 @@ export default function DocsPage() {
  */
 function OverviewSection() {
   return (
-    <div className="space-y-12">
+    <div className="space-y-8">
       <div>
-        <h1 className="text-4xl font-bold text-white mb-4">Introduction</h1>
-        <p className="text-xl text-gray-300 leading-relaxed">
+        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-4">Introduction</h1>
+        <p className="text-base sm:text-lg text-gray-300 leading-relaxed">
           OneRouter is a unified API integration platform that provides a single interface for payments, SMS, email, and more. Route requests to your existing provider accounts (Razorpay, PayPal, Stripe, Twilio, Resend) through one SDK.
         </p>
       </div>
 
       {/* Key Points */}
-      <div className="border border-gray-800 rounded-lg p-6 bg-gray-900/50">
-        <h2 className="text-xl font-semibold text-white mb-4">What OneRouter Does</h2>
-        <div className="grid md:grid-cols-2 gap-6">
+      <div className="border border-gray-800 rounded-lg p-4 sm:p-6 bg-gray-900/50">
+        <h2 className="text-lg sm:text-xl font-semibold text-white mb-4">What OneRouter Does</h2>
+        <div className="grid sm:grid-cols-2 gap-4 sm:gap-6">
           <div>
-            <h3 className="text-lg font-semibold text-cyan-400 mb-2">🔐 Secure Credential Management</h3>
+            <h3 className="text-base sm:text-lg font-semibold text-cyan-400 mb-2">Secure Credential Management</h3>
             <p className="text-gray-300 text-sm">Upload your provider credentials once. We encrypt and securely store them. Never manage multiple env variables again.</p>
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-cyan-400 mb-2">🔄 Unified API Interface</h3>
+            <h3 className="text-base sm:text-lg font-semibold text-cyan-400 mb-2">Unified API Interface</h3>
             <p className="text-gray-300 text-sm">One SDK for all services. Payments, SMS, and email work the same way regardless of provider.</p>
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-cyan-400 mb-2">💰 Credit-Based Pricing</h3>
+            <h3 className="text-base sm:text-lg font-semibold text-cyan-400 mb-2">Credit-Based Pricing</h3>
             <p className="text-gray-300 text-sm">Pay $0.01 per API call. 1,000 free credits/month. No monthly subscriptions. Pay only for what you use.</p>
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-cyan-400 mb-2">🏢 Multi-Tenant Architecture</h3>
+            <h3 className="text-base sm:text-lg font-semibold text-cyan-400 mb-2">Multi-Tenant Architecture</h3>
             <p className="text-gray-300 text-sm">Complete data isolation. Your credentials and data are never accessible to other users.</p>
           </div>
         </div>
@@ -279,25 +273,25 @@ function OverviewSection() {
 
       {/* Supported Services */}
       <div>
-        <h2 className="text-2xl font-semibold text-white mb-6">Supported Services</h2>
-        <div className="grid md:grid-cols-3 gap-4">
+        <h2 className="text-xl sm:text-2xl font-semibold text-white mb-4 sm:mb-6">Supported Services</h2>
+        <div className="grid sm:grid-cols-3 gap-4">
           <div className="border border-gray-800 rounded-lg p-4">
-            <h3 className="text-lg font-semibold text-white mb-3">💳 Payments</h3>
+            <h3 className="text-base sm:text-lg font-semibold text-white mb-3">Payments</h3>
             <ul className="text-gray-300 text-sm space-y-2">
-              <li>• Razorpay</li>
-              <li>• PayPal</li>
+              <li>- Razorpay</li>
+              <li>- PayPal</li>
             </ul>
           </div>
           <div className="border border-gray-800 rounded-lg p-4">
-            <h3 className="text-lg font-semibold text-white mb-3">📱 SMS</h3>
+            <h3 className="text-base sm:text-lg font-semibold text-white mb-3">SMS</h3>
             <ul className="text-gray-300 text-sm space-y-2">
-              <li>• Twilio</li>
+              <li>- Twilio</li>
             </ul>
           </div>
           <div className="border border-gray-800 rounded-lg p-4">
-            <h3 className="text-lg font-semibold text-white mb-3">📧 Email</h3>
+            <h3 className="text-base sm:text-lg font-semibold text-white mb-3">Email</h3>
             <ul className="text-gray-300 text-sm space-y-2">
-              <li>• Resend</li>
+              <li>- Resend</li>
             </ul>
           </div>
         </div>
@@ -347,36 +341,36 @@ function OverviewSection() {
 
       {/* Quickstart Cards */}
       <div>
-        <h2 className="text-2xl font-semibold text-white mb-6">Quickstart</h2>
-        <p className="text-gray-300 mb-8">Get OneRouter integrated in 5 minutes.</p>
+        <h2 className="text-xl sm:text-2xl font-semibold text-white mb-4 sm:mb-6">Quickstart</h2>
+        <p className="text-gray-300 mb-6 sm:mb-8">Get OneRouter integrated in 5 minutes.</p>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div className="border border-gray-800 rounded-lg p-6 hover:border-cyan-500 transition-colors cursor-pointer" onClick={() => window.location.href = '/docs/sdk'}>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="border border-gray-800 rounded-lg p-4 sm:p-6 hover:border-cyan-500 transition-colors cursor-pointer" onClick={() => window.location.href = '/docs/sdk'}>
             <div className="flex items-center gap-3 mb-3">
               <div className="w-8 h-8 border border-gray-700 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold">🐍</span>
+                <span className="text-white font-bold">Python</span>
               </div>
-              <h3 className="text-lg font-semibold text-white">Python SDK</h3>
+              <h3 className="text-base sm:text-lg font-semibold text-white">Python SDK</h3>
             </div>
             <p className="text-gray-400 text-sm">Install pip package and start integrating</p>
           </div>
 
-          <div className="border border-gray-800 rounded-lg p-6 hover:border-cyan-500 transition-colors cursor-pointer" onClick={() => window.location.href = '/docs/sdk'}>
+          <div className="border border-gray-800 rounded-lg p-4 sm:p-6 hover:border-cyan-500 transition-colors cursor-pointer" onClick={() => window.location.href = '/docs/sdk'}>
             <div className="flex items-center gap-3 mb-3">
               <div className="w-8 h-8 border border-gray-700 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold">⚛️</span>
+                <span className="text-white font-bold">JS</span>
               </div>
-              <h3 className="text-lg font-semibold text-white">JavaScript SDK</h3>
+              <h3 className="text-base sm:text-lg font-semibold text-white">JavaScript SDK</h3>
             </div>
             <p className="text-gray-400 text-sm">Node.js, browser, and edge support</p>
           </div>
 
-          <div className="border border-gray-800 rounded-lg p-6 hover:border-cyan-500 transition-colors cursor-pointer">
+          <div className="border border-gray-800 rounded-lg p-4 sm:p-6 hover:border-cyan-500 transition-colors cursor-pointer">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-8 h-8 border border-gray-700 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold">🌐</span>
+                <span className="text-white font-bold">API</span>
               </div>
-              <h3 className="text-lg font-semibold text-white">REST API</h3>
+              <h3 className="text-base sm:text-lg font-semibold text-white">REST API</h3>
             </div>
             <p className="text-gray-400 text-sm">Use any HTTP client</p>
           </div>
@@ -384,34 +378,34 @@ function OverviewSection() {
       </div>
 
       {/* Pricing */}
-      <div className="border border-gray-800 rounded-lg p-6 bg-cyan-900/20">
-        <h2 className="text-xl font-semibold text-white mb-4">💰 Pricing</h2>
-        <div className="grid md:grid-cols-3 gap-6">
+      <div className="border border-gray-800 rounded-lg p-4 sm:p-6 bg-cyan-900/20">
+        <h2 className="text-lg sm:text-xl font-semibold text-white mb-4">Pricing</h2>
+        <div className="grid sm:grid-cols-3 gap-4 sm:gap-6">
           <div className="text-center">
-            <div className="text-3xl font-bold text-white mb-2">Free</div>
+            <div className="text-2xl sm:text-3xl font-bold text-white mb-2">Free</div>
             <div className="text-gray-400 text-sm mb-4">1,000 credits/month</div>
             <ul className="text-gray-300 text-sm space-y-1 text-left">
-              <li>• Perfect for testing</li>
-              <li>• All features included</li>
-              <li>• No credit card required</li>
+              <li>- Perfect for testing</li>
+              <li>- All features included</li>
+              <li>- No credit card required</li>
             </ul>
           </div>
           <div className="text-center">
-            <div className="text-3xl font-bold text-cyan-400 mb-2">$10</div>
+            <div className="text-2xl sm:text-3xl font-bold text-cyan-400 mb-2">$10</div>
             <div className="text-gray-400 text-sm mb-4">1,000 credits</div>
             <ul className="text-gray-300 text-sm space-y-1 text-left">
-              <li>• $0.01 per API call</li>
-              <li>• Pay as you go</li>
-              <li>• No monthly minimums</li>
+              <li>- $0.01 per API call</li>
+              <li>- Pay as you go</li>
+              <li>- No monthly minimums</li>
             </ul>
           </div>
           <div className="text-center">
-            <div className="text-3xl font-bold text-green-400 mb-2">Volume</div>
+            <div className="text-2xl sm:text-3xl font-bold text-green-400 mb-2">Volume</div>
             <div className="text-gray-400 text-sm mb-4">20-30% off</div>
             <ul className="text-gray-300 text-sm space-y-1 text-left">
-              <li>• $100+ purchase: 20% off</li>
-              <li>• $500+ purchase: 30% off</li>
-              <li>• Enterprise pricing available</li>
+              <li>- $100+ purchase: 20% off</li>
+              <li>- $500+ purchase: 30% off</li>
+              <li>- Enterprise pricing available</li>
             </ul>
           </div>
         </div>
@@ -432,21 +426,21 @@ function QuickStartSection() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold text-white mb-4">Quick Start</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-4">Quick Start</h1>
         <p className="text-gray-300 leading-relaxed">
           Get started with OneRouter in 5 minutes. Follow these steps to integrate payments, SMS, or email.
         </p>
       </div>
 
-      <div className="space-y-8">
+      <div className="space-y-6 sm:space-y-8">
         {/* Step 1 */}
-        <div className="border border-gray-800 rounded-lg p-6">
+        <div className="border border-gray-800 rounded-lg p-4 sm:p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-8 h-8 border border-gray-700 rounded-lg flex items-center justify-center text-white font-bold">1</div>
-            <h3 className="text-xl font-semibold text-white">Get API Key</h3>
+            <h3 className="text-lg sm:text-xl font-semibold text-white">Get API Key</h3>
           </div>
           <p className="text-gray-300 mb-4">Sign up and generate your API key from the dashboard.</p>
-          <div className="border border-gray-700 rounded p-4 bg-gray-900">
+          <div className="border border-gray-700 rounded p-3 sm:p-4 bg-gray-900">
             <div className="text-sm text-gray-400 mb-2">Your API Key Format:</div>
             <code className="text-cyan-400">unf_live_xxxxxxxxxxxxxxxxxxxxxxxx</code>
             <p className="text-gray-500 text-xs mt-2">Use unf_test_ for development, unf_live_ for production</p>
@@ -454,22 +448,22 @@ function QuickStartSection() {
         </div>
 
         {/* Step 2 */}
-        <div className="border border-gray-800 rounded-lg p-6">
+        <div className="border border-gray-800 rounded-lg p-4 sm:p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-8 h-8 border border-gray-700 rounded-lg flex items-center justify-center text-white font-bold">2</div>
-            <h3 className="text-xl font-semibold text-white">Configure Provider Credentials</h3>
+            <h3 className="text-lg sm:text-xl font-semibold text-white">Configure Provider Credentials</h3>
           </div>
           <p className="text-gray-300 mb-4">Upload your provider credentials through the dashboard. We encrypt and store them securely.</p>
           <div className="space-y-2">
             <p className="text-gray-400 text-sm">Supported providers and required credentials:</p>
             <ul className="text-gray-300 text-sm space-y-1 ml-4">
-              <li>• Razorpay: RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET</li>
-              <li>• PayPal: PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET</li>
-              <li>• Twilio: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN</li>
-              <li>• Resend: RESEND_API_KEY</li>
+              <li>- Razorpay: RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET</li>
+              <li>- PayPal: PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET</li>
+              <li>- Twilio: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN</li>
+              <li>- Resend: RESEND_API_KEY</li>
             </ul>
           </div>
-          <div className="mt-4 p-4 bg-cyan-900/20 border border-cyan-500/30 rounded-lg">
+          <div className="mt-4 p-3 sm:p-4 bg-cyan-900/20 border border-cyan-500/30 rounded-lg">
             <p className="text-cyan-400 text-sm">
               <strong>Note:</strong> Configure credentials in the dashboard at <code className="text-cyan-300">/onboarding</code> or upload a .env file.
             </p>
@@ -477,30 +471,30 @@ function QuickStartSection() {
         </div>
 
         {/* Step 3 */}
-        <div className="border border-gray-800 rounded-lg p-6">
+        <div className="border border-gray-800 rounded-lg p-4 sm:p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-8 h-8 border border-gray-700 rounded-lg flex items-center justify-center text-white font-bold">3</div>
-            <h3 className="text-xl font-semibold text-white">Install SDK</h3>
+            <h3 className="text-lg sm:text-xl font-semibold text-white">Install SDK</h3>
           </div>
-          <div className="border border-gray-700 rounded p-4 bg-gray-900 mb-4">
+          <div className="border border-gray-700 rounded p-3 sm:p-4 bg-gray-900 mb-3 sm:mb-4">
             <code className="text-green-400">pip install onerouter</code>
           </div>
-          <div className="border border-gray-700 rounded p-4 bg-gray-900">
-            <code className="text-green-400">npm install @onerouter/sdk</code>
+          <div className="border border-gray-700 rounded p-3 sm:p-4 bg-gray-900">
+            <code className="text-green-400">npm install onerouter-js</code>
           </div>
         </div>
 
         {/* Step 4 */}
-        <div className="border border-gray-800 rounded-lg p-6">
+        <div className="border border-gray-800 rounded-lg p-4 sm:p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-8 h-8 border border-gray-700 rounded-lg flex items-center justify-center text-white font-bold">4</div>
-            <h3 className="text-xl font-semibold text-white">Make Your First API Call</h3>
+            <h3 className="text-lg sm:text-xl font-semibold text-white">Make Your First API Call</h3>
           </div>
           
-          <div className="mb-6">
+          <div className="mb-4 sm:mb-6">
             <h4 className="text-white font-medium mb-2">Python</h4>
-            <div className="border border-gray-700 rounded p-4 bg-gray-900">
-              <pre className="text-white text-sm overflow-x-auto">
+            <div className="border border-gray-700 rounded p-3 sm:p-4 bg-gray-900">
+              <pre className="text-white text-xs sm:text-sm overflow-x-auto whitespace-pre-wrap sm:whitespace-pre">
 {`from onerouter import OneRouter
 
 client = OneRouter(api_key="unf_test_your_key_here")
@@ -514,7 +508,7 @@ print("SMS sent:", sms['message_id'])
 
 # Create Payment
 payment = client.payments.create(
-    amount=1000,  # ₹10.00 or $10.00
+    amount=1000,
     currency="INR",
     customer_id="cust_123"
 )
@@ -525,9 +519,9 @@ print("Payment created:", payment['transaction_id'])`}
 
           <div>
             <h4 className="text-white font-medium mb-2">JavaScript</h4>
-            <div className="border border-gray-700 rounded p-4 bg-gray-900">
-              <pre className="text-white text-sm overflow-x-auto">
-{`import { OneRouter } from '@onerouter/sdk';
+            <div className="border border-gray-700 rounded p-3 sm:p-4 bg-gray-900">
+              <pre className="text-white text-xs sm:text-sm overflow-x-auto whitespace-pre-wrap sm:whitespace-pre">
+{`import { OneRouter } from 'onerouter-js';
 
 const client = new OneRouter({
   apiKey: 'unf_test_your_key_here'
@@ -553,10 +547,10 @@ console.log('Payment created:', payment.transactionId);`}
         </div>
 
         {/* Step 5 */}
-        <div className="border border-gray-800 rounded-lg p-6">
+        <div className="border border-gray-800 rounded-lg p-4 sm:p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-8 h-8 border border-gray-700 rounded-lg flex items-center justify-center text-white font-bold">5</div>
-            <h3 className="text-xl font-semibold text-white">Go Live</h3>
+            <h3 className="text-lg sm:text-xl font-semibold text-white">Go Live</h3>
           </div>
           <ol className="text-gray-300 space-y-2 list-decimal list-inside">
             <li>Switch from test to live credentials in dashboard</li>
@@ -564,6 +558,43 @@ console.log('Payment created:', payment.transactionId);`}
             <li>Test with real transactions (small amounts)</li>
             <li>Monitor your dashboard for usage and costs</li>
           </ol>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function IntegrationsSection() {
+  return (
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-4">Integrations</h1>
+        <p className="text-gray-300 leading-relaxed">
+          OneRouter provides unified APIs for Payments, SMS, and Email. Configure your provider credentials once, then use the same interface regardless of which provider you choose.
+        </p>
+      </div>
+
+      <div className="border border-gray-800 rounded-lg p-4 sm:p-6">
+        <h3 className="text-lg sm:text-xl font-semibold text-white mb-4">Payments</h3>
+        <p className="text-gray-300 mb-4">Supported providers: Razorpay, PayPal</p>
+        <div className="border border-gray-700 rounded p-3 sm:p-4 bg-gray-900">
+          <pre className="text-white text-xs sm:text-sm overflow-x-auto whitespace-pre-wrap sm:whitespace-pre">{'from onerouter import OneRouter\n\nclient = OneRouter(api_key="unf_live_xxx")\n\n# Create a payment\npayment = client.payments.create(\n    amount=1000,\n    currency="INR",\n    receipt="order_123"\n)\n\nprint("Payment ID:", payment["transaction_id"])\nprint("Checkout URL:", payment.get("checkout_url"))'}</pre>
+        </div>
+      </div>
+
+      <div className="border border-gray-800 rounded-lg p-4 sm:p-6">
+        <h3 className="text-lg sm:text-xl font-semibold text-white mb-4">SMS</h3>
+        <p className="text-gray-300 mb-4">Supported providers: Twilio</p>
+        <div className="border border-gray-700 rounded p-3 sm:p-4 bg-gray-900">
+          <pre className="text-white text-xs sm:text-sm overflow-x-auto whitespace-pre-wrap sm:whitespace-pre">{'from onerouter import OneRouter\n\nclient = OneRouter(api_key="unf_live_xxx")\n\n# Send SMS\nsms = client.sms.send(\n    to="+1234567890",\n    body="Your verification code is 1234"\n)\n\nprint("Message ID:", sms["message_id"])\nprint("Status:", sms["status"])'}</pre>
+        </div>
+      </div>
+
+      <div className="border border-gray-800 rounded-lg p-4 sm:p-6">
+        <h3 className="text-lg sm:text-xl font-semibold text-white mb-4">Email</h3>
+        <p className="text-gray-300 mb-4">Supported providers: Resend</p>
+        <div className="border border-gray-700 rounded p-3 sm:p-4 bg-gray-900">
+          <pre className="text-white text-xs sm:text-sm overflow-x-auto whitespace-pre-wrap sm:whitespace-pre">{'from onerouter import OneRouter\n\nclient = OneRouter(api_key="unf_live_xxx")\n\n# Send email\nemail = client.email.send(\n    to="user@example.com",\n    subject="Welcome!",\n    html_body="<h1>Welcome to OneRouter</h1>"\n)\n\nprint("Email ID:", email["email_id"])\nprint("Status:", email["status"])'}</pre>
         </div>
       </div>
     </div>
@@ -860,19 +891,19 @@ function JSSDKSection() {
           <div>
             <h4 className="text-white font-medium mb-2">npm</h4>
             <div className="border border-gray-700 rounded p-3 bg-gray-900">
-              <code className="text-green-400">npm install @onerouter/sdk</code>
+              <code className="text-green-400">npm install onerouter-js</code>
             </div>
           </div>
           <div>
             <h4 className="text-white font-medium mb-2">yarn</h4>
             <div className="border border-gray-700 rounded p-3 bg-gray-900">
-              <code className="text-green-400">yarn add @onerouter/sdk</code>
+              <code className="text-green-400">yarn add onerouter-js</code>
             </div>
           </div>
           <div>
             <h4 className="text-white font-medium mb-2">pnpm</h4>
             <div className="border border-gray-700 rounded p-3 bg-gray-900">
-              <code className="text-green-400">pnpm add @onerouter/sdk</code>
+              <code className="text-green-400">pnpm add onerouter-js</code>
             </div>
           </div>
         </div>
@@ -903,7 +934,7 @@ function JSSDKSection() {
         <h3 className="text-xl font-semibold text-white mb-4">Complete SDK Setup</h3>
         <div className="border border-gray-700 rounded p-4 bg-gray-900">
           <pre className="text-white text-sm overflow-x-auto">
-{`import { OneRouter } from '@onerouter/sdk';
+{`import { OneRouter } from 'onerouter-js';
 
 // Production - Use environment variable or actual URL
 const client = new OneRouter({
@@ -911,14 +942,6 @@ const client = new OneRouter({
   baseURL: process.env.ONEROUTER_BASE_URL || 'https://api.yourdomain.com',
   timeout: 30000,
   maxRetries: 3
-});
-
-// Development
-const client = new OneRouter({
-  apiKey: 'unf_test_your_test_key',
-  baseURL: 'http://localhost:8000',
-  timeout: 60000,
-  maxRetries: 5
 });`}
           </pre>
         </div>

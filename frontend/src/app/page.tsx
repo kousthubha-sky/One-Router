@@ -53,12 +53,7 @@ export default function Home() {
                  <a href="/contact" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
                    contact
                  </a>
-                 <a href="/community" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
-                   community
-                 </a>
-                 <a href="/enterprise" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
-                   enterprise
-                 </a>
+                 
                </nav>
 
               {/* Right - Auth & GitHub */}
@@ -150,7 +145,7 @@ export default function Home() {
 
                 {/* Code Snippet */}
                 <div className="bg-black border border-[#0a0a0a] rounded-lg p-3 sm:p-4 mb-8 font-mono text-xs sm:text-sm overflow-x-auto">
-                  <div className="text-[#888] mb-3">npm install @onerouter/sdk</div>
+                  <div className="text-[#888] mb-3">npm install onerouter-js</div>
                   <div className="text-[#00ff88]">✓ Ready to connect all services</div>
                 </div>
 
@@ -202,7 +197,7 @@ export default function Home() {
                   <div className="p-6 font-mono text-sm">
                     <div className="text-[#888] mb-4">
                       <span className="text-[#666]">1</span>
-                      <span className="ml-4">import {'{}'} from <span className="text-[#ff9d76]">&quot;@onerouter/sdk&quot;</span></span>
+                      <span className="ml-4">import {'{}'} from <span className="text-[#ff9d76]">&quot;onerouter-js&quot;</span></span>
                     </div>
                     <div className="text-[#888] mb-4">
                       <span className="text-[#666]">2</span>
@@ -294,7 +289,7 @@ export default function Home() {
                     <span className="text-xs text-[#666] font-mono">with.ts</span>
                   </div>
                   <div className="p-3 sm:p-4 font-mono text-xs sm:text-sm space-y-2 overflow-x-auto">
-                    <div><span className="text-[#ff9d76]">import</span> {'{'}OneRouter{'}'} <span className="text-[#ff9d76]">from</span> <span className="text-[#90c695]">&apos;@onerouter/sdk&apos;</span></div>
+                    <div><span className="text-[#ff9d76]">import</span> {'{'}OneRouter{'}'} <span className="text-[#ff9d76]">from</span> <span className="text-[#90c695]">&apos;onerouter-js&apos;</span></div>
                     <div className="mt-3 pt-3 border-t border-[#222]"><span className="text-[#ff9d76]">const</span> router = <span className="text-[#6bcf7f]">new OneRouter</span>({'{}'}</div>
                     <div className="ml-4">apiKey: process.env.KEY</div>
                     <div className="ml-4">{'}'})</div>
@@ -343,7 +338,7 @@ export default function Home() {
                 {
                   num: "01",
                   title: "Install",
-                  code: "npm install @onerouter/sdk",
+                  code: "npm install onerouter-js",
                   desc: "Get the SDK from npm with one command"
                 },
                 {
@@ -361,14 +356,14 @@ export default function Home() {
               ].map((step, idx) => (
                 <div key={idx} className="flex gap-3 sm:gap-6 flex-col sm:flex-row">
                   <div className="flex-shrink-0">
-                    <div className="flex items-center justify-center h-10 sm:h-12 w-10 sm:w-12 rounded-lg bg-[#666] text-white text-sm sm:text-base font-bold font-mono">
+                    <div className="flex items-center justify-center h-10 sm:h-12 w-10 sm:w-12 rounded-lg text-white text-sm sm:text-base font-bold font-mono">
                       {step.num}
                     </div>
                   </div>
                   <div className="flex-1">
                     <h3 className="text-lg sm:text-xl font-bold font-mono mb-2 bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">{step.title}</h3>
                     <p className="text-xs sm:text-sm text-[#888] font-mono mb-3">{step.desc}</p>
-                    <div className="bg-[#0a0a0a] border border-[#222] rounded-lg p-3 sm:p-4 font-mono text-xs sm:text-sm overflow-x-auto">
+                    <div className="bg-[#0a0a0a] border border-[#222] max-w-xl rounded-lg p-3 sm:p-4 font-mono text-xs sm:text-sm overflow-x-auto">
                       <code className="text-[#666]">{step.code}</code>
                     </div>
                   </div>

@@ -216,7 +216,7 @@ function InstallationSection() {
           <div>
             <h3 className="text-lg font-semibold text-cyan-400 mb-3">JavaScript SDK</h3>
             <div className="bg-[#1a1a1a] border border-[#222] rounded p-4">
-              <pre className="text-sm text-green-400">npm install @onerouter/sdk</pre>
+              <pre className="text-sm text-green-400">npm install onerouter-js</pre>
             </div>
           </div>
         </CardContent>
