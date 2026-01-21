@@ -423,6 +423,10 @@ app.include_router(service_discovery_router, prefix="/v1", tags=["service-discov
 from .routes.communications import router as communications_router
 app.include_router(communications_router, prefix="/v1", tags=["communications"])
 
+# Import and include credits router
+from .routes.credits import router as credits_router
+app.include_router(credits_router, prefix="/v1", tags=["credits"])
+
 # Health check endpoint
 @app.get("/")
 async def root():

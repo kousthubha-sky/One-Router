@@ -10,7 +10,8 @@ const PricingCard = ({
   features, 
   highlight, 
   popular = false,
-  buttonLabel = 'Get Started'
+  buttonLabel = 'Get Started',
+  buttonHref = '/onboarding'
 }: {
   title: string;
   price: string;
@@ -19,6 +20,7 @@ const PricingCard = ({
   highlight?: boolean;
   popular?: boolean;
   buttonLabel?: string;
+  buttonHref?: string;
 }) => (
   <Card className={`bg-[#1a1a1a] border-2 transition-all duration-300 ${
         highlight ? 'border-cyan-500 shadow-lg shadow-cyan-500/20 scale-105' : 
@@ -44,7 +46,7 @@ const PricingCard = ({
             </li>
           ))}
         </ul>
-        <Link href="/onboarding">
+        <Link href={buttonHref}>
           <Button className={`w-full ${
             highlight ? 'bg-cyan-500 hover:bg-cyan-600 text-black' :
             popular ? 'bg-cyan-400 hover:bg-cyan-500 text-black' :
@@ -163,6 +165,65 @@ export default function PricingPage() {
             ]}
             buttonLabel="Contact Sales"
           />
+        </div>
+
+        {/* Credit Packages */}
+        <div className="mb-16">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl font-bold text-white mb-4">Buy API Credits</h2>
+            <p className="text-gray-400">
+              Each API call costs 1 credit. Buy credits to use OneRouter services.
+            </p>
+          </div>
+          <div className="grid md:grid-cols-3 gap-6">
+            <Card className="bg-[#1a1a1a] border-[#222]">
+              <CardContent className="p-6 text-center">
+                <div className="text-3xl font-bold text-white mb-2">Starter</div>
+                <div className="text-4xl font-bold text-cyan-500 mb-4">₹100</div>
+                <div className="text-gray-400 mb-4">1,000 credits</div>
+                <div className="text-green-500 text-sm mb-6">₹0.10/credit</div>
+                <Link href="/credits?plan=starter">
+                  <Button className="w-full bg-[#1a1a1a] hover:bg-cyan-500 text-white border border-[#333]">
+                    Buy Now
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+            <Card className="relative bg-[#1a1a1a] border-2 border-cyan-500">
+              <CardContent className="p-6 text-center">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-cyan-500 text-black text-xs font-bold px-3 py-1 rounded-full">
+                  BEST VALUE
+                </div>
+                <div className="text-3xl font-bold text-white mb-2">Pro</div>
+                <div className="text-4xl font-bold text-cyan-500 mb-4">₹800</div>
+                <div className="text-gray-400 mb-4">10,000 credits</div>
+                <div className="text-green-500 text-sm mb-6">₹0.08/credit (20% off)</div>
+                <Link href="/credits?plan=pro">
+                  <Button className="w-full bg-cyan-500 hover:bg-cyan-600 text-black font-bold">
+                    Buy Now
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+            <Card className="bg-[#1a1a1a] border-[#222]">
+              <CardContent className="p-6 text-center">
+                <div className="text-3xl font-bold text-white mb-2">Enterprise</div>
+                <div className="text-4xl font-bold text-cyan-500 mb-4">₹7,000</div>
+                <div className="text-gray-400 mb-4">100,000 credits</div>
+                <div className="text-green-500 text-sm mb-6">₹0.07/credit (30% off)</div>
+                <Link href="/credits?plan=enterprise">
+                  <Button className="w-full bg-[#1a1a1a] hover:bg-cyan-500 text-white border border-[#333]">
+                    Buy Now
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+          </div>
+          <div className="text-center mt-4">
+            <Link href="/credits" className="text-cyan-500 hover:underline">
+              View all credit packages →
+            </Link>
+          </div>
         </div>
 
         {/* Feature Comparison */}
