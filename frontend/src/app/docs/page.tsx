@@ -155,7 +155,7 @@ export default function DocsPage() {
                 <div className="mb-6">
                   <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">SDKs</h3>
                   <ul className="space-y-1">
-                    {sections.slice(2, 4).map(section => (
+                    {sections.slice(2, 5).map(section => (
                       <li key={section.id}>
                         <button
                           onClick={() => setActiveSection(section.id)}
@@ -175,7 +175,7 @@ export default function DocsPage() {
                 <div className="mb-6">
                   <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">Reference</h3>
                   <ul className="space-y-1">
-                    {sections.slice(5).map(section => (
+                    {sections.slice(5, 8).map(section => (
                       <li key={section.id}>
                         <button
                           onClick={() => setActiveSection(section.id)}
@@ -217,14 +217,14 @@ export default function DocsPage() {
           {/* Main Content */}
           <main className="flex-1 w-full" style={{minHeight: '600px'}}>
             <div className="border border-gray-800 rounded-lg p-4 sm:p-6 lg:p-8">
-            {activeSection === 'overview' && <OverviewSection />}
-              {activeSection === 'quickstart' && <QuickStartSection />}
-              {activeSection === 'integrations' && <IntegrationsSection />}
-              {activeSection === 'sdk' && <SDKSection />}
-              {activeSection === 'js-sdk' && <JSSDKSection />}
-              {activeSection === 'api' && <APISection />}
-              {activeSection === 'management' && <ManagementAPISection />}
-              {activeSection === 'troubleshooting' && <TroubleshootingSection />}
+            {activeSection === 'overview' && <OverviewSection setActiveSection={setActiveSection} />}
+              {activeSection === 'quickstart' && <QuickStartSection setActiveSection={setActiveSection} />}
+              {activeSection === 'integrations' && <IntegrationsSection setActiveSection={setActiveSection} />}
+              {activeSection === 'sdk' && <SDKSection setActiveSection={setActiveSection} />}
+              {activeSection === 'js-sdk' && <JSSDKSection setActiveSection={setActiveSection} />}
+              {activeSection === 'api' && <APISection setActiveSection={setActiveSection} />}
+              {activeSection === 'management' && <ManagementAPISection setActiveSection={setActiveSection} />}
+              {activeSection === 'troubleshooting' && <TroubleshootingSection setActiveSection={setActiveSection} />}
             </div>
           </main>
         </div>
@@ -236,9 +236,11 @@ export default function DocsPage() {
 /**
  * Renders the Overview documentation section describing OneRouter's purpose, key features, supported services, quickstart links, and pricing.
  *
+ * @param setActiveSection - Function to set the active documentation section
  * @returns The React element for the Overview section of the docs page.
  */
-function OverviewSection() {
+function OverviewSection({ setActiveSection }: { setActiveSection: (section: string) => void }) {
+
   return (
     <div className="space-y-8">
       <div>
@@ -345,7 +347,7 @@ function OverviewSection() {
         <p className="text-gray-300 mb-6 sm:mb-8">Get OneRouter integrated in 5 minutes.</p>
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div className="border border-gray-800 rounded-lg p-4 sm:p-6 hover:border-cyan-500 transition-colors cursor-pointer" onClick={() => window.location.href = '/docs/sdk'}>
+          <button onClick={() => setActiveSection('sdk')} className="border border-gray-800 rounded-lg p-4 sm:p-6 hover:border-cyan-500 transition-colors cursor-pointer text-left">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-8 h-8 border border-gray-700 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold">Python</span>
@@ -353,9 +355,9 @@ function OverviewSection() {
               <h3 className="text-base sm:text-lg font-semibold text-white">Python SDK</h3>
             </div>
             <p className="text-gray-400 text-sm">Install pip package and start integrating</p>
-          </div>
+          </button>
 
-          <div className="border border-gray-800 rounded-lg p-4 sm:p-6 hover:border-cyan-500 transition-colors cursor-pointer" onClick={() => window.location.href = '/docs/sdk'}>
+          <button onClick={() => setActiveSection('js-sdk')} className="border border-gray-800 rounded-lg p-4 sm:p-6 hover:border-cyan-500 transition-colors cursor-pointer text-left">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-8 h-8 border border-gray-700 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold">JS</span>
@@ -363,9 +365,9 @@ function OverviewSection() {
               <h3 className="text-base sm:text-lg font-semibold text-white">JavaScript SDK</h3>
             </div>
             <p className="text-gray-400 text-sm">Node.js, browser, and edge support</p>
-          </div>
+          </button>
 
-          <div className="border border-gray-800 rounded-lg p-4 sm:p-6 hover:border-cyan-500 transition-colors cursor-pointer">
+          <button onClick={() => setActiveSection('api')} className="border border-gray-800 rounded-lg p-4 sm:p-6 hover:border-cyan-500 transition-colors cursor-pointer text-left">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-8 h-8 border border-gray-700 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold">API</span>
@@ -373,7 +375,7 @@ function OverviewSection() {
               <h3 className="text-base sm:text-lg font-semibold text-white">REST API</h3>
             </div>
             <p className="text-gray-400 text-sm">Use any HTTP client</p>
-          </div>
+          </button>
         </div>
       </div>
 
@@ -422,7 +424,7 @@ function OverviewSection() {
  *
  * @returns A React element containing the Quick Start content (steps, notes, code examples, and links) for the docs page.
  */
-function QuickStartSection() {
+function QuickStartSection({ setActiveSection }: { setActiveSection: (section: string) => void }) {
   return (
     <div className="space-y-8">
       <div>
@@ -564,7 +566,7 @@ console.log('Payment created:', payment.transactionId);`}
   );
 }
 
-function IntegrationsSection() {
+function IntegrationsSection({ setActiveSection }: { setActiveSection: (section: string) => void }) {
   return (
     <div className="space-y-8">
       <div>
@@ -610,7 +612,7 @@ function IntegrationsSection() {
  *
  * @returns The JSX element representing the Python SDK documentation section.
  */
-function SDKSection() {
+function SDKSection({ setActiveSection }: { setActiveSection: (section: string) => void }) {
   return (
     <div className="space-y-8">
       <div>
@@ -735,7 +737,7 @@ if __name__ == '__main__':
           <div className="border border-gray-700 rounded p-4 bg-gray-900">
             <pre className="text-white text-sm overflow-x-auto">
 {`from fastapi import FastAPI, HTTPException
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 from onerouter import OneRouter
 
 app = FastAPI()
@@ -743,8 +745,7 @@ app = FastAPI()
 class Settings(BaseSettings):
     api_key: str
     base_url: str = "https://one-backend.stack-end.com"
-    class Config:
-        env_prefix = "ONEROUTER_"
+    model_config = {"env_prefix": "ONEROUTER_"}
 
 settings = Settings()
 client = OneRouter(api_key=settings.api_key, base_url=settings.base_url)
@@ -874,7 +875,7 @@ except Exception as e:
  *
  * @returns The JSX element for the JavaScript SDK documentation section.
  */
-function JSSDKSection() {
+function JSSDKSection({ setActiveSection }: { setActiveSection: (section: string) => void }) {
   return (
     <div className="space-y-8">
       <div>
@@ -987,7 +988,7 @@ const sms2 = await client.sms.send({
     card: {
       number: '4242424242424242',
       expiryMonth: '12',
-      expiryYear: '2025',
+      expiryYear: '2028',
       cvv: '123'
     }
   }
@@ -996,8 +997,7 @@ const sms2 = await client.sms.send({
 console.log('Payment ID:', payment.transactionId);
 console.log('Checkout URL:', payment.checkoutUrl);`}
             </pre>
-          </div>
-        </div>
+          </div>        </div>
 
         <div>
           <h4 className="text-white font-medium mb-2">Send Email</h4>
@@ -1025,7 +1025,7 @@ console.log('Email ID:', email.emailId);`}
  *
  * @returns The JSX element for the SMS documentation section
  */
-function SMSSection() {
+function SMSSection({ setActiveSection }: { setActiveSection: (section: string) => void }) {
   return (
     <div className="space-y-8">
       <div>
@@ -1128,7 +1128,7 @@ print("Delivered at:", status.get('delivered_at'))`}
  *
  * @returns A JSX element containing the email integration documentation UI.
  */
-function EmailSection() {
+function EmailSection({ setActiveSection }: { setActiveSection: (section: string) => void }) {
   return (
     <div className="space-y-8">
       <div>
@@ -1236,7 +1236,7 @@ print("Opened at:", status.get('opened_at'))`}
  *
  * @returns A React element containing the payments documentation UI
  */
-function PaymentsSection() {
+function PaymentsSection({ setActiveSection }: { setActiveSection: (section: string) => void }) {
   return (
     <div className="space-y-8">
       <div>
@@ -1319,7 +1319,7 @@ payment = client.payments.create(
         "card": {
             "number": "4242424242424242",
             "expiry_month": "12",
-            "expiry_year": "2025",
+            "expiry_year": "2028",
             "cvv": "123"
         }
     }
@@ -1367,7 +1367,7 @@ print("Status:", status['status'])`}
  *
  * @returns A JSX element containing the API reference content for display in the docs page.
  */
-function APISection() {
+function APISection({ setActiveSection }: { setActiveSection: (section: string) => void }) {
   return (
     <div className="space-y-8">
       <div>
@@ -1622,7 +1622,7 @@ curl -H "X-API-Key: unf_live_your_api_key_here" \
  *
  * @returns A React element containing the Management API documentation UI.
  */
-function ManagementAPISection() {
+function ManagementAPISection({ setActiveSection }: { setActiveSection: (section: string) => void }) {
   return (
     <div className="space-y-8">
       <div>
@@ -1795,7 +1795,7 @@ function ManagementAPISection() {
  *
  * @returns A JSX element containing troubleshooting content: common issues and their checks, debugging tips (including example debug logging and mode guidance), and links to additional help resources.
  */
-function TroubleshootingSection() {
+function TroubleshootingSection({ setActiveSection }: { setActiveSection: (section: string) => void }) {
   return (
     <div className="space-y-8">
       <div>
@@ -1876,12 +1876,12 @@ function TroubleshootingSection() {
             <h4 className="text-white font-medium mb-2">Enable Debug Logging</h4>
             <div className="border border-gray-700 rounded p-4 bg-gray-900">
               <pre className="text-white text-sm overflow-x-auto">
-                    {`import logging
-                    logging.basicConfig(level=logging.DEBUG)
+{`import logging
+logging.basicConfig(level=logging.DEBUG)
 
-                    from onerouter import OneRouter
-                    client = OneRouter(api_key="unf_live_xxx")
-                    # Now you'll see detailed request/response logs`}
+from onerouter import OneRouter
+client = OneRouter(api_key="unf_live_xxx")
+# Now you'll see detailed request/response logs`}
               </pre>
             </div>
           </div>

@@ -79,20 +79,20 @@ export default function ContactPage() {
 
             {/* Right - Auth & GitHub */}
             <div className="flex items-center gap-2 md:gap-4 lg:gap-6 justify-end flex-1 pl-4 md:pl-8">
-              <a href="https://github.com" className="text-[#888] hover:text-white transition-all duration-300 hover:scale-110">
+              <a href="https://github.com/" className="text-[#888] hover:text-white transition-all duration-300 hover:scale-110">
                 <Github className="w-4 md:w-5 h-4 md:h-5" />
               </a>
 
               <SignedOut>
                 <SignInButton mode="modal">
-                  <Button className="bg-white text-black hover:bg-gray-200 font-mono font-bold text-xs md:text-sm px-3 md:px-6 py-2 rounded transition-all duration-300 transform hover:scale-105 hidden sm:block">
+                  <Button className="bg-white text-black hover:bg-gray-200 font-mono font-bold text-xs md:text-sm px-3 md:px-6 py-2 rounded transition-all duration-300 transform hover:scale-105">
                     Sign In
                   </Button>
                 </SignInButton>
               </SignedOut>
               <SignedIn>
                 <Link href="/dashboard">
-                  <Button className="bg-white text-black hover:bg-gray-200 font-mono font-bold text-xs md:text-sm px-3 md:px-6 py-2 rounded transition-all duration-300 transform hover:scale-105 hidden sm:block">
+                  <Button className="bg-white text-black hover:bg-gray-200 font-mono font-bold text-xs md:text-sm px-3 md:px-6 py-2 rounded transition-all duration-300 transform hover:scale-105">
                     Dashboard
                   </Button>
                 </Link>

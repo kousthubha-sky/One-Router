@@ -197,7 +197,7 @@ export default function Home() {
                   <div className="p-6 font-mono text-sm">
                     <div className="text-[#888] mb-4">
                       <span className="text-[#666]">1</span>
-                      <span className="ml-4">import {'{}'} from <span className="text-[#ff9d76]">&quot;onerouter-js&quot;</span></span>
+                      <span className="ml-4">import {'{ OneRouter }'} from <span className="text-[#ff9d76]">&quot;onerouter-js&quot;</span></span>
                     </div>
                     <div className="text-[#888] mb-4">
                       <span className="text-[#666]">2</span>
