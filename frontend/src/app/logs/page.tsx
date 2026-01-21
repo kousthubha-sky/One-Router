@@ -65,11 +65,7 @@ export default function LogsPage() {
   useEffect(() => {
     loadTransactions();
     loadServices();
-  }, [loadTransactions, loadServices]);
-
-  useEffect(() => {
-    loadTransactions();
-  }, [filter, loadTransactions]);
+  }, []);
 
   const filteredTransactions = transactions.filter(tx => {
     const matchesFilter = filter === 'all' || tx.status === filter;
