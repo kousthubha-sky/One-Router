@@ -162,6 +162,10 @@ async def razorpay_webhook(
             "razorpay"
         )
     
+    # Handle payment success - add credits to user
+    event_type = event.get("event")
+    if event_type in ("payment.authorized", "payment.captured"):
+        await handle_payment_success(db, event, user_id)
     # Mark as processed
     await db.execute(
         update(WebhookEvent)
@@ -171,6 +175,49 @@ async def razorpay_webhook(
     await db.commit()
     
     return {"status": "received", "event_id": str(webhook_event.id)}
+
+
+async def handle_payment_success(db: AsyncSession, event: dict, user_id: str):
+    """Handle successful payment - add credits to user account"""
+    from ..services.credits_service import CreditsService
+    from ..models import OneRouterPayment, PaymentStatus, TransactionType
+    
+    payload = event.get("payload", {})
+    payment_entity = payload.get("payment", {}).get("entity", {})
+    
+    payment_id = payment_entity.get("id")
+    order_id = payment_entity.get("order_id")
+    amount_paise = payment_entity.get("amount", 0)
+    amount_inr = amount_paise / 100  # Convert from paise
+    
+    # Find the pending payment in our database
+    result = await db.execute(
+        select(OneRouterPayment).where(
+            OneRouterPayment.provider_order_id == order_id,
+            OneRouterPayment.user_id == user_id,
+            OneRouterPayment.status == PaymentStatus.PENDING
+        )
+    )
+    payment = result.scalar_one_or_none()
+    
+
+    
+    if payment and payment.status == PaymentStatus.PENDING:
+        # Update payment status
+        payment.status = PaymentStatus.SUCCESS
+        payment.provider_payment_id = payment_id
+        
+        # Add credits to user
+        await CreditsService.add_credits(
+            user_id=user_id,
+            amount=payment.credits_purchased,
+            transaction_type=TransactionType.PURCHASE,
+            payment_id=str(payment.id),
+            description=f"Purchased {payment.credits_purchased} credits via Razorpay",
+            db=db
+        )
+        
+        print(f"SUCCESS: Added {payment.credits_purchased} credits to user {user_id} for payment {payment_id}")
 
 
 @router.post("/webhooks/paypal")
@@ -324,6 +371,9 @@ async def twilio_webhook(
         )
 
     # Find user by Twilio account SID in their credentials
+    from ..services.webhook_verifier import WebhookVerifier
+    verifier = WebhookVerifier()
+    
     result = await db.execute(
         select(ServiceCredential).where(
             ServiceCredential.provider_name == "twilio",
@@ -335,8 +385,6 @@ async def twilio_webhook(
     user_id = None
     creds = None
     for credential in credentials:
-        from ..services.webhook_verifier import WebhookVerifier
-        verifier = WebhookVerifier()
         decrypted_creds = await verifier.get_user_credentials(credential.user_id, "twilio", db)
         if decrypted_creds and decrypted_creds.get("TWILIO_ACCOUNT_SID") == account_sid:
             user_id = credential.user_id

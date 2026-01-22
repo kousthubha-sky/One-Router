@@ -44,8 +44,7 @@ export function CreditBalance({
   const [error, setError] = useState<string | null>(null);
   const apiClient = useClientApiCall();
 
-  // Define fetchBalance as a memoized callback to avoid stale closures
-  // This allows the Retry button to call it with the correct state setters
+  // Memoized callback for fetching balance (used for retry)
   const fetchBalance = useCallback(async () => {
     try {
       setLoading(true);
@@ -66,8 +65,41 @@ export function CreditBalance({
   }, [apiClient]);
 
   useEffect(() => {
-    fetchBalance();
-  }, [fetchBalance]);
+    // Only fetch once on mount, not on every apiClient change
+    let isMounted = true;
+    
+    const load = async () => {
+      const localApiClient = apiClient;
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await localApiClient("/v1/credits/balance") as { balance: number; [key: string]: unknown };
+        if (isMounted) {
+          if (response && typeof response.balance === 'number') {
+            setBalance(response.balance);
+          } else {
+            setError("Unable to load credit balance");
+            setBalance(null);
+          }
+        }
+      } catch (err) {
+        if (isMounted) {
+          setError("Failed to load balance. Please try again later.");
+          setBalance(null);
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+    
+    load();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const tierInfo = getTierInfo(userTier);
 
@@ -88,10 +120,9 @@ export function CreditBalance({
             size="sm"
             variant="outline"
             onClick={fetchBalance}
-            disabled={loading}
             className="text-red-400 border-red-500/50 hover:bg-red-500/20"
           >
-            {loading ? "Retrying..." : "Retry"}
+            Retry
           </Button>
         </CardContent>
       </Card>
@@ -102,7 +133,7 @@ export function CreditBalance({
     return (
       <div className="flex items-center gap-2">
         <span className="text-gray-400 text-sm">Credits:</span>
-        <span className="text-cyan-400 font-bold">{balance?.toLocaleString() || "—"}</span>
+        <span className="text-cyan-400 font-bold">{balance !== null ? balance.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",") : "—"}</span>
         {error && <span className="text-xs text-red-400">Error loading</span>}
         <Button size="sm" variant="outline" asChild>
           <a href="/credits">Buy More</a>
@@ -128,7 +159,7 @@ export function CreditBalance({
           </div>
         ) : null}
         <div className="text-4xl font-bold text-white mb-2">
-          {balance !== null ? balance.toLocaleString() : "—"}
+          {balance !== null ? balance.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",") : "—"}
         </div>
         <p className="text-gray-400 text-sm mb-4">credits remaining</p>
 

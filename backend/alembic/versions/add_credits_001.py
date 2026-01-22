@@ -41,7 +41,7 @@ def upgrade() -> None:
         sa.Column('transaction_type', sa.Enum('purchase', 'consumption', 'refund', 'bonus', name='transaction_type'), nullable=False),
         sa.Column('payment_id', sa.String(), nullable=True),
         sa.Column('description', sa.String(), nullable=True),
-        sa.Column('metadata', postgresql.JSONB(astext_type=sa.Text()), server_default='{}', nullable=True),
+        sa.Column('extra_data', postgresql.JSONB(astext_type=sa.Text()), server_default='{}', nullable=True),
         sa.Column('created_at', sa.TIMESTAMP(), server_default=sa.func.now(), nullable=False),
         sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
         sa.PrimaryKeyConstraint('id')
@@ -90,11 +90,5 @@ def downgrade() -> None:
     op.drop_table('user_credits')
 
     # Drop enums (if they exist)
-    try:
-        sa.Enum(name='payment_status').drop(op.get_bind())
-    except Exception:
-        pass
-    try:
-        sa.Enum(name='transaction_type').drop(op.get_bind())
-    except Exception:
-        pass
+    op.execute("DROP TYPE IF EXISTS payment_status")
+    op.execute("DROP TYPE IF EXISTS transaction_type")

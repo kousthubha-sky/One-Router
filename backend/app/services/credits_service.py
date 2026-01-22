@@ -154,19 +154,24 @@ class CreditsService:
         amount: int = 1,
         db: AsyncSession = None,
         description: str = "API call"
-    ) -> bool:
+    ) -> Dict[str, Any]:
         """
-        Consume credits from balance.
+        Atomically consume credits from balance.
+        
+        Uses SELECT FOR UPDATE to prevent race conditions between concurrent requests.
         
         Args:
             user_id: The user ID to consume credits from
             amount: Number of credits to consume (must be positive)
-            db: Database session (required, cannot be None)
+            db: Database session (required)
             description: Optional description of the consumption
             
         Returns:
-            True if consumption was successful, False if insufficient balance
-            
+            Dict with success status and updated balance info
+
+        Note:
+            Returns {"success": False, "error": "INSUFFICIENT_CREDITS", ...} if balance is insufficient.
+
         Raises:
             TypeError: If db is None
             ValueError: If amount is not positive
@@ -179,27 +184,56 @@ class CreditsService:
         if not isinstance(amount, int) or amount <= 0:
             raise ValueError(f"Amount must be a positive integer, got: {amount}")
         
-        credits = await CreditsService.get_or_create_user_credits(user_id, db)
+        # Use get_or_create_user_credits to ensure row exists and BONUS is recorded
+        await CreditsService.get_or_create_user_credits(user_id, db)
+        
+        # Use SELECT FOR UPDATE to lock the row and prevent race conditions
+        result = await db.execute(
+            select(UserCredit)
+            .where(UserCredit.user_id == user_id)
+            .with_for_update()  # Lock the row for atomic update
+        )
+        credits = result.scalar_one_or_none()
 
-        # Check balance before consuming
+        # Check balance
         if credits.balance < amount:
-            return False
+            return {
+                "success": False,
+                "error": "INSUFFICIENT_CREDITS",
+                "current_balance": credits.balance,
+                "required": amount
+            }
 
-        # Update balance
+        # Atomically update balance
         credits.balance -= amount
         credits.total_consumed += amount
 
         # Record transaction
         transaction = CreditTransaction(
             user_id=user_id,
-            amount=-amount,  # Negative for consumption
+            amount=-amount,
             transaction_type=TransactionType.CONSUMPTION,
             description=description
         )
         db.add(transaction)
         await db.commit()
 
-        return True
+        return {
+            "success": True,
+            "consumed": amount,
+            "balance": credits.balance,
+            "total_consumed": credits.total_consumed
+        }
+
+    @staticmethod
+    async def get_balance_info(user_id: str, db: AsyncSession) -> Dict[str, Any]:
+        """Get user's current balance info without consuming credits."""
+        credits = await CreditsService.get_or_create_user_credits(user_id, db)
+        return {
+            "balance": credits.balance,
+            "total_purchased": credits.total_purchased,
+            "total_consumed": credits.total_consumed
+        }
 
     @staticmethod
     async def get_transaction_history(
@@ -234,7 +268,7 @@ class CreditsService:
                     "type": t.transaction_type.value,
                     "payment_id": t.payment_id,
                     "description": t.description,
-                    "metadata": t.metadata,
+                    "extra_data": t.extra_data,
                     "created_at": t.created_at.isoformat()
                 }
                 for t in transactions
@@ -243,6 +277,66 @@ class CreditsService:
             "limit": limit,
             "offset": offset
         }
+
+    @staticmethod
+    async def consume_for_usage(
+        user_id: str,
+        service_type: str,
+        amount: float = 0,
+        count: int = 1,
+        db: AsyncSession = None
+    ) -> Dict[str, Any]:
+        """
+        Consume credits based on usage (payments, SMS, email).
+        
+        Uses FeeCalculator to determine credit cost based on actual usage.
+        
+        Args:
+            user_id: The user ID
+            service_type: 'payment', 'sms', or 'email'
+            amount: For payments, the transaction amount
+            count: For SMS/email, the number of messages
+            db: Database session
+            
+        Returns:
+            Dict with success status, fee details, and updated balance
+        """
+        from .fee_calculator import FeeCalculator
+        
+        if db is None:
+            raise TypeError("Database session (db) is required")
+        
+        # Calculate fee based on service type
+        if service_type == "payment":
+            fee = FeeCalculator.payment(amount)
+        elif service_type == "sms":
+            fee = FeeCalculator.sms(count)
+        elif service_type == "email":
+            fee = FeeCalculator.email(count)
+        else:
+            raise ValueError(f"Unknown service type: {service_type}")
+        
+        # Convert fee to credits (1 credit = ₹0.01)
+        credits_to_consume = int(fee.fee_paise)  # fee_paise already in paise
+        
+        # Use existing consume_credit method
+        result = await CreditsService.consume_credit(
+            user_id=user_id,
+            amount=credits_to_consume,
+            db=db,
+            description=f"{service_type} usage: ₹{fee.fee_rupees}"
+        )
+        
+        # Add fee details to result
+        result["fee_details"] = {
+            "service_type": fee.service_type,
+            "fee_rupees": fee.fee_rupees,
+            "fee_paise": fee.fee_paise,
+            "credits_consumed": credits_to_consume,
+            "breakdown": fee.breakdown
+        }
+        
+        return result
 
     @staticmethod
     async def has_sufficient_credits(user_id: str, required: int, db: AsyncSession) -> bool:

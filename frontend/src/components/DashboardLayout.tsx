@@ -152,16 +152,16 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
                  {/* Pricing */}
                  <NavigationMenuItem>
-                   <button className={navigationMenuTriggerStyle()}>
+                   <Link href="/pricing" className={navigationMenuTriggerStyle()}>
                      Pricing
-                   </button>
+                   </Link>
                  </NavigationMenuItem>
 
                  {/* Docs */}
                  <NavigationMenuItem>
-                   <button className={navigationMenuTriggerStyle()}>
+                   <Link href="/docs" className={navigationMenuTriggerStyle()}>
                      Docs
-                   </button>
+                   </Link>
                  </NavigationMenuItem>
                 </NavigationMenuList>
               </NavigationMenu>

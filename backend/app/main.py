@@ -424,8 +424,9 @@ from .routes.communications import router as communications_router
 app.include_router(communications_router, prefix="/v1", tags=["communications"])
 
 # Import and include credits router
-from .routes.credits import router as credits_router
-app.include_router(credits_router, prefix="/v1", tags=["credits"])
+from .routes.credits import router as credits_router, callback_router as credits_callback_router
+app.include_router(credits_router, tags=["credits"])
+app.include_router(credits_callback_router, tags=["credits-callback"])
 
 # Health check endpoint
 @app.get("/")

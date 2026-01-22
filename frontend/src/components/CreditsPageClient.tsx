@@ -63,25 +63,36 @@ export function CreditsPageClient() {
           credits: plan.credits,
           plan_id: plan.id,
         }),
-      }) as { checkout_url?: string; [key: string]: unknown };
+      }) as { checkout_url?: string; error?: string; [key: string]: unknown };
 
-      if (response) {
-        // For demo mode, show success message
-        if (response.checkout_url?.includes("demo")) {
-          alert(
-            `Demo Mode: Would purchase ${plan.credits} credits for ₹${plan.price_inr}\n\nIn production, this would redirect to Razorpay checkout.`
-          );
-        } else if (response.checkout_url) {
-          // Redirect to Razorpay checkout
-          window.location.href = response.checkout_url;
-        } else {
-          alert(`Successfully purchased ${plan.credits} credits!`);
-        }
-      } else {
-        setError("Failed to initiate purchase");
+      // If backend returned an error object, surface it to the user and log
+      if (response?.error) {
+        const msg = String(response.error);
+        console.error("Purchase API returned error:", response);
+        setError(msg || "Failed to initiate purchase");
+        return;
       }
-    } catch (err) {
-      setError("Failed to process purchase. Please try again.");
+
+      // Demo flow: show informational alert instead of redirecting
+      if (response?.checkout_url?.includes("demo")) {
+        alert(
+          `Demo Mode: Would purchase ${plan.credits} credits for ₹${plan.price_inr}\n\nIn production, this would redirect to Razorpay checkout.`
+        );
+        return;
+      }
+
+      // Normal flow: redirect to checkout URL if provided
+      if (response?.checkout_url) {
+        window.location.href = response.checkout_url;
+        return;
+      }
+
+      // Fallback: no checkout URL and no explicit error
+      setError("Failed to initiate purchase");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : (err ? String(err) : "Failed to process purchase");
+      console.error("Error while initiating purchase:", err);
+      setError(msg);
     } finally {
       setPurchasing(null);
     }
@@ -129,7 +140,7 @@ export function CreditsPageClient() {
               <CardContent>
                 <div className="mb-4">
                   <div className="text-4xl font-bold text-white">
-                    {plan.credits.toLocaleString()}
+                    {plan.credits.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
                   </div>
                   <div className="text-gray-400">credits</div>
                 </div>

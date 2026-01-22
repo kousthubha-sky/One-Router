@@ -6,16 +6,26 @@ Endpoints for credit balance, purchases, and transaction history.
 import json
 import hmac
 import hashlib
+import jwt
 import logging
 import httpx
+from uuid import uuid4
+from datetime import datetime, timedelta
+from urllib.parse import urlencode
+import hmac
+import hashlib
+import logging
+import httpx
+from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from typing import Dict, Any, Optional
 from pydantic import BaseModel, Field
 
 from ..database import get_db
-from ..auth.dependencies import get_current_user
+from ..auth.dependencies import get_current_user, get_api_user, get_api_or_current_user
 from ..services.credits_service import CreditsService
 from ..services.razorpay_service import RazorpayService, CreditPricingService
 from ..models import UserCredit, CreditTransaction, OneRouterPayment, TransactionType, PaymentStatus
@@ -74,7 +84,7 @@ class CreditConsumeRequest(BaseModel):
 
 @router.get("/balance", response_model=CreditBalanceResponse)
 async def get_credit_balance(
-    user=Depends(get_current_user),
+    user=Depends(get_api_or_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -90,14 +100,14 @@ async def get_credit_balance(
 async def get_transaction_history(
     limit: int = 50,
     offset: int = 0,
-    user=Depends(get_current_user),
+    user=Depends(get_api_or_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Get user's credit transaction history.
     """
     user_id = str(user.get("id"))
-    history = await CreditsService.get_history(user_id, db, limit, offset)
+    history = await CreditsService.get_transaction_history(user_id, db, limit, offset)
 
     return TransactionHistoryResponse(**history)
 
@@ -105,15 +115,22 @@ async def get_transaction_history(
 @router.post("/purchase", response_model=CreditPurchaseResponse)
 async def purchase_credits(
     request: CreditPurchaseRequest,
-    user=Depends(get_current_user),
+    user=Depends(get_api_or_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Initiate credit purchase. Returns Razorpay checkout URL.
     """
+    from ..services.request_router import RequestRouter
+    
     user_id = str(user.get("id"))
-    user_email = user.get("email", "")
-    user_phone = user.get("phone", "")
+    logger.debug(
+        "Purchase credits initiated",
+        extra={"user_id_prefix": user_id[:8], "auth_type": user.get("auth_type", "unknown")}
+    )
+    
+    request_router = RequestRouter()
+    environment = user.get("environment", "test")
 
     # Calculate credits and price
     if request.plan_id:
@@ -129,27 +146,49 @@ async def purchase_credits(
         credits_to_buy = request.credits
         price_inr = CreditPricingService.calculate_amount(credits_to_buy, request.currency)
 
-    # Create Razorpay order
-    razorpay = RazorpayService()
     amount_paise = CreditPricingService.credits_to_paise(price_inr)
 
+    # Get Razorpay adapter with user's database credentials
     try:
-        order = await razorpay.create_order(
-            amount=amount_paise,
+        adapter = await request_router.get_adapter(
+            user_id,
+            "razorpay",
+            db,
+            target_environment=environment
+        )
+        
+        logger.debug(
+            "Razorpay adapter obtained",
+            extra={"adapter_type": type(adapter).__name__, "environment": environment}
+        )
+        
+        # Create payment link using the adapter
+        order = await adapter.create_payment_link(
+            amount=price_inr,
             currency=request.currency,
+            description=f"Purchase {credits_to_buy} credits",
+            callback_url=f"{settings.FRONTEND_URL}/credits/payment-callback",
             notes={
-                "user_id": user_id,
+                "onerouter_user_id": user_id,
                 "credits": str(credits_to_buy),
                 "type": "credit_purchase"
             }
         )
-    except (httpx.RequestError, httpx.HTTPStatusError, ValueError) as e:
-        # Log the exception for debugging
+        
+        logger.info(
+            "Razorpay payment link created successfully",
+            extra={"credits_purchased": credits_to_buy, "amount_inr": price_inr}
+        )
+    except Exception as e:
+        logger.error(
+            "Razorpay payment link creation failed",
+            extra={"error_type": type(e).__name__, "user_id_prefix": user_id[:8]},
+            exc_info=True
+        )
         logger.error(
             f"Razorpay order creation failed for user {user_id}: {type(e).__name__}: {str(e)}"
         )
         
-        # Only return demo order in development mode
         if settings.ENVIRONMENT == "development" or settings.DEBUG:
             logger.warning(
                 f"Falling back to demo order for user {user_id} due to: {str(e)}"
@@ -162,7 +201,6 @@ async def purchase_credits(
                 "checkout_url": f"https://checkout.razorpay.com/demo/{order_id}"
             }
         else:
-            # In production, don't hide the error
             raise HTTPException(
                 status_code=503,
                 detail="Payment service temporarily unavailable. Please try again later."
@@ -175,8 +213,8 @@ async def purchase_credits(
         currency=request.currency,
         credits_purchased=credits_to_buy,
         provider="razorpay",
-        provider_order_id=order["id"],
-        checkout_url=order.get("checkout_url"),
+        provider_order_id=order.get("provider_order_id") or order.get("id"),
+        checkout_url=order.get("checkout_url") or order.get("provider_data", {}).get("checkout_url"),
         status=PaymentStatus.PENDING
     )
     db.add(payment)
@@ -185,11 +223,11 @@ async def purchase_credits(
 
     return CreditPurchaseResponse(
         payment_id=str(payment.id),
-        order_id=order["id"],
+        order_id=order.get("provider_order_id") or order.get("id"),
         credits=credits_to_buy,
         amount=price_inr,
         currency=request.currency,
-        checkout_url=order.get("checkout_url", "")
+        checkout_url=order.get("checkout_url") or order.get("provider_data", {}).get("checkout_url", "")
     )
 
 
@@ -208,7 +246,7 @@ async def get_credit_plans():
 @router.post("/consume")
 async def consume_credit(
     request: CreditConsumeRequest,
-    user=Depends(get_current_user),
+    user=Depends(get_api_or_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -374,7 +412,7 @@ async def razorpay_webhook(
 @router.get("/verify-payment/{payment_id}")
 async def verify_payment(
     payment_id: str,
-    user=Depends(get_current_user),
+    user=Depends(get_api_or_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -431,3 +469,393 @@ async def verify_payment(
         "created_at": payment.created_at.isoformat(),
         "provider_payment_id": payment.provider_payment_id
     }
+
+
+@router.post("/simulate-payment/{payment_id}")
+async def simulate_payment_success(
+    payment_id: str,
+    user=Depends(get_api_or_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Simulate a successful payment for testing/development purposes only.
+    In production, this endpoint should be disabled.
+    """
+    from ..config import settings
+    
+    if settings.ENVIRONMENT == "production":
+        raise HTTPException(
+            status_code=403,
+            detail="This endpoint is not available in production"
+        )
+    
+    user_id = str(user.get("id"))
+    
+    result = await db.execute(
+        select(OneRouterPayment)
+        .where(
+            OneRouterPayment.id == payment_id,
+            OneRouterPayment.user_id == user_id
+        )
+    )
+    payment = result.scalar_one_or_none()
+    
+    if not payment:
+        raise HTTPException(
+            status_code=404,
+            detail="Payment not found"
+        )
+    
+    if payment.status in (PaymentStatus.SUCCESS, PaymentStatus.FAILED, PaymentStatus.REFUNDED):
+        return {
+            "status": "already_processed",
+            "message": f"Payment already has status: {payment.status.value}"
+        }
+    
+    # Simulate successful payment
+    payment.status = PaymentStatus.SUCCESS
+    payment.provider_payment_id = f"simulated_pay_{uuid4().hex[:12]}"
+    
+    # Add credits to user
+    try:
+        await CreditsService.add_credits(
+            user_id=payment.user_id,
+            amount=payment.credits_purchased,
+            transaction_type=TransactionType.PURCHASE,
+            payment_id=str(payment.id),
+            description=f"Purchased {payment.credits_purchased} credits (simulated)",
+            db=db
+        )
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to add credits for simulated payment {payment.id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to add credits. Please try again."
+        )
+    
+    logger.info(
+        f"Simulated payment success for {payment.id}: "
+        f"added {payment.credits_purchased} credits to user {payment.user_id}"
+    )
+    
+    return {
+        "status": "success",
+        "payment_id": str(payment.id),
+        "credits_added": payment.credits_purchased,
+        "message": "Payment simulated successfully. Credits have been added to your account."
+    }
+
+
+# ==================== Helper Functions ====================
+
+def _create_payment_result_token(result: Dict[str, Any]) -> str:
+    """
+    Create a signed JWT token for payment result.
+    Prevents URL tampering by verifying server-side.
+    """
+    payload = {
+        "status": result.get("status", "error"),
+        "message": result.get("message", ""),
+        "credits": result.get("credits_added") or result.get("credits", 0),
+        "balance": result.get("new_balance", 0),
+        "payment_id": result.get("payment_id", ""),
+        "iat": datetime.utcnow(),
+        "exp": datetime.utcnow() + timedelta(minutes=5)
+    }
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
+
+
+def _verify_payment_result_token(token: str) -> Optional[Dict[str, Any]]:
+    """
+    Verify and decode payment result token.
+    Returns the payload if valid, None otherwise.
+    """
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+        return {
+            "status": payload.get("status"),
+            "message": payload.get("message", ""),
+            "credits": payload.get("credits", 0),
+            "balance": payload.get("balance", 0),
+            "payment_id": payload.get("payment_id", "")
+        }
+    except jwt.PyJWTError:
+        return None
+
+
+async def _process_payment_callback(
+    razorpay_payment_id: Optional[str],
+    razorpay_payment_link_id: Optional[str],
+    razorpay_payment_link_status: Optional[str],
+    razorpay_signature: Optional[str],
+    db: AsyncSession
+) -> Dict[str, Any]:
+    """
+    Shared helper to process Razorpay payment callbacks.
+    Implements signature verification, transaction safety with row locks,
+    and comprehensive error handling.
+    
+    Returns response dict with 'status', 'message', and optional 'credits_added', 'new_balance'.
+    """
+    try:
+        # Input validation
+        if not razorpay_payment_link_status:
+            return {
+                "status": "failed",
+                "message": "Payment status is required"
+            }
+        
+        if razorpay_payment_link_status != "paid":
+            return {
+                "status": "failed",
+                "message": f"Payment not completed. Status: {razorpay_payment_link_status}"
+            }
+        
+        if not razorpay_payment_id:
+            return {
+                "status": "failed",
+                "message": "No payment ID provided"
+            }
+        
+        if not razorpay_payment_link_id:
+            return {
+                "status": "failed",
+                "message": "No payment link ID provided"
+            }
+        
+        # Signature verification
+        if razorpay_signature:
+            try:
+                razorpay = RazorpayService()
+                is_valid = razorpay.verify_payment_link_signature(
+                    razorpay_payment_id,
+                    razorpay_payment_link_id,
+                    razorpay_signature
+                )
+                if not is_valid:
+                    logger.warning(
+                        f"Invalid signature for payment {razorpay_payment_id}, "
+                        f"link {razorpay_payment_link_id}"
+                    )
+                    return {
+                        "status": "failed",
+                        "message": "Invalid payment signature"
+                    }
+                logger.debug(f"Signature verified for payment {razorpay_payment_id}")
+            except Exception as e:
+                logger.error(f"Signature verification error: {str(e)}")
+                return {
+                    "status": "failed",
+                    "message": "Signature verification failed"
+                }
+        
+        # Find payment with row-level lock to prevent concurrent processing
+        # Using SELECT ... FOR UPDATE to lock the row
+        # Combined query to prevent race conditions between exact and pattern matches
+        result = await db.execute(
+            select(OneRouterPayment)
+            .where(
+                or_(
+                    OneRouterPayment.provider_order_id == razorpay_payment_link_id,
+                    OneRouterPayment.provider_order_id.ilike(f"%{razorpay_payment_link_id}%")
+                )
+            )
+            .with_for_update()  # Row-level lock
+        )
+        payment = result.scalar_one_or_none()
+        
+        if not payment:
+            logger.warning(
+                f"Payment not found for link {razorpay_payment_link_id}, "
+                f"payment_id {razorpay_payment_id}"
+            )
+            return {
+                "status": "failed",
+                "message": "Payment record not found"
+            }
+        
+        # Check if already processed (idempotency check)
+        if payment.status == PaymentStatus.SUCCESS:
+            logger.info(
+                f"Payment {payment.id} already processed (idempotent). "
+                f"Credits: {payment.credits_purchased}"
+            )
+            return {
+                "status": "already_processed",
+                "message": "Payment already processed",
+                "credits": payment.credits_purchased
+            }
+        
+        if payment.status in (PaymentStatus.FAILED, PaymentStatus.REFUNDED):
+            logger.warning(
+                f"Cannot process payment {payment.id} with status {payment.status.value}"
+            )
+            return {
+                "status": "failed",
+                "message": f"Payment has status: {payment.status.value}"
+            }
+        
+        # Ensure payment is still PENDING before processing
+        if payment.status != PaymentStatus.PENDING:
+            logger.warning(
+                f"Payment {payment.id} is not PENDING (status: {payment.status.value})"
+            )
+            return {
+                "status": "failed",
+                "message": f"Invalid payment status: {payment.status.value}"
+            }
+        
+        # Update payment status in transaction
+        try:
+            payment.status = PaymentStatus.SUCCESS
+            payment.provider_payment_id = razorpay_payment_id
+            
+            # Add credits to user
+            await CreditsService.add_credits(
+                user_id=payment.user_id,
+                amount=payment.credits_purchased,
+                transaction_type=TransactionType.PURCHASE,
+                payment_id=str(payment.id),
+                description=f"Purchased {payment.credits_purchased} credits via Razorpay",
+                db=db
+            )
+            
+            # Commit the transaction (releases row lock)
+            await db.commit()
+            
+            logger.info(
+                f"Payment {payment.id} processed successfully. "
+                f"Added {payment.credits_purchased} credits to user {payment.user_id}"
+            )
+            
+            # Get updated balance after successful commit
+            balance_info = await CreditsService.get_balance(payment.user_id, db)
+            
+            return {
+                "status": "success",
+                "message": "Payment successful! Credits have been added to your account.",
+                "credits_added": payment.credits_purchased,
+                "new_balance": balance_info.get("balance", 0)
+            }
+        
+        except Exception as e:
+            await db.rollback()
+            logger.error(
+                f"Error processing payment {payment.id}: {type(e).__name__}: {str(e)}",
+                exc_info=True
+            )
+            return {
+                "status": "error",
+                "message": "Failed to process payment. Please contact support.",
+                "error_code": type(e).__name__
+            }
+    
+    except Exception as e:
+        logger.error(
+            f"Unexpected error in payment callback: {type(e).__name__}: {str(e)}",
+            exc_info=True
+        )
+        return {
+            "status": "error",
+            "message": "An unexpected error occurred. Please contact support.",
+            "error_code": type(e).__name__
+        }
+
+
+@router.get("/payment-callback")
+@router.post("/payment-callback")
+async def razorpay_payment_callback(
+    request: Request,
+    razorpay_payment_id: Optional[str] = None,
+    razorpay_payment_link_id: Optional[str] = None,
+    razorpay_payment_link_status: Optional[str] = None,
+    razorpay_signature: Optional[str] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Callback URL that Razorpay redirects to after payment (/v1 prefix).
+    Handles both GET and POST requests.
+    Adds credits to user's account when payment is confirmed.
+    """
+    logger.info(f"Payment callback received - payment_id: {razorpay_payment_id}, status: {razorpay_payment_link_status}")
+    
+    return await _process_payment_callback(
+        razorpay_payment_id,
+        razorpay_payment_link_id,
+        razorpay_payment_link_status,
+        razorpay_signature,
+        db
+    )
+
+
+
+# Separate router for callback without /v1 prefix (for Razorpay redirects)
+callback_router = APIRouter(prefix="", tags=["Payment Callback"])
+
+@callback_router.get("/credits/payment-callback")
+@callback_router.post("/credits/payment-callback")
+async def razorpay_payment_callback_public(
+    request: Request,
+    razorpay_payment_id: Optional[str] = None,
+    razorpay_payment_link_id: Optional[str] = None,
+    razorpay_payment_link_status: Optional[str] = None,
+    razorpay_signature: Optional[str] = None,
+    db: AsyncSession = Depends(get_db)
+    ):
+    """
+    Public callback URL for Razorpay payment redirects (no /v1 prefix).
+    Redirects to frontend with signed payment result token to prevent tampering.
+    """
+    frontend_url = settings.FRONTEND_URL or "http://localhost:3000"
+    
+    result = await _process_payment_callback(
+        razorpay_payment_id,
+        razorpay_payment_link_id,
+        razorpay_payment_link_status,
+        razorpay_signature,
+        db
+    )
+    
+    token = _create_payment_result_token(result)
+    redirect_url = f"{frontend_url}/credits/payment-result?token={token}"
+    
+    return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+
+
+@router.get("/payment-result/verify")
+async def verify_payment_result(
+    token: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Verify payment result token and return actual payment status.
+    Frontend should call this endpoint to validate the token from the redirect URL.
+    """
+    result = _verify_payment_result_token(token)
+    if not result:
+        return {
+            "status": "error",
+            "message": "Invalid or expired payment result token"
+        }
+    
+    if result["status"] == "success" and result.get("payment_id"):
+        try:
+            result_stmt = await db.execute(
+                select(OneRouterPayment)
+                .where(OneRouterPayment.id == result["payment_id"])
+            )
+            payment = result_stmt.scalar_one_or_none()
+            if payment:
+                balance_stmt = await db.execute(
+                    select(UserCredit.balance)
+                    .where(UserCredit.user_id == payment.user_id)
+                )
+                current_balance = balance_stmt.scalar_one_or_none()
+                if current_balance is not None:
+                    result["balance"] = int(current_balance)
+        except Exception:
+            pass
+    
+    return result

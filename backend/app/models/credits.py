@@ -44,10 +44,10 @@ class CreditTransaction(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     amount = Column(Integer, nullable=False)  # Positive = purchase/refund/bonus, Negative = consumption
-    transaction_type = Column(SQLEnum(TransactionType), nullable=False)
+    transaction_type = Column(SQLEnum(TransactionType, native_enum=True, name='transaction_type'), nullable=False)
     payment_id = Column(String, nullable=True)  # Reference to one_router_payments.id
     description = Column(String, nullable=True)
-    metadata = Column(JSONB, nullable=True, server_default='{}')
+    extra_data = Column(JSONB, nullable=True, server_default='{}')  # Renamed from 'metadata'
     created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
 
     __table_args__ = (
@@ -68,7 +68,7 @@ class OneRouterPayment(Base):
     provider = Column(String(50), nullable=False)  # 'razorpay', 'paypal'
     provider_payment_id = Column(String, nullable=True)  # Razorpay payment_id
     provider_order_id = Column(String, nullable=True)  # Razorpay order_id
-    status = Column(SQLEnum(PaymentStatus), nullable=False, default=PaymentStatus.PENDING)
+    status = Column(SQLEnum(PaymentStatus, native_enum=True, name='payment_status'), nullable=False, default=PaymentStatus.PENDING)
     error_message = Column(String, nullable=True)
     checkout_url = Column(String, nullable=True)
     created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)

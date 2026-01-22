@@ -171,6 +171,42 @@ class RazorpayService:
 
         return hmac.compare_digest(signature, expected_signature)
 
+    def verify_payment_link_signature(
+        self,
+        payment_id: str,
+        payment_link_id: str,
+        signature: str
+    ) -> bool:
+        """
+        Verify Razorpay payment link callback signature.
+
+        For payment link callbacks, Razorpay provides a signature that can be
+        verified using HMAC-SHA256 with the account's key secret.
+
+        Args:
+            payment_id: Razorpay payment ID from callback
+            payment_link_id: Razorpay payment link ID from callback
+            signature: Razorpay-Signature header value
+
+        Returns:
+            True if signature is valid, False otherwise
+        """
+        if not payment_id or not payment_link_id or not signature:
+            return False
+
+        if not self.key_secret:
+            logger.warning("Razorpay key secret not configured, skipping signature verification")
+            return False
+
+        payload = f"{payment_id}|{payment_link_id}"
+        expected_signature = hmac.new(
+            self.key_secret.encode(),
+            payload.encode(),
+            hashlib.sha256
+        ).hexdigest()
+
+        return hmac.compare_digest(signature, expected_signature)
+
     @classmethod
     def get_checkout_options(
         cls,

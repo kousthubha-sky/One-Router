@@ -24,7 +24,7 @@ class RedisManager:
     async def get_redis(cls) -> Redis:
         """Get or create Redis connection"""
         if cls._instance is None:
-            redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+            redis_url = os.getenv("REDIS_URL", "redis://localhost:6380")
             cls._instance = await Redis.from_url(
                 redis_url,
                 encoding="utf-8",
