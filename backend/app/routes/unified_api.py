@@ -11,6 +11,7 @@ from ..services.request_router import RequestRouter
 from ..auth.dependencies import get_current_user, get_api_user
 from ..services.transaction_logger import TransactionLogger
 from ..services.idempotency_service import IdempotencyService
+from ..services.credits_service import CreditsService
 from ..models import ServiceCredential, TransactionLog
 from ..exceptions import InvalidAmountException, CurrencyAmountMismatchException
 
@@ -36,9 +37,9 @@ CURRENCY_RULES = {
 class PaymentOrderRequest(BaseModel):
     amount: Annotated[Decimal, Field(
         gt=0,
-        decimal_places=2,
+        
         max_digits=15,
-        description="Amount must be positive with max 2 decimal places"
+        description="Amount must be positive "
     )]
     currency: Annotated[str, Field(
         pattern=r"^[A-Z]{3}$",
@@ -123,6 +124,9 @@ class UnifiedPaymentResponse(BaseModel):
     status: str
     receipt: Optional[str] = None
     created_at: Optional[int] = None
+    credits_deducted: bool = True
+    credits_consumed: Optional[int] = None
+    fee_details: Optional[Dict[str, Any]] = None
 
     class Config:
         json_encoders = {
@@ -162,7 +166,7 @@ async def create_payment_order(
             target_environment=environment
         )
 
-        # Create order
+        # Create order FIRST (before consuming credit)
         order_kwargs = {
             "amount": float(request.amount),
             "currency": request.currency,
@@ -181,7 +185,51 @@ async def create_payment_order(
 
         result = await adapter.create_order(**order_kwargs)
 
-        return UnifiedPaymentResponse(**result)
+        # Order succeeded - now consume credits based on usage (1% + ₹0.50)
+        credits_deducted = True
+        credit_result = {"success": True, "fee_details": None}
+        try:
+            credit_result = await CreditsService.consume_for_usage(
+                user_id=user_id,
+                service_type="payment",
+                amount=float(request.amount),
+                db=db
+            )
+            if not credit_result["success"]:
+                credits_deducted = False
+                logger.warning(
+                    f"Credit deduction failed after order {transaction_id}: "
+                    f"insufficient balance ({credit_result.get('current_balance', 0)})"
+                )
+            else:
+                logger.info(
+                    f"Consumed {credit_result.get('fee_details', {}).get('credits_consumed', '?')} credits "
+                    f"for payment ₹{request.amount} (fee: ₹{credit_result.get('fee_details', {}).get('fee_rupees', '?')})"
+                )
+        except Exception as credit_error:
+            credits_deducted = False
+            # Order was created but credit deduction failed
+            # Log for reconciliation - don't fail the request
+            logger.error(
+                f"Credit deduction failed after successful order {transaction_id}: {credit_error}"
+            )
+
+        # Format the response to match UnifiedPaymentResponse
+        payment_response = {
+            "transaction_id": transaction_id,
+            "provider": provider,
+            "provider_order_id": result.get("id", transaction_id),
+            "amount": request.amount,
+            "currency": request.currency,
+            "status": "created",
+            "receipt": request.receipt,
+            "created_at": int(start_time * 1000) if start_time else None,
+            "credits_deducted": credits_deducted,
+            "credits_consumed": credit_result.get("fee_details", {}).get("credits_consumed") if credits_deducted and credit_result.get("fee_details") else None,
+            "fee_details": credit_result.get("fee_details") if credits_deducted and credit_result.get("fee_details") else None
+        }
+
+        return UnifiedPaymentResponse(**payment_response)
 
     except HTTPException:
         raise
@@ -296,8 +344,9 @@ async def get_subscription(
         return result
 
     except Exception as e:
+        if isinstance(e, HTTPException):
+            raise
         raise HTTPException(status_code=500, detail=str(e))
-
 @router.post("/subscriptions/{subscription_id}/cancel")
 async def cancel_subscription(
     subscription_id: str,

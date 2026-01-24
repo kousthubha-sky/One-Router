@@ -9,6 +9,7 @@ from ..database import get_db
 from ..auth.dependencies import get_current_user, get_api_user
 from ..services.adapter_factory import AdapterFactory
 from ..services.cost_tracker import cost_tracker
+from ..services.credits_service import CreditsService
 from ..models import ServiceCredential, TransactionLog, ApiKey
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,9 @@ class SMSResponse(BaseModel):
     cost: float
     currency: str
     created_at: Optional[str] = None
+    credits_deducted: bool = True
+    credits_consumed: Optional[int] = None
+    fee_details: Optional[Dict[str, Any]] = None
 
 
 class EmailRequest(BaseModel):
@@ -54,6 +58,9 @@ class EmailResponse(BaseModel):
     cost: float
     currency: str
     created_at: Optional[str] = None
+    credits_deducted: bool = True
+    credits_consumed: Optional[int] = None
+    fee_details: Optional[Dict[str, Any]] = None
 
 
 @router.post("/sms", response_model=SMSResponse, status_code=status.HTTP_201_CREATED)
@@ -75,8 +82,142 @@ async def send_sms(
         user_id = auth_data["id"]
         user = {"id": user_id}
         api_key_obj = auth_data["api_key"]
-        
-        # Check idempotency key
+
+        # Check idempotency key first (no credit consumed for cached response)
+        if request.idempotency_key:
+            result = await db.execute(
+                select(TransactionLog).where(
+                    TransactionLog.user_id == user_id,
+                    TransactionLog.idempotency_key == request.idempotency_key
+                )
+            )
+            existing = result.scalar_one_or_none()
+
+            if existing:
+                return SMSResponse(
+                    message_id=existing.transaction_id,
+                    status=existing.status,
+                    service=existing.service_name,
+                    cost=existing.cost or 0.0,
+                    currency="USD",
+                    created_at=existing.created_at.isoformat() if existing.created_at else None
+                )
+
+        # Get Twilio credentials
+        result = await db.execute(
+            select(ServiceCredential).where(
+                ServiceCredential.user_id == user_id,
+                ServiceCredential.provider_name == "twilio",
+                ServiceCredential.environment == "test",
+                ServiceCredential.is_active == True
+            )
+        )
+        creds_result = result.scalar_one_or_none()
+
+        if not creds_result:
+            raise HTTPException(
+                status_code=400,
+                detail="Twilio not configured. Please add your credentials in dashboard."
+            )
+
+        # Decrypt credentials
+        from ..services.credential_manager import CredentialManager
+        cred_manager = CredentialManager()
+        decrypted_creds = await cred_manager.get_credentials(db, user_id, "twilio", "test")
+
+        # Create adapter
+        adapter = AdapterFactory.create_adapter("twilio", decrypted_creds)
+
+        # Prepare parameters
+        params = {
+            "to": request.to,
+            "body": request.body
+        }
+
+        if request.from_number:
+            params["from_number"] = request.from_number
+        else:
+            params["from_number"] = decrypted_creds.get("from_number")
+
+        # Start timer
+        start_time = time.time()
+
+        # Send SMS FIRST (before consuming credit)
+        sms_result = await adapter.execute("send_sms", params)
+
+        # SMS sent successfully - now consume credits based on usage (₹0.10 per SMS)
+        credits_deducted = True
+        credit_result = {"success": True, "fee_details": None}
+        try:
+            credit_result = await CreditsService.consume_for_usage(
+                user_id=user_id,
+                service_type="sms",
+                count=1,  # 1 SMS
+                db=db
+            )
+            if not credit_result["success"]:
+                credits_deducted = False
+                logger.warning(
+                    f"Credit deduction failed after SMS {sms_result.get('id')}: "
+                    f"insufficient balance ({credit_result.get('current_balance', 0)})"
+                )
+            else:
+                logger.info(
+                    f"Consumed {credit_result.get('fee_details', {}).get('credits_consumed', '?')} credits "
+                    f"for 1 SMS (fee: ₹{credit_result.get('fee_details', {}).get('fee_rupees', '?')})"
+                )
+        except Exception as credit_error:
+            credits_deducted = False
+            logger.exception("Credit deduction failed after SMS: %s", credit_error)
+        # Calculate cost
+        cost = await cost_tracker.calculate_cost("twilio", "send_sms", params)
+        response_time_ms = int((time.time() - start_time) * 1000)
+
+        # Log transaction
+        transaction = TransactionLog(
+            user_id=user.id,
+            api_key_id=api_key_obj.id if api_key_obj else None,
+            transaction_id=sms_result.get("id", ""),
+            idempotency_key=request.idempotency_key,
+            service_name="twilio",
+            provider_txn_id=sms_result.get("id"),
+            endpoint="/Messages.json",
+            http_method="POST",
+            request_payload=params,
+            response_payload=sms_result,
+            response_status=200,
+            response_time_ms=response_time_ms,
+            status="sent",
+            cost=cost,
+            currency="USD",
+            environment="test",
+            created_at=datetime.utcnow()
+        )
+
+        db.add(transaction)
+        await db.commit()
+
+        return SMSResponse(
+            message_id=sms_result.get("id", ""),
+            status="sent",
+            service="twilio",
+            cost=cost,
+            currency="USD",
+            created_at=datetime.utcnow().isoformat(),
+            credits_deducted=credits_deducted,
+            credits_consumed=credit_result.get("fee_details", {}).get("credits_consumed") if credits_deducted and credit_result.get("fee_details") else None,
+            fee_details=credit_result.get("fee_details") if credits_deducted and credit_result.get("fee_details") else None
+        )
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        logger.error(f"SMS sending failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to send SMS: {str(e)}"
+        )
         if request.idempotency_key:
             result = await db.execute(
                 select(TransactionLog).where(
@@ -240,6 +381,153 @@ async def send_email(
     import time
 
     try:
+        # Check idempotency key first (no credit consumed for cached response)
+        if request.idempotency_key:
+            result = await db.execute(
+                select(TransactionLog).where(
+                    TransactionLog.user_id == user.id,
+                    TransactionLog.idempotency_key == request.idempotency_key
+                )
+            )
+            existing = result.scalar_one_or_none()
+
+            if existing:
+                return EmailResponse(
+                    email_id=existing.transaction_id,
+                    status=existing.status,
+                    service=existing.service_name,
+                    cost=existing.cost or 0.0,
+                    currency="USD",
+                    created_at=existing.created_at.isoformat() if existing.created_at else None
+                )
+
+        # Get Resend credentials
+        result = await db.execute(
+            select(ServiceCredential).where(
+                ServiceCredential.user_id == user.id,
+                ServiceCredential.provider_name == "resend",
+                ServiceCredential.environment == "test",
+                ServiceCredential.is_active == True
+            )
+        )
+        creds_result = result.scalar_one_or_none()
+
+        if not creds_result:
+            raise HTTPException(
+                status_code=400,
+                detail="Resend not configured. Please add your credentials in dashboard."
+            )
+
+        # Decrypt credentials
+        from ..services.credential_manager import CredentialManager
+        cred_manager = CredentialManager()
+        decrypted_creds = await cred_manager.get_credentials(db, user.id, "resend", "test")
+
+        # Create adapter
+        adapter = AdapterFactory.create_adapter("resend", decrypted_creds)
+
+        # Prepare parameters
+        params = {
+            "to": request.to,
+            "subject": request.subject
+        }
+
+        if request.html_body:
+            params["html_body"] = request.html_body
+        elif request.text_body:
+            params["text_body"] = request.text_body
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Either html_body or text_body is required"
+            )
+
+        if request.from_email:
+            params["from_email"] = request.from_email
+        else:
+            params["from_email"] = decrypted_creds.get("from_email")
+
+        # Start timer
+        start_time = time.time()
+
+        # Send email FIRST (before consuming credit)
+        email_result = await adapter.execute("send_email", params)
+
+        # Email sent successfully - now consume credits based on usage (₹0.001 per email)
+        credits_deducted = True
+        credit_result = {"success": True, "fee_details": None}
+        try:
+            credit_result = await CreditsService.consume_for_usage(
+                user_id=str(user.id),
+                service_type="email",
+                count=1,  # 1 email
+                db=db
+            )
+            if not credit_result["success"]:
+                credits_deducted = False
+                logger.warning(
+                    f"Credit deduction failed after email {email_result.get('id')}: "
+                    f"insufficient balance ({credit_result.get('current_balance', 0)})"
+                )
+            else:
+                logger.info(
+                    f"Consumed {credit_result.get('fee_details', {}).get('credits_consumed', '?')} credits "
+                    f"for 1 email (fee: ₹{credit_result.get('fee_details', {}).get('fee_rupees', '?')})"
+                )
+        except Exception as credit_error:
+            credits_deducted = False
+            logger.error(f"Credit deduction failed after email: {credit_error}")
+
+        # Calculate cost
+        cost = await cost_tracker.calculate_cost("resend", "send_email", params)
+        response_time_ms = int((time.time() - start_time) * 1000)
+
+        # Log transaction
+        transaction = TransactionLog(
+            user_id=user.id,
+            api_key_id=api_key_obj.id if api_key_obj else None,
+            transaction_id=email_result.get("id", ""),
+            idempotency_key=request.idempotency_key,
+            service_name="resend",
+            provider_txn_id=email_result.get("id"),
+            endpoint="/emails",
+            http_method="POST",
+            request_payload=params,
+            response_payload=email_result,
+            response_status=200,
+            response_time_ms=response_time_ms,
+            status="sent",
+            cost=cost,
+            currency="USD",
+            environment="test",
+            created_at=datetime.utcnow()
+        )
+
+        db.add(transaction)
+        await db.commit()
+
+        return EmailResponse(
+            email_id=email_result.get("id", ""),
+            status="sent",
+            service="resend",
+            cost=cost,
+            currency="USD",
+            created_at=datetime.utcnow().isoformat(),
+            credits_deducted=credits_deducted,
+            credits_consumed=credit_result.get("fee_details", {}).get("credits_consumed") if credits_deducted and credit_result.get("fee_details") else None,
+            fee_details=credit_result.get("fee_details") if credits_deducted and credit_result.get("fee_details") else None
+        )
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        logger.error(f"Email sending failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to send email: {str(e)}"
+        )
+
         # Check idempotency key
         if request.idempotency_key:
             result = await db.execute(

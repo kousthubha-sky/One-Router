@@ -416,12 +416,21 @@ app.include_router(api_keys_router, tags=["api-keys"])
 from .routes.csrf import router as csrf_router
 app.include_router(csrf_router, tags=["security"])
 
+# Import and include Razorpay setup router
+from .routes.razorpay_setup import router as razorpay_setup_router
+app.include_router(razorpay_setup_router, tags=["razorpay"])
+
 # Import and include service discovery router
 app.include_router(service_discovery_router, prefix="/v1", tags=["service-discovery"])
 
 # Import and include communications router
 from .routes.communications import router as communications_router
 app.include_router(communications_router, prefix="/v1", tags=["communications"])
+
+# Import and include credits router
+from .routes.credits import router as credits_router, callback_router as credits_callback_router
+app.include_router(credits_router, tags=["credits"])
+app.include_router(credits_callback_router, tags=["credits-callback"])
 
 # Health check endpoint
 @app.get("/")
@@ -675,9 +684,17 @@ async def generate_api_key(
 @app.get("/api/keys")
 async def list_api_keys(
     db: AsyncSession = Depends(get_db),
-    user = Depends(get_current_user)
+    user = Depends(get_current_user),
+    environment: str = "test"
 ):
-    """List API keys for the authenticated user"""
+    """
+    List API keys for the authenticated user, filtered by environment
+    
+    Query Parameters:
+    - environment: 'test' or 'live' (default: 'test')
+    
+    Returns only API keys for the specified environment.
+    """
     from app.services.credential_manager import CredentialManager
 
     # Verify user has a valid ID
@@ -685,10 +702,16 @@ async def list_api_keys(
     if not user_id:
         raise HTTPException(status_code=401, detail="User ID not found in authentication token")
     
+    # Validate environment parameter
+    if environment not in ["test", "live"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid environment '{environment}'. Must be 'test' or 'live'."
+        )    
     cred_manager = CredentialManager()
     user_id = str(user_id)
 
-    api_keys = await cred_manager.get_user_api_keys(db, user_id)
+    api_keys = await cred_manager.get_user_api_keys(db, user_id, environment)
 
     return {
         "api_keys": api_keys,

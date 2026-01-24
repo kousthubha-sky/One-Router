@@ -1,21 +1,32 @@
+import logging
 import httpx
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Literal
 from pybreaker import CircuitBreaker
 from .base import BaseAdapter
 from .razorpay_transformer import RazorpayTransformer, UnifiedPaymentResponse, UnifiedRefundResponse, UnifiedSubscriptionResponse, UnifiedErrorResponse
 from decimal import Decimal
 
+logger = logging.getLogger(__name__)
+
 class RazorpayAdapter(BaseAdapter):
-    """Razorpay payment service adapter"""
+    """Razorpay payment service adapter with environment segregation"""
     
     # Circuit breakers for external API calls
     _order_breaker = CircuitBreaker(fail_max=5, reset_timeout=60, listeners=[])
     _verify_breaker = CircuitBreaker(fail_max=5, reset_timeout=60, listeners=[])
     _refund_breaker = CircuitBreaker(fail_max=5, reset_timeout=60, listeners=[])
 
-    def __init__(self, credentials: Dict[str, str]):
+    def __init__(self, credentials: Dict[str, str], environment: Literal["test", "live"] = "test"):
         super().__init__(credentials)
         self.transformer = RazorpayTransformer()
+        self.environment = environment
+        
+        # Validate that credentials match the environment
+        key_id = credentials.get("RAZORPAY_KEY_ID", "")
+        if environment == "live" and not key_id.startswith("rzp_live_"):
+            logger.warning(f"Live adapter initialized with test key: {key_id[:20]}")
+        elif environment == "test" and not key_id.startswith("rzp_test_"):
+            logger.warning(f"Test adapter initialized with live key: {key_id[:20]}")
 
     async def _get_base_url(self) -> str:
         """Return Razorpay API base URL"""
@@ -56,19 +67,26 @@ class RazorpayAdapter(BaseAdapter):
 
                 # If we get a successful response (even if it's an error about amount),
                 # it means credentials are valid
-                return response.status_code in [200, 400, 422]  # Success or validation errors
+                success = response.status_code in [200, 400, 422]  # Success or validation errors
+                
+                if success:
+                    logger.info(f"Validated Razorpay {self.environment} credentials")
+                else:
+                    logger.warning(f"Razorpay {self.environment} credential validation failed: {response.status_code}")
+                
+                return success
 
         except Exception as e:
-            print(f"Razorpay credential validation failed: {e}")
+            logger.error(f"Razorpay credential validation failed: {e}")
             return False
 
     async def create_order(self, amount: float, currency: str = "INR", **kwargs) -> Dict[str, Any]:
-        """Create a Razorpay order"""
+        """Create a Razorpay order using configured environment (test/live)"""
         try:
+            logger.info(f"Creating Razorpay {self.environment} order: {amount} {currency}")
             return await self._order_breaker.call(self._create_order_impl, amount, currency, **kwargs)
         except Exception as e:
-            logger = __import__('logging').getLogger(__name__)
-            logger.error(f"Failed to create Razorpay order: {e}")
+            logger.error(f"Failed to create Razorpay {self.environment} order: {e}")
             raise
 
     async def _create_order_impl(self, amount: float, currency: str = "INR", **kwargs) -> Dict[str, Any]:
@@ -145,9 +163,73 @@ class RazorpayAdapter(BaseAdapter):
         try:
             return await self._order_breaker.call(self._get_order_impl, order_id)
         except Exception as e:
-            logger = __import__('logging').getLogger(__name__)
-            logger.error(f"Failed to fetch Razorpay order: {e}")
+            logger.error(f"Failed to get Razorpay order {order_id}: {e}")
             raise
+
+    async def create_payment_link(self, amount: float, currency: str = "INR", description: str = "", **kwargs) -> Dict[str, Any]:
+        """Create a Razorpay payment link with checkout URL"""
+        try:
+            base_url = await self._get_base_url()
+            auth = (
+                self.credentials["RAZORPAY_KEY_ID"],
+                self.credentials["RAZORPAY_KEY_SECRET"]
+            )
+            
+            # Use provided callback_url or default to frontend
+            from ..config import settings
+            callback_url = kwargs.get("callback_url") or f"{settings.FRONTEND_URL}/credits/payment-callback"
+            
+            payload = {
+                "amount": int(Decimal(str(amount)) * 100),  # Convert to paise
+                "currency": currency,                "description": description,
+                "notify": {
+                    "sms": True,
+                    "email": True
+                },
+                "reminder_enable": True,
+                "notes": kwargs.get("notes", {})
+            }
+            
+            if callback_url:
+                payload["callback_url"] = callback_url
+                payload["callback_method"] = "get"
+            
+            async with httpx.AsyncClient(auth=auth, timeout=30.0) as client:
+                response = await client.post(
+                    f"{base_url}/payment_links",
+                    json=payload,
+                    headers={"Content-Type": "application/json"}
+                )
+                
+                if response.status_code == 401:
+                    raise Exception("Invalid Razorpay credentials")
+                elif response.status_code == 400:
+                    error_data = response.json()
+                    error_desc = error_data.get('error', {}).get('description', 'Unknown error')
+                    raise Exception(f"Razorpay API error: {error_desc}")
+                elif response.status_code == 429:
+                    raise Exception("Razorpay rate limit exceeded")
+                
+                response.raise_for_status()
+                link_data = response.json()
+                
+                # Return unified response with checkout_url
+                return {
+                    "transaction_id": f"pl_{link_data.get('id', '')}",
+                    "provider": "razorpay",
+                    "provider_order_id": link_data.get('id', ''),
+                    "provider_payment_id": None,
+                    "amount": Decimal(str(link_data.get('amount', 0))) / 100,  # Convert from paise
+                    "currency": link_data.get('currency', 'INR'),
+                    "status": link_data.get('status', 'created'),
+                    "checkout_url": link_data.get('short_url', ''),
+                    "provider_data": link_data
+                }
+                
+        except httpx.TimeoutException:
+            raise Exception("Razorpay API request timed out")
+        except httpx.HTTPError as e:
+            raise Exception(f"Razorpay API network error: {str(e)}")
 
     async def _get_order_impl(self, order_id: str) -> Dict[str, Any]:
         """Implementation of order fetch (protected by circuit breaker)"""
@@ -171,28 +253,81 @@ class RazorpayAdapter(BaseAdapter):
                 response.raise_for_status()
                 return response.json()
 
+        except httpx.TimeoutException:
+            raise Exception(f"Razorpay API request timed out fetching order {order_id}")
+        
         except httpx.HTTPError as e:
-            raise Exception(f"Razorpay API error: {str(e)}")
-        except Exception as e:
-            raise Exception(f"Failed to fetch Razorpay order: {str(e)}")
-
+            raise Exception(f"Razorpay API error: {str(e)}")    
+    
     async def capture_payment(self, payment_id: str, amount: float, currency: str = "INR"):
-        """Capture a payment"""
-        base_url = await self._get_base_url()
-        auth = (self.credentials["RAZORPAY_KEY_ID"], self.credentials["RAZORPAY_KEY_SECRET"])
+        """Capture a payment with robust error handling"""
+        try:
+            base_url = await self._get_base_url()
+            auth = (self.credentials["RAZORPAY_KEY_ID"], self.credentials["RAZORPAY_KEY_SECRET"])
+            
+            amount_paise = int(Decimal(str(amount)) * 100)  # Convert to paise
 
-        async with httpx.AsyncClient(auth=auth) as client:
-            response = await client.post(
-                f"{base_url}/payments/{payment_id}/capture",
-                json={
-                    "amount": int(amount * 100),  # Convert to paise
-                    "currency": currency
-                }
+            async with httpx.AsyncClient(auth=auth, timeout=30.0) as client:
+                response = await client.post(
+                    f"{base_url}/payments/{payment_id}/capture",
+                    json={
+                        "amount": amount_paise,
+                        "currency": currency
+                    }
+                )
+                
+                # Handle specific error codes
+                if response.status_code == 401:
+                    raise Exception("Invalid Razorpay credentials")
+                elif response.status_code == 404:
+                    raise Exception(f"Payment not found: {payment_id}")
+                elif response.status_code == 400:
+                    try:
+                        error_data = response.json()
+                        error_desc = error_data.get('error', {}).get('description', 'Unknown error')
+                        raise Exception(f"Razorpay API error: {error_desc}")
+                    except (ValueError, KeyError):
+                        raise Exception(f"Razorpay API error (invalid response): {response.text}")
+                elif response.status_code == 429:
+                    raise Exception("Razorpay rate limit exceeded")
+                
+                response.raise_for_status()
+                
+                try:
+                    capture_data = response.json()
+                except ValueError as je:
+                    raise Exception(f"Invalid JSON response from Razorpay: {response.text}")
+                
+                return capture_data
+        
+        except httpx.TimeoutException:
+            raise Exception(f"Razorpay capture request timed out (payment_id: {payment_id}, amount: {amount} {currency})")
+        except httpx.HTTPStatusError as e:
+            response_text = ""
+            try:
+                response_text = e.response.text[:500]
+            except Exception:
+                pass
+            raise Exception(f"Razorpay capture failed (payment_id: {payment_id}): {e.response.status_code} - {response_text}")
+        except httpx.RequestError as e:
+            raise Exception(f"Razorpay capture network error (payment_id: {payment_id}): {str(e)}")
+        except Exception as e:
+            # Log with context but re-raise
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(
+                f"Payment capture error",
+                extra={
+                    "payment_id_prefix": payment_id[:8] if len(payment_id) > 8 else payment_id,
+                    "amount": amount,
+                    "currency": currency,
+                    "error": str(e)
+                },
+                exc_info=True
             )
-            response.raise_for_status()
-            return response.json()
+            raise
 
-    async def create_refund(self, payment_id: str, amount: float = None):
+    async def create_refund(self, payment_id: str, amount: Optional[float] = None):
         """Create a refund (full or partial)"""
         try:
             # Create unified request object
@@ -238,54 +373,6 @@ class RazorpayAdapter(BaseAdapter):
         except Exception as e:
             raise Exception(f"Failed to create Razorpay refund: {str(e)}")
 
-    async def create_payment_link(
-        self,
-        amount: float,
-        description: str,
-        customer_email: str = None,
-        customer_phone: str = None
-    ):
-        """Create a payment link"""
-        try:
-            base_url = await self._get_base_url()
-            auth = (self.credentials["RAZORPAY_KEY_ID"], self.credentials["RAZORPAY_KEY_SECRET"])
-
-            payload = {
-                "amount": int(amount * 100),
-                "currency": "INR",
-                "description": description
-            }
-
-            # Only add customer object if we have data
-            if customer_email or customer_phone:
-                payload["customer"] = {}
-                if customer_email:
-                    payload["customer"]["email"] = customer_email
-                if customer_phone:
-                    payload["customer"]["contact"] = customer_phone
-
-            async with httpx.AsyncClient(auth=auth, timeout=30.0) as client:
-                response = await client.post(
-                    f"{base_url}/payment_links",
-                    json=payload
-                )
-
-                if response.status_code == 401:
-                    raise Exception("Invalid Razorpay credentials")
-                elif response.status_code == 400:
-                    error_data = response.json()
-                    error_desc = error_data.get('error', {}).get('description', 'Unknown error')
-                    raise Exception(f"Razorpay payment link error: {error_desc}")
-
-                response.raise_for_status()
-                return response.json()
-        except httpx.TimeoutException:
-            raise Exception("Razorpay API request timed out")
-        except httpx.HTTPError as e:
-            raise Exception(f"Razorpay API network error: {str(e)}")
-        except Exception as e:
-            raise Exception(f"Failed to create Razorpay payment link: {str(e)}")
-
     def verify_webhook_signature(self, payload: str, signature: str) -> bool:
         """Verify Razorpay webhook signature"""
         import hmac
@@ -293,7 +380,10 @@ class RazorpayAdapter(BaseAdapter):
 
         webhook_secret = self.credentials.get("RAZORPAY_WEBHOOK_SECRET")
         if not webhook_secret:
+            import logging
+            logging.getLogger(__name__).warning("RAZORPAY_WEBHOOK_SECRET not configured, webhook verification will fail")
             return False
+
 
         expected_signature = hmac.new(
             webhook_secret.encode(),
@@ -325,18 +415,37 @@ class RazorpayAdapter(BaseAdapter):
 
             # Add any additional kwargs
             payload.update(kwargs)
+            
+            base_url = await self._get_base_url()
+            auth = (self.credentials["RAZORPAY_KEY_ID"], self.credentials["RAZORPAY_KEY_SECRET"])
 
-            result = await self.call_api("/v1/subscriptions", method="POST", payload=payload)
+            async with httpx.AsyncClient(auth=auth, timeout=30.0) as client:
+                response = await client.post(
+                    f"{base_url}/subscriptions",
+                    json=payload
+                )
 
-            # Transform response to unified format
-            unified_response = self.transformer.transform_subscription_response(result)
-            response_dict = unified_response.dict()
-            response_dict["provider_data"] = result
-            return response_dict
+                if response.status_code == 401:
+                    raise Exception("Invalid Razorpay credentials")
+                elif response.status_code == 400:
+                    error_data = response.json()
+                    error_desc = error_data.get('error', {}).get('description', 'Unknown error')
+                    raise Exception(f"Razorpay subscription error: {error_desc}")
 
+                response.raise_for_status()
+                subscription_data = response.json()
+
+                # Transform response to unified format
+                unified_response = self.transformer.transform_subscription_response(subscription_data)
+                result = unified_response.dict()
+                result["provider_data"] = subscription_data
+                return result
+        except httpx.TimeoutException:
+            raise Exception("Razorpay API request timed out")
+        except httpx.HTTPError as e:
+            raise Exception(f"Razorpay API network error: {str(e)}")
         except Exception as e:
             raise Exception(f"Failed to create Razorpay subscription: {str(e)}")
-
     async def get_subscription(self, subscription_id: str):
         """Get subscription details"""
         return await self.call_api(f"/v1/subscriptions/{subscription_id}", method="GET")
@@ -364,7 +473,7 @@ class RazorpayAdapter(BaseAdapter):
         }
         return await self.call_api(f"/v1/subscriptions/{subscription_id}", method="PATCH", payload=payload)
 
-    async def create_split_payment(self, amount: float, currency: str, splits: list, description: str = None, metadata: dict = None):
+    async def create_split_payment(self, amount: float, currency: str, splits: list, description: Optional[str] = None, metadata: Optional[dict] = None):
         """Create split payment for marketplace vendors"""
         # Razorpay doesn't have native split payment API - this is a mock implementation
         # In production, you would need to integrate with Razorpay's payment links with vendors

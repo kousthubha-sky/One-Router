@@ -9,9 +9,9 @@ import { Github } from 'lucide-react';
 
 export default function TermsPage() {
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-gradient-to-br from-black via-[#0a0a0a] to-black text-white">
       {/* Navbar */}
-      <header className="sticky top-0 z-50 bg-black border-b border-[#222]">
+      <header className="sticky top-0 z-50 bg-black/80 backdrop-blur-md border-b border-[#222]">
         <div className="w-full h-16 flex items-center border-l border-r border-[#222] relative">
           {/* Vertical gridlines - hidden on mobile */}
           <div className="absolute inset-0 pointer-events-none hidden md:flex">
@@ -23,7 +23,7 @@ export default function TermsPage() {
           <div className="w-full h-full flex justify-between items-center px-4 md:px-8 relative z-10">
             {/* Left - Logo */}
             <div className="flex items-center gap-2 border-r border-[#222] pr-4 md:pr-8 flex-1">
-              <div className="w-8 h-8 bg-linear-to-br from-black to-cyan-600 rounded-2xl flex items-center justify-center shadow-lg transition-all duration-300 hover:shadow-cyan-500/25 hover:scale-110"></div>
+              <div className="w-8 h-8 bg-gradient-to-br from-black to-cyan-600 rounded-2xl flex items-center justify-center shadow-lg transition-all duration-300 hover:shadow-cyan-500/25 hover:scale-110"></div>
               <Link href="/" className="font-bold text-sm md:text-lg font-mono cursor-pointer hover:opacity-80 transition">
                 <span className="text-white">One</span>
                 <span className="text-cyan-400">Router</span>
@@ -66,468 +66,254 @@ export default function TermsPage() {
       </header>
 
       {/* Page Header */}
-      <header className="border-b border-[#222]">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <h1 className="text-3xl font-bold">Terms of Service</h1>
-          <p className="text-[#888] mt-2">Last Updated: January 2026</p>
+      <header className="border-b border-[#222] bg-gradient-to-b from-[#1a1a1a] to-transparent">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24">
+          <div className="max-w-3xl">
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 bg-gradient-to-r from-white via-white to-cyan-400 bg-clip-text text-transparent">
+              Terms of Service
+            </h1>
+            <p className="text-lg md:text-xl text-[#aaa] mb-2">
+              Clear and transparent service agreements.
+            </p>
+            <p className="text-[#777]">
+              Our commitment to fair and balanced terms
+            </p>
+          </div>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <Card className="bg-[#1a1a1a] border-[#222] mb-8">
-          <CardHeader>
-            <CardTitle className="text-2xl text-cyan-500">Agreement to Terms</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            <p className="text-[#888] leading-relaxed mb-4">
-              By accessing or using OneRouter (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;), you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use our service.
-            </p>
-            <p className="text-[#888] leading-relaxed">
-              These Terms of Service constitute a legally binding agreement between you and OneRouter. Please read them carefully.
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[#1a1a1a] border-[#222] mb-8">
-          <CardHeader>
-            <CardTitle className="text-2xl text-cyan-500">1. Acceptance of Terms</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            <p className="text-[#888] leading-relaxed">
-              By creating an account, using our API, or accessing our services, you acknowledge that you have read, understood, and agree to be bound by these Terms of Service and our Privacy Policy.
-            </p>
-            <div className="space-y-3">
-              <div className="p-4 bg-[#0a0a0a] rounded-lg border-l-4 border-cyan-500">
-                <h3 className="text-lg font-semibold text-cyan-400 mb-2">Creating an Account</h3>
-                <p className="text-sm text-[#888]">
-                  You represent that you are at least 18 years old and have the legal capacity to enter into this agreement. You agree to provide accurate, current, and complete information during the registration process.
-                </p>
-              </div>
-              <div className="p-4 bg-[#0a0a0a] rounded-lg border-l-4 border-cyan-500">
-                <h3 className="text-lg font-semibold text-cyan-400 mb-2">Modifications to Terms</h3>
-                <p className="text-sm text-[#888]">
-                  We reserve the right to modify these terms at any time. Continued use of the service after modifications constitutes your acceptance of the new terms. We will notify users of material changes via email or in-app notification.
-                </p>
-              </div>
-              <div className="p-4 bg-[#0a0a0a] rounded-lg border-l-4 border-cyan-500">
-                <h3 className="text-lg font-semibold text-cyan-400 mb-2">Effective Date</h3>
-                <p className="text-sm text-[#888]">
-                  These Terms of Service are effective as of December 28, 2025. By using our service on or after this date, you agree to the current version of these terms.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[#1a1a1a] border-[#222] mb-8">
-          <CardHeader>
-            <CardTitle className="text-2xl text-cyan-500">2. Account Responsibilities</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            <div>
-              <h3 className="text-lg font-semibold text-white mb-3">Account Security</h3>
-              <p className="text-[#888] mb-3">
-                You are responsible for:
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <div className="grid grid-cols-1 gap-8">
+          {/* Section 1 */}
+          <Card className="group bg-gradient-to-br from-[#1a1a1a] to-[#0f0f0f] border-[#222] hover:border-cyan-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/10 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <CardHeader className="relative z-10">
+              <CardTitle className="text-2xl text-cyan-400">Agreement to Terms</CardTitle>
+            </CardHeader>
+            <CardContent className="relative z-10 space-y-4">
+              <p className="text-[#888] leading-relaxed">
+                By accessing or using OneRouter (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;), you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use our service.
               </p>
-              <ul className="list-disc list-inside text-[#888] space-y-2 ml-6">
-                <li>Maintaining the confidentiality of your account credentials</li>
-                <li>Not sharing your API keys or payment gateway credentials</li>
-                <li>Notify us immediately of any unauthorized access</li>
-                <li>Using strong, unique passwords</li>
-                <li>Keeping your contact information up to date</li>
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold text-white mb-3">Prohibited Activities</h3>
-              <p className="text-[#888] mb-3">
-                You agree NOT to:
+              <p className="text-[#888] leading-relaxed">
+                These Terms of Service constitute a legally binding agreement between you and OneRouter. Please read them carefully before using our payment integration platform.
               </p>
-              <ul className="list-disc list-inside text-[#888] space-y-2 ml-6">
-                <li>Use the service for any illegal or unauthorized purpose</li>
-                <li>Attempt to gain unauthorized access to our systems</li>
-                <li>Interfere with or disrupt the service or servers</li>
-                <li>Introduce malware, viruses, or harmful code</li>
-                <li>Violate any applicable laws or regulations</li>
-                <li>Use the service to facilitate fraud or money laundering</li>
-                <li>Attempt to reverse engineer or decompile our software</li>
-              </ul>
-            </div>
+            </CardContent>
+          </Card>
 
-            <div>
-              <h3 className="text-lg font-semibold text-white mb-3">API Key Usage</h3>
-              <ul className="list-disc list-inside text-[#888] space-y-2 ml-6">
-                <li>Use API keys only for authorized business purposes</li>
-                <li>Do not share API keys with unauthorized parties</li>
-                <li>Implement proper error handling in your applications</li>
-                <li>Respect rate limits and usage quotas</li>
-                <li>Use test environment keys only for development/testing</li>
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold text-white mb-3">Payment Processing</h3>
-              <ul className="list-disc list-inside text-[#888] space-y-2 ml-6">
-                <li>Ensure all payments comply with applicable laws and regulations</li>
-                <li>Provide accurate transaction information to payment gateways</li>
-                <li>Handle refunds and disputes in accordance with payment provider terms</li>
-                <li>Do not use test payment gateways for live transactions</li>
-              </ul>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[#1a1a1a] border-[#222] mb-8">
-          <CardHeader>
-            <CardTitle className="text-2xl text-cyan-500">3. Service Availability</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            <p className="text-[#888] leading-relaxed">
-              We strive to maintain 99.9% uptime for our API services. However, we do not guarantee uninterrupted access.
-            </p>
-
-            <div className="space-y-3">
-              <div className="p-4 bg-[#0a0a0a] rounded-lg border-l-4 border-cyan-500">
-                <h3 className="text-lg font-semibold text-cyan-400 mb-2">Scheduled Maintenance</h3>
-                <p className="text-sm text-[#888]">
-                  We may perform scheduled maintenance with reasonable advance notice. We will attempt to notify users of significant maintenance windows via email or status page.
-                </p>
-              </div>
-
-              <div className="p-4 bg-[#0a0a0a] rounded-lg border-l-4 border-cyan-500">
-                <h3 className="text-lg font-semibold text-cyan-400 mb-2">Service Changes</h3>
-                <p className="text-sm text-[#888]">
-                  We reserve the right to modify, suspend, or discontinue any aspect of the service at any time. We will provide notice for material changes that affect your use of the service.
-                </p>
-              </div>
-
-              <div className="p-4 bg-[#0a0a0a] rounded-lg border-l-4 border-cyan-500">
-                <h3 className="text-lg font-semibold text-cyan-400 mb-2">Force Majeure Events</h3>
-                <p className="text-sm text-[#888]">
-                  We are not liable for service unavailability caused by events beyond our reasonable control, including but not limited to acts of God, war, or natural disasters.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[#1a1a1a] border-[#222] mb-8">
-          <CardHeader>
-            <CardTitle className="text-2xl text-cyan-500">4. Payment Gateway Integration</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            <p className="text-[#888] leading-relaxed mb-4">
-              OneRouter provides integration with third-party payment gateways. Your use of these payment gateways is also subject to their respective terms of service.
-            </p>
-
-            <div className="space-y-3">
-              <div className="p-4 bg-[#0a0a0a] rounded-lg border-l-4 border-cyan-500">
-                <h3 className="text-lg font-semibold text-cyan-400 mb-2">Provider Agreements</h3>
-                <p className="text-sm text-[#888]">
-                  By using payment gateways through OneRouter, you agree to the terms and conditions of each respective payment provider (Razorpay, PayPal, Stripe).
-                </p>
-              </div>
-
-              <div className="p-4 bg-[#0a0a0a] rounded-lg border-l-4 border-cyan-500">
-                <h3 className="text-lg font-semibold text-cyan-400 mb-2">Transaction Fees</h3>
-                <p className="text-sm text-[#888]">
-                  Payment gateway providers may charge transaction fees. OneRouter does not control or benefit from these fees. Please review each provider&apos;s pricing structure.
-                </p>
-              </div>
-
-              <div className="p-4 bg-[#0a0a0a] rounded-lg border-l-4 border-cyan-500">
-                <h3 className="text-lg font-semibold text-cyan-400 mb-2">Currency Conversion</h3>
-                <p className="text-sm text-[#888]">
-                  For international transactions, currency conversion fees may apply based on payment provider policies.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[#1a1a1a] border-[#222] mb-8">
-          <CardHeader>
-            <CardTitle className="text-2xl text-cyan-500">5. Limitation of Liability</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
-              <h3 className="text-lg font-semibold text-red-400 mb-2 flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5" />
-                Disclaimer
-              </h3>
-              <p className="text-sm text-[#888]">
-                To the maximum extent permitted by applicable law, OneRouter shall not be liable for any indirect, incidental, special, consequential, or punitive damages.
-              </p>
-            </div>
-
-            <div className="space-y-3">
+          {/* Section 2 */}
+          <Card className="group bg-gradient-to-br from-[#1a1a1a] to-[#0f0f0f] border-[#222] hover:border-cyan-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/10 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <CardHeader className="relative z-10">
+              <CardTitle className="text-2xl text-cyan-400">1. Account Responsibilities</CardTitle>
+            </CardHeader>
+            <CardContent className="relative z-10 space-y-6">
               <div>
-                <h3 className="text-lg font-semibold text-white mb-2">Transaction Processing</h3>
-                <p className="text-sm text-[#888]">
-                  We are not liable for failed transactions, delays, or errors caused by payment gateway providers or financial institutions.
-                </p>
+                <h3 className="text-lg font-semibold text-white mb-3">Account Security</h3>
+                <p className="text-[#888] mb-3">You are responsible for:</p>
+                <ul className="list-disc list-inside text-[#888] space-y-2 ml-4">
+                  <li>Maintaining the confidentiality of your account credentials</li>
+                  <li>Not sharing your API keys or payment gateway credentials</li>
+                  <li>Notifying us immediately of any unauthorized access</li>
+                  <li>Using strong, unique passwords</li>
+                  <li>Keeping your contact information up to date</li>
+                </ul>
               </div>
 
               <div>
-                <h3 className="text-lg font-semibold text-white mb-2">Data Accuracy</h3>
-                <p className="text-sm text-[#888]">
-                  While we strive for accuracy, we do not warrant that the information on our platform is complete, accurate, or error-free.
-                </p>
+                <h3 className="text-lg font-semibold text-white mb-3">Prohibited Activities</h3>
+                <p className="text-[#888] mb-3">You agree NOT to:</p>
+                <ul className="list-disc list-inside text-[#888] space-y-2 ml-4">
+                  <li>Use the service for any illegal or unauthorized purpose</li>
+                  <li>Attempt to gain unauthorized access to our systems</li>
+                  <li>Interfere with or disrupt the service or servers</li>
+                  <li>Introduce malware, viruses, or harmful code</li>
+                  <li>Violate any applicable laws or regulations</li>
+                  <li>Use the service to facilitate fraud or money laundering</li>
+                  <li>Attempt to reverse engineer or decompile our software</li>
+                </ul>
               </div>
+            </CardContent>
+          </Card>
 
-              <div>
-                <h3 className="text-lg font-semibold text-white mb-2">Third-Party Actions</h3>
-                <p className="text-sm text-[#888]">
-                  We are not responsible for actions, policies, or practices of third-party payment gateway providers.
-                </p>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-semibold text-white mb-2">Maximum Liability</h3>
-                <p className="text-sm text-[#888]">
-                  Our total liability to you for all claims shall not exceed the amount you paid to us in the three (3) months preceding the claim.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[#1a1a1a] border-[#222] mb-8">
-          <CardHeader>
-            <CardTitle className="text-2xl text-cyan-500">6. Termination</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            <div>
-              <h3 className="text-lg font-semibold text-white mb-3">Termination by You</h3>
-              <p className="text-[#888]">
-                You may terminate your account at any time by:
+          {/* Section 3 */}
+          <Card className="group bg-gradient-to-br from-[#1a1a1a] to-[#0f0f0f] border-[#222] hover:border-cyan-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/10 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <CardHeader className="relative z-10">
+              <CardTitle className="text-2xl text-cyan-400">2. Service Availability</CardTitle>
+            </CardHeader>
+            <CardContent className="relative z-10 space-y-4">
+              <p className="text-[#888] leading-relaxed">
+                We strive to maintain 99.9% uptime for our API services. However, we do not guarantee uninterrupted access. We reserve the right to modify, suspend, or discontinue any aspect of the service at any time.
               </p>
-              <ul className="list-disc list-inside text-[#888] space-y-2 ml-6">
-                <li>Deleting your account through the dashboard</li>
-                <li>Revoking all API keys</li>
-                <li>Removing all payment gateway credentials</li>
-                <li>Contacting our support team</li>
-              </ul>
-              <p className="text-sm text-[#888] mt-3">
-                Upon termination, your right to use the service will immediately cease. You will not be entitled to any refund of fees paid.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold text-white mb-3">Termination by OneRouter</h3>
-              <p className="text-[#888] mb-3">
-                We reserve the right to suspend or terminate your access to the service if:
-              </p>
-              <ul className="list-disc list-inside text-[#888] space-y-2 ml-6">
-                <li>You violate these Terms of Service</li>
-                <li>You engage in fraudulent or illegal activities</li>
-                <li>Your account remains inactive for an extended period (12+ months)</li>
-                <li>You fail to pay applicable fees when required</li>
-                <li>We receive valid legal request to terminate your account</li>
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold text-white mb-3">Effect of Termination</h3>
-              <p className="text-sm text-[#888]">
-                Upon termination:
-              </p>
-              <ul className="list-disc list-inside text-[#888] space-y-2 ml-6">
-                <li>All API keys will be immediately revoked</li>
-                <li>Access to your account and data will be terminated</li>
-                <li>We may retain certain data as required by law or for legitimate business purposes</li>
-                <li>Any provisions that by their nature should survive termination will continue to apply</li>
-              </ul>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[#1a1a1a] border-[#222] mb-8">
-          <CardHeader>
-            <CardTitle className="text-2xl text-cyan-500">7. Dispute Resolution</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            <p className="text-[#888] leading-relaxed mb-4">
-              We are committed to resolving disputes fairly and efficiently. If you have a concern, please contact us first.
-            </p>
-
-            <div className="space-y-3">
               <div className="p-4 bg-[#0a0a0a] rounded-lg border-l-4 border-cyan-500">
-                <h3 className="text-lg font-semibold text-cyan-400 mb-2">Contact Support First</h3>
-                <p className="text-sm text-[#888]">
-                  Before escalating disputes or filing complaints, please contact our support team to resolve the issue amicably.
+                <p className="text-sm text-cyan-500">
+                  <strong>Note:</strong> We will provide reasonable advance notice for scheduled maintenance or material service changes.
                 </p>
               </div>
+            </CardContent>
+          </Card>
 
+          {/* Section 4 */}
+          <Card className="group bg-gradient-to-br from-[#1a1a1a] to-[#0f0f0f] border-[#222] hover:border-cyan-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/10 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <CardHeader className="relative z-10">
+              <CardTitle className="text-2xl text-cyan-400">3. Payment Gateway Integration</CardTitle>
+            </CardHeader>
+            <CardContent className="relative z-10 space-y-4">
+              <p className="text-[#888] leading-relaxed mb-2">
+                OneRouter provides integration with third-party payment gateways. Your use of these payment gateways is also subject to their respective terms of service.
+              </p>
+              <ul className="list-disc list-inside text-[#888] space-y-2 ml-4">
+                <li><strong>Provider Agreements:</strong> You agree to the terms of each payment provider (Razorpay, PayPal, Stripe)</li>
+                <li><strong>Transaction Fees:</strong> Payment gateway providers may charge fees not controlled by OneRouter</li>
+                <li><strong>Compliance:</strong> All transactions must comply with applicable laws and regulations</li>
+              </ul>
+            </CardContent>
+          </Card>
+
+          {/* Section 5 */}
+          <Card className="group bg-gradient-to-br from-red-500/10 to-[#0f0f0f] border-red-500/30 hover:border-cyan-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/10 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <CardHeader className="relative z-10">
+              <CardTitle className="text-2xl text-red-400 flex items-center gap-2">
+                <AlertTriangle className="w-6 h-6" />
+                4. Limitation of Liability
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="relative z-10 space-y-4">
+              <p className="text-[#888] leading-relaxed">
+                To the maximum extent permitted by applicable law, OneRouter shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of the service.
+              </p>
+              <ul className="list-disc list-inside text-[#888] space-y-2 ml-4 text-sm">
+                <li>Failed transactions or delays caused by payment gateway providers</li>
+                <li>Inaccurate information or data on our platform</li>
+                <li>Actions or policies of third-party payment providers</li>
+              </ul>
+              <div className="p-4 bg-[#0a0a0a] rounded-lg border-l-4 border-red-500">
+                <p className="text-sm text-red-400">
+                  <strong>Maximum Liability:</strong> Our total liability shall not exceed the amount you paid to us in the preceding 3 months.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Section 6 */}
+          <Card className="group bg-gradient-to-br from-[#1a1a1a] to-[#0f0f0f] border-[#222] hover:border-cyan-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/10 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <CardHeader className="relative z-10">
+              <CardTitle className="text-2xl text-cyan-400">5. Termination</CardTitle>
+            </CardHeader>
+            <CardContent className="relative z-10 space-y-4">
+              <div>
+                <h3 className="text-lg font-semibold text-white mb-2">You May Terminate At Any Time</h3>
+                <ul className="list-disc list-inside text-[#888] space-y-1 ml-4 text-sm">
+                  <li>Delete your account through the dashboard</li>
+                  <li>Revoke all API keys</li>
+                  <li>Contact our support team</li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-semibold text-white mb-2">We May Terminate If</h3>
+                <ul className="list-disc list-inside text-[#888] space-y-1 ml-4 text-sm">
+                  <li>You violate these Terms of Service</li>
+                  <li>You engage in fraudulent or illegal activities</li>
+                  <li>Your account remains inactive for 12+ months</li>
+                  <li>You fail to pay applicable fees</li>
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Section 7 */}
+          <Card className="group bg-gradient-to-br from-[#1a1a1a] to-[#0f0f0f] border-[#222] hover:border-cyan-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/10 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <CardHeader className="relative z-10">
+              <CardTitle className="text-2xl text-cyan-400">6. Governing Law & Dispute Resolution</CardTitle>
+            </CardHeader>
+            <CardContent className="relative z-10 space-y-4">
+              <p className="text-[#888] leading-relaxed">
+                These Terms of Service are governed by applicable laws. For disputes, we encourage contacting our support team first to resolve issues amicably within 3 business days.
+              </p>
               <div className="p-4 bg-[#0a0a0a] rounded-lg border-l-4 border-cyan-500">
-                <h3 className="text-lg font-semibold text-cyan-400 mb-2">Response Time</h3>
-                <p className="text-sm text-[#888]">
-                  We will respond to support inquiries within 3 business days. For urgent issues, we will respond within 24 hours.
+                <p className="text-sm text-cyan-500">
+                  <strong>Support Email:</strong> support@onerouter.com
                 </p>
               </div>
+            </CardContent>
+          </Card>
 
-              <div className="p-4 bg-[#0a0a0a] rounded-lg border-l-4 border-cyan-500">
-                <h3 className="text-lg font-semibold text-cyan-400 mb-2">Legal Recourse</h3>
-                <p className="text-sm text-[#888]">
-                  If disputes cannot be resolved amicably, you agree to submit to binding arbitration in accordance with applicable laws.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          {/* Section 8 */}
+          <Card className="group bg-gradient-to-br from-[#1a1a1a] to-[#0f0f0f] border-[#222] hover:border-cyan-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/10 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <CardHeader className="relative z-10">
+              <CardTitle className="text-2xl text-cyan-400">7. Indemnification</CardTitle>
+            </CardHeader>
+            <CardContent className="relative z-10">
+              <p className="text-[#888] leading-relaxed">
+                You agree to indemnify and hold harmless OneRouter from claims arising from your violation of these terms, misuse of API keys, or non-compliance with payment provider agreements.
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card className="bg-[#1a1a1a] border-[#222] mb-8">
-          <CardHeader>
-            <CardTitle className="text-2xl text-cyan-500">8. Governing Law & Jurisdiction</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            <p className="text-[#888] leading-relaxed">
-              These Terms of Service and any dispute or claim arising out of or relating to them shall be governed by and construed in accordance with the laws of the jurisdiction where OneRouter is established.
-            </p>
-
-            <div className="space-y-3">
+          {/* Section 9 */}
+          <Card className="group bg-gradient-to-br from-[#1a1a1a] to-[#0f0f0f] border-[#222] hover:border-cyan-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/10 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <CardHeader className="relative z-10">
+              <CardTitle className="text-2xl text-cyan-400">8. Miscellaneous</CardTitle>
+            </CardHeader>
+            <CardContent className="relative z-10 space-y-3">
               <div>
-                <h3 className="text-lg font-semibold text-white mb-2">Governing Law</h3>
-                <p className="text-sm text-[#888]">
-                  These terms are governed by the laws of [Jurisdiction to be specified by OneRouter], without regard to conflict of law provisions.
-                </p>
+                <h3 className="text-sm font-semibold text-white">Entire Agreement</h3>
+                <p className="text-sm text-[#888]">These terms constitute the entire agreement regarding your use of the service.</p>
               </div>
-
               <div>
-                <h3 className="text-lg font-semibold text-white mb-2">Jurisdiction</h3>
-                <p className="text-sm text-[#888]">
-                  Any legal action or proceeding shall be subject to the exclusive jurisdiction of the courts in [Jurisdiction to be specified].
-                </p>
+                <h3 className="text-sm font-semibold text-white">Severability</h3>
+                <p className="text-sm text-[#888]">If any provision is invalid, remaining provisions continue in full effect.</p>
               </div>
-
               <div>
-                <h3 className="text-lg font-semibold text-white mb-2">International Use</h3>
-                <p className="text-sm text-[#888]">
-                  For users outside the governing jurisdiction, these terms shall be governed by applicable international laws and regulations.
-                </p>
+                <h3 className="text-sm font-semibold text-white">No Partnership</h3>
+                <p className="text-sm text-[#888]">Nothing here creates a partnership, joint venture, or agency relationship.</p>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        <Card className="bg-[#1a1a1a] border-[#222] mb-8">
-          <CardHeader>
-            <CardTitle className="text-2xl text-cyan-500">9. Indemnification</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            <p className="text-[#888] leading-relaxed mb-4">
-              You agree to indemnify and hold harmless OneRouter, its officers, directors, employees, and agents from any claims arising from your use of the service or violation of these Terms of Service.
-            </p>
-
-            <ul className="list-disc list-inside text-[#888] space-y-2 ml-6">
-              <li>Your misuse of API keys or credentials</li>
-              <li>Your violation of these terms or applicable laws</li>
-              <li>Any third-party claims arising from your use of payment gateways</li>
-              <li>Claims related to your non-compliance with payment provider terms</li>
-            </ul>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[#1a1a1a] border-[#222] mb-8">
-          <CardHeader>
-            <CardTitle className="text-2xl text-cyan-500">10. Miscellaneous</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            <div>
-              <h3 className="text-lg font-semibold text-white mb-2">Entire Agreement</h3>
-              <p className="text-sm text-[#888]">
-                These Terms of Service constitute the entire agreement between you and OneRouter regarding your use of the service. They supersede all prior agreements.
+          {/* Contact Section */}
+          <Card className="group bg-linear-to-r from-cyan-500/20 via-blue-500/10 to-[#0f0f0f] border-cyan-500/50 hover:border-cyan-500/80 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/20 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <CardHeader className="relative z-10">
+              <CardTitle className="text-2xl text-cyan-400">Have Questions?</CardTitle>
+            </CardHeader>
+            <CardContent className="relative z-10 space-y-4">
+              <p className="text-[#888] leading-relaxed">
+                If you have questions about these Terms of Service, our Privacy Policy, or any aspect of our service, we&apos;re here to help.
               </p>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold text-white mb-2">Severability</h3>
-              <p className="text-sm text-[#888]">
-                If any provision of these terms is found to be invalid or unenforceable, the remaining provisions shall continue in full force and effect.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold text-white mb-2">Waiver</h3>
-              <p className="text-sm text-[#888]">
-                Our failure to enforce any right or provision of these terms shall not constitute a waiver of such right or provision.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold text-white mb-2">No Partnership</h3>
-              <p className="text-sm text-[#888]">
-                Nothing in these terms shall be construed as creating a partnership, joint venture, or agency relationship between you and OneRouter.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold text-white mb-2">Assignment</h3>
-              <p className="text-sm text-[#888]">
-                You may not assign or transfer your rights or obligations under these terms without our prior written consent. We may freely assign these terms to any successor of our business.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[#1a1a1a] border-[#222] mb-8">
-          <CardHeader>
-            <CardTitle className="text-2xl text-cyan-500">Contact Information</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            <p className="text-[#888] leading-relaxed mb-4">
-              For questions about these Terms of Service, please contact us:
-            </p>
-            <div className="p-4 bg-[#0a0a0a] rounded-lg border-l-4 border-cyan-500">
-              <p className="text-sm">
-                <strong className="text-cyan-500">Email:</strong> legal@onerouter.com
-              </p>
-              <p className="text-sm text-[#888] mt-2">
-                We typically respond to legal inquiries within 5 business days.
-              </p>
-            </div>
-            <Link
-              href="/contact"
-              className="inline-flex items-center gap-2 mt-4 text-cyan-500 hover:text-cyan-400"
-            >
-              <Button variant="outline" className="border-[#222] text-white hover:border-cyan-500">
-                Contact Support
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-linear-to-r from-cyan-500/20 to-blue-500/20 border-2 border-cyan-500/50 mb-8">
-          <CardContent className="p-8 text-center">
-            <h2 className="text-2xl font-bold text-white mb-3">Questions?</h2>
-            <p className="text-[#888] mb-6 max-w-2xl mx-auto">
-              If you have questions about these Terms of Service, our Privacy Policy, or any aspect of our service, please don&apos;t hesitate to reach out.
-            </p>
-            <div className="flex justify-center gap-4">
-              <Link href="/contact">
-                <Button className="bg-cyan-500 hover:bg-cyan-600 text-black font-medium px-8">
-                  Contact Support
-                </Button>
-              </Link>
-              <Link href="/docs">
-                <Button variant="outline" className="border-[#222] text-white hover:border-cyan-500">
-                  View Documentation
-                </Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <Link href="/contact">
+                  <Button className="bg-cyan-500 hover:bg-cyan-600 text-black font-bold px-8 py-3 rounded-lg transition-all hover:scale-105">
+                    Contact Support
+                  </Button>
+                </Link>
+                <Link href="/privacy">
+                  <Button variant="outline" className="border-cyan-500/50 text-white hover:border-cyan-400 hover:bg-cyan-500/10 px-8 py-3 rounded-lg transition-all">
+                    Privacy Policy
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-[#222] mt-16">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <footer className="border-t border-[#222] mt-16 bg-black">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-6 text-sm text-[#888]">
-              <Link href="/privacy">Privacy Policy</Link>
-              <Link href="/docs">Documentation</Link>
-              <Link href="/pricing">Pricing</Link>
-              <Link href="/contact">Contact</Link>
+              <Link href="/docs" className="hover:text-white transition">Documentation</Link>
+              <Link href="/privacy" className="hover:text-white transition">Privacy Policy</Link>
+              <Link href="/pricing" className="hover:text-white transition">Pricing</Link>
+              <Link href="/contact" className="hover:text-white transition">Contact</Link>
             </div>
             <p className="text-sm text-[#666]">
               © 2025 OneRouter. All rights reserved.
@@ -538,3 +324,4 @@ export default function TermsPage() {
     </div>
   );
 }
+    

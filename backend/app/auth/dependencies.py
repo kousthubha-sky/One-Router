@@ -1,5 +1,6 @@
 import hashlib
 import secrets
+from datetime import datetime, timezone 
 from fastapi import HTTPException, Depends, Request, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional, Dict, Any
@@ -104,17 +105,16 @@ async def get_api_user(
     api_key_obj, user = row
 
     # Check expiration
-    if api_key_obj.expires_at and api_key_obj.expires_at < datetime.utcnow():
+    if api_key_obj.expires_at and api_key_obj.expires_at < datetime.now(timezone.utc): # type: ignore
         raise HTTPException(
             status_code=401,
             detail="API key has expired"
         )
 
-    # Update last used (don't await - fire and forget)
-    api_key_obj.last_used_at = datetime.utcnow()
+    # Update last used timestamp
+    api_key_obj.last_used_at = datetime.now(timezone.utc)  # type: ignore
     db.add(api_key_obj)
     await db.commit()
-
     # Return simplified auth data
     return {
         "id": str(user.id),
@@ -132,13 +132,8 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
         raise HTTPException(status_code=401, detail="Authorization header missing or invalid")
 
     token = auth_header.split(" ")[1]
-    print(f"DEBUG: Received token: {token[:50]}...")
-
     # Verify token with Clerk
-    token_payload = await clerk_auth.verify_token(token)
-    print(f"DEBUG: Authenticated user: {token_payload}")
-
-    # Extract user info from token
+    token_payload = await clerk_auth.verify_token(token)    # Extract user info from token
     clerk_user_id = token_payload.get("sub")
     if not clerk_user_id:
         raise HTTPException(status_code=401, detail="Invalid token: missing user ID")
@@ -159,7 +154,7 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
             name = f"User {clerk_user_id[-8:]}"
 
         # Set timestamps explicitly (naive UTC datetime for PostgreSQL)
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)  # type: ignore
 
         new_user = User(
             id=uuid4(),
@@ -173,8 +168,7 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
         await db.commit()
         await db.refresh(new_user)
         db_user = new_user
-        print(f"✅ Created new user: {db_user.id} with email: {email}, name: {name}")
-
+        print(f" Created new user: {db_user.id}")
     return {
         "id": str(db_user.id),
         "clerk_user_id": db_user.clerk_user_id,
@@ -182,3 +176,121 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
         "name": db_user.name,
         "created_at": db_user.created_at
     }
+
+# Dependency for flexible auth (API key OR Clerk token)
+async def get_api_or_current_user(
+    authorization: Optional[str] = Header(None),
+    x_platform_key: Optional[str] = Header(None, alias="X-Platform-Key"),
+    request: Request = None,
+    db: AsyncSession = Depends(get_db)
+) -> dict:
+    """
+    Flexible authentication that accepts either:
+    1. API key (Bearer token for SDK users)
+    2. Clerk token (Bearer token for frontend users)
+    
+    Tries API key first, falls back to Clerk token.
+    """
+    # Extract API key/token from headers
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ", 1)[1]
+    elif x_platform_key:
+        token = x_platform_key
+    
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail="Authorization header missing or invalid"
+        )
+    
+    # First, try API key authentication
+    try:
+        key_hash = hashlib.sha256(token.encode()).hexdigest()
+        result = await db.execute(
+            select(ApiKey, User)
+            .join(User, ApiKey.user_id == User.id)
+            .where(
+                ApiKey.key_hash == key_hash,
+                ApiKey.is_active == True
+            )
+        )
+        row = result.one_or_none()
+        
+        if row:
+            api_key_obj, user = row
+            
+            # Check expiration
+            if api_key_obj.expires_at and api_key_obj.expires_at < datetime.now(timezone.utc): # type: ignore
+                raise HTTPException(
+                    status_code=401,
+                    detail="API key has expired"
+                )
+            
+            # Update last used
+            api_key_obj.last_used_at = datetime.now(timezone.utc)  # type: ignore
+            db.add(api_key_obj)
+            await db.commit()
+            
+            return {
+                "id": str(user.id),
+                "email": user.email,
+                "name": user.name,
+                "api_key": api_key_obj,
+                "environment": api_key_obj.environment,
+                "auth_type": "api_key"
+            }
+    except HTTPException:
+        pass  # Invalid/expired key -> try Clerk
+    except Exception:
+        raise  # Unexpected failure should surface
+    # Fall back to Clerk token authentication
+    try:
+        token_payload = await clerk_auth.verify_token(token)
+        clerk_user_id = token_payload.get("sub")
+        
+        if not clerk_user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        # Check if user exists in database, create if not
+        result = await db.execute(select(User).where(User.clerk_user_id == clerk_user_id))
+        db_user = result.scalar_one_or_none()
+        
+        if not db_user:
+            try:
+                profile = await clerk_auth.get_user_profile(clerk_user_id)
+                email = profile.get("email") or f"{clerk_user_id}@clerk.local"
+                name = profile.get("name") or f"User {clerk_user_id[-8:]}"
+            except Exception:
+                email = f"{clerk_user_id}@clerk.local"
+                name = f"User {clerk_user_id[-8:]}"
+            
+            now = datetime.now(timezone.utc)  # type: ignore
+            new_user = User(
+                id=uuid4(),
+                clerk_user_id=clerk_user_id,
+                email=email,
+                name=name,
+                created_at=now,
+                updated_at=now
+            )
+            db.add(new_user)
+            await db.commit()
+            await db.refresh(new_user)
+            db_user = new_user
+        
+        return {
+            "id": str(db_user.id),
+            "clerk_user_id": db_user.clerk_user_id,
+            "email": db_user.email,
+            "name": db_user.name,
+            "created_at": db_user.created_at,
+            "auth_type": "clerk"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid credentials"
+        )

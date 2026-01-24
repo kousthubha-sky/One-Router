@@ -8,9 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-gradient-to-br from-black via-[#0a0a0a] to-black text-white">
       {/* Navbar */}
-      <header className="sticky top-0 z-50 bg-black border-b border-[#222]">
+      <header className="sticky top-0 z-50 bg-black/80 backdrop-blur-md border-b border-[#222]">
         <div className="w-full h-16 flex items-center border-l border-r border-[#222] relative">
           {/* Vertical gridlines - hidden on mobile */}
           <div className="absolute inset-0 pointer-events-none hidden md:flex">
@@ -65,10 +65,19 @@ export default function PrivacyPage() {
       </header>
 
       {/* Page Header */}
-      <header className="border-b border-[#222]">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <h1 className="text-3xl font-bold">Privacy Policy</h1>
-          <p className="text-[#888] mt-2">Last Updated: January 2026</p>
+      <header className="border-b border-[#222] bg-gradient-to-b from-[#1a1a1a] to-transparent">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24">
+          <div className="max-w-3xl">
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 bg-gradient-to-r from-white via-white to-cyan-400 bg-clip-text text-transparent">
+              Privacy Policy
+            </h1>
+            <p className="text-lg md:text-xl text-[#aaa] mb-2">
+              Your data security is our top priority.
+            </p>
+            <p className="text-[#777]">
+              Transparent practices and protection standards
+            </p>
+          </div>
         </div>
       </header>
 
@@ -444,14 +453,14 @@ export default function PrivacyPage() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-[#222] mt-16">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <footer className="border-t border-[#222] mt-16 bg-black">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-6 text-sm text-[#888]">
-              <Link href="/docs">Documentation</Link>
-              <Link href="/terms">Terms of Service</Link>
-              <Link href="/pricing">Pricing</Link>
-              <Link href="/contact">Contact</Link>
+              <Link href="/docs" className="hover:text-white transition">Documentation</Link>
+              <Link href="/privacy" className="hover:text-white transition">Privacy Policy</Link>
+              <Link href="/terms" className="hover:text-white transition">Terms of Service</Link>
+              <Link href="/pricing" className="hover:text-white transition">Pricing</Link>
             </div>
             <p className="text-sm text-[#666]">
               © 2025 OneRouter. All rights reserved.
@@ -462,3 +471,4 @@ export default function PrivacyPage() {
     </div>
   );
 }
+     

@@ -9,6 +9,7 @@ from datetime import datetime
 from ..database import get_db
 from ..auth.dependencies import get_current_user
 from ..models import ServiceCredential
+from ..models.user import User
 from ..services.credential_manager import CredentialManager
 
 router = APIRouter()
@@ -36,22 +37,43 @@ class UpdateCredentialsRequest(BaseModel):
 @router.get("/services", response_model=ServicesResponse)
 async def get_user_services(
     user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    environment: str = "test"
 ):
     """
-    Get all services connected by the user
+    Get all services connected by the user, filtered by environment
+    
+    Query Parameters:
+    - environment: 'test' or 'live' (default: 'test')
     
     This endpoint is called by the dashboard to check:
     1. Does user have ANY services? (show onboarding vs dashboard)
     2. Which services are connected? (display service cards)
     3. What features are enabled? (show feature toggles)
+    4. Filter by environment: Only show test services in test mode, live in live mode
     """
     try:
-        # Query all active services for this user
+        # Get user's preferred environment
+        user_obj = await db.execute(select(User).where(User.id == user['id']))
+        user_obj = user_obj.scalar_one_or_none()
+        preferred_env = "test"
+        if user_obj and user_obj.preferences:
+            preferred_env = user_obj.preferences.get("current_environment", "test")
+
+        # If default environment used, override with user's preference
+        if environment == "test":
+            environment = preferred_env
+
+        # Validate environment parameter
+        if environment not in ["test", "live"]:
+            environment = "test"
+        
+        # Query services for this user AND the requested environment
         result = await db.execute(
             select(ServiceCredential).where(
                 ServiceCredential.user_id == user["id"],
-                ServiceCredential.is_active
+                ServiceCredential.is_active,
+                ServiceCredential.environment == environment  # Filter by environment
             )
         )
         credentials = result.scalars().all()
@@ -163,6 +185,13 @@ async def update_service_credentials(
         validation_errors = cred_manager.validate_credentials_format(service_name, request.credentials)
         if validation_errors:
             raise HTTPException(status_code=400, detail=f"Invalid credentials: {validation_errors}")
+
+        # Validate environment before persisting
+        if request.environment not in ["test", "live"]:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid environment. Must be 'test' or 'live'"
+            )
 
         # Encrypt and update the credentials
         encrypted_creds = cred_manager.encrypt_credentials(request.credentials)
@@ -385,6 +414,24 @@ async def switch_all_environments_atomic(
                 detail="Invalid environment. Must be 'test' or 'live'"
             )
         
+        # If switching to live, verify user has live credentials configured
+        if target_env == "live":
+            result = await db.execute(
+                select(ServiceCredential).where(
+                    ServiceCredential.user_id == user_id,
+                    ServiceCredential.provider_name == "razorpay",
+                    ServiceCredential.environment == "live",
+                    ServiceCredential.is_active == True
+                )
+            )
+            live_creds = result.scalar_one_or_none()
+            
+            if not live_creds:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Cannot switch to live mode: Please configure live Razorpay credentials first"
+                )
+        
         # Use database transaction for atomicity
         async with db.begin_nested() as nested_transaction:
             # Build query for services to update
@@ -471,7 +518,7 @@ async def verify_environment_switch(
             "switched_count": 5,
             "failed_count": 0,
             "services": [
-                {"name": "razorpay", "environment": "live", "switched": true},
+                {"id": "...", "provider_name": "razorpay", "environment": "live", "switched": true},
                 ...
             ]
         }
@@ -479,6 +526,13 @@ async def verify_environment_switch(
     try:
         user_id = str(user.get("id"))
         expected_env = request.expected
+        
+        # Validate expected environment
+        if expected_env not in ["test", "live"]:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid environment. Must be 'test' or 'live'"
+            )
         
         # Fetch all active services for user
         result = await db.execute(

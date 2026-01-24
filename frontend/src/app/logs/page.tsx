@@ -116,7 +116,7 @@ export default function LogsPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-l border-r border-white/10">
             <div className="flex justify-between items-center py-6">
               <div className="flex items-center space-x-4">
-                <GlobalEnvironmentToggle services={services} />
+                <GlobalEnvironmentToggle services={services} apiClient={apiClient} />
                 <div className="px-4 rounded-full text-sm font-medium text-cyan-500 transition-all duration-300 hover:bg-cyan-500/10">
                   Free Plan
                 </div>

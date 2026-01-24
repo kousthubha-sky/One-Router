@@ -25,6 +25,7 @@ class Settings:
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
     API_HOST: str = os.getenv("API_HOST", "0.0.0.0")
     API_PORT: int = int(os.getenv("API_PORT", "8000"))
+    API_BASE_URL: str = os.getenv("API_BASE_URL", "http://localhost:8000")
 
     # Security
     SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
@@ -57,6 +58,17 @@ class Settings:
         "POST /v1/refunds",
         "POST /v1/subscriptions",
     ]
+
+    # Razorpay Configuration (for OneRouter's own payment processing)
+    RAZORPAY_KEY_ID: str = os.getenv("RAZORPAY_KEY_ID", "")
+    RAZORPAY_KEY_SECRET: str = os.getenv("RAZORPAY_KEY_SECRET", "")
+    RAZORPAY_WEBHOOK_SECRET: str = os.getenv("RAZORPAY_WEBHOOK_SECRET", "")
+    # Feature flag for Razorpay requirement: defaults to True in production, False in development.
+    # Can be overridden with RAZORPAY_REQUIRED env var. Production enforcement is also applied in validate().
+    RAZORPAY_REQUIRED: bool = os.getenv(
+        "RAZORPAY_REQUIRED",
+        "true" if os.getenv("ENVIRONMENT", "development") == "production" else "false"
+    ).lower() == "true"
 
     def __init__(self):
         """Initialize settings and validate/generate encryption key"""
@@ -125,6 +137,25 @@ class Settings:
 
         if not self.ENCRYPTION_KEY:
             raise ValueError("ENCRYPTION_KEY is required")
+
+        # Validate Razorpay credentials if enabled (required in production, optional in development)
+        if self.RAZORPAY_REQUIRED or self.ENVIRONMENT == "production":
+            missing_razorpay = []
+            
+            if not self.RAZORPAY_KEY_ID:
+                missing_razorpay.append("RAZORPAY_KEY_ID")
+            if not self.RAZORPAY_KEY_SECRET:
+                missing_razorpay.append("RAZORPAY_KEY_SECRET")
+            if not self.RAZORPAY_WEBHOOK_SECRET:
+                missing_razorpay.append("RAZORPAY_WEBHOOK_SECRET")
+            
+            if missing_razorpay:
+                missing_vars = ", ".join(missing_razorpay)
+                raise ValueError(
+                    f"Razorpay payment processing is enabled but the following required "
+                    f"environment variables are missing: {missing_vars}. "
+                    f"Set these environment variables or set RAZORPAY_REQUIRED=false to disable Razorpay."
+                )
 
         return True
 
