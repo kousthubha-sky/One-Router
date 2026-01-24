@@ -202,8 +202,7 @@ async def verify_razorpay_webhook(
         success = await credential_manager.verify_razorpay_webhook(
             db=db,
             user_id=user["id"],
-            environment=environment,
-            webhook_url=webhook_url
+            environment=environment
         )
         
         if not success:
