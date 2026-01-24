@@ -60,6 +60,7 @@ export function GlobalEnvironmentToggle({ services, onGlobalSwitch, apiClient }:
     }, [services]);
 
   const switchAllServices = async (targetEnvironment: "test" | "live") => {
+    const previousMode = currentMode;
     if (services.length === 0) return;
     
     // Require apiClient for switching environments
@@ -113,8 +114,8 @@ export function GlobalEnvironmentToggle({ services, onGlobalSwitch, apiClient }:
 
     } catch (error) {
       console.error("Failed to switch all services:", error);
-      // Reset on error
-      setCurrentMode("test");
+       // Restore previous mode on error
+      setCurrentMode(previousMode);
       
       // Show user-friendly error message
       const errorMsg = error instanceof Error ? error.message : String(error);
