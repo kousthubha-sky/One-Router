@@ -168,11 +168,7 @@ async def send_sms(
                 )
         except Exception as credit_error:
             credits_deducted = False
-            logger.error(f"Credit deduction failed after SMS: {credit_error}")
-        except Exception as credit_error:
-            # SMS was sent but credit deduction failed
-            logger.error(f"Credit deduction failed after SMS: {credit_error}")
-
+            logger.exception("Credit deduction failed after SMS: %s", credit_error)
         # Calculate cost
         cost = await cost_tracker.calculate_cost("twilio", "send_sms", params)
         response_time_ms = int((time.time() - start_time) * 1000)
