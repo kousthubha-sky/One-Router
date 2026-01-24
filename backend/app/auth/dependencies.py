@@ -240,9 +240,10 @@ async def get_api_or_current_user(
                 "environment": api_key_obj.environment,
                 "auth_type": "api_key"
             }
+    except HTTPException:
+        pass  # Invalid/expired key -> try Clerk
     except Exception:
-        pass  # Fall through to Clerk auth
-    
+        raise  # Unexpected failure should surface
     # Fall back to Clerk token authentication
     try:
         token_payload = await clerk_auth.verify_token(token)
