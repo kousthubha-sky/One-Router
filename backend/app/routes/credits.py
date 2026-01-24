@@ -12,11 +12,6 @@ import httpx
 from uuid import uuid4
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
-import hmac
-import hashlib
-import logging
-import httpx
-from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
