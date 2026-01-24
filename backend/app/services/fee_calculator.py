@@ -5,7 +5,7 @@ Calculates fees based on actual usage (payments, SMS, email).
 
 from dataclasses import dataclass
 from typing import Dict, Any
-from decimal import Decimal
+from decimal import Decimal, ROUND_UP       
 
 
 @dataclass
@@ -100,9 +100,9 @@ class FeeCalculator:
         Returns:
             UsageFee with breakdown
         """
-        fee_rupees = emails * cls.EMAIL_PER_MESSAGE
-        rounded_fee_rupees = round(fee_rupees, 2)
-        fee_paise = int(round(rounded_fee_rupees * 100))
+        fee_rupees = Decimal(str(emails)) * Decimal(str(cls.EMAIL_PER_MESSAGE))
+        fee_paise = int((fee_rupees * Decimal("100")).quantize(Decimal("1"), rounding=ROUND_UP))
+        rounded_fee_rupees = float(Decimal(fee_paise) / Decimal("100"))
         
         return UsageFee(
             service_type="email",
