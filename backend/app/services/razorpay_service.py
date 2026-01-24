@@ -111,8 +111,22 @@ class RazorpayService:
         Raises:
             Exception: If payment_id is not provided or order_id does not match
         """
+
         if not payment_id:
-            raise ValueError("Payment ID is required for verification")
+           # Fallback: look up payments for this order
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{self.base_url}/orders/{order_id}/payments",
+                    headers=self.headers,
+                    timeout=30.0
+                )
+                if response.status_code != 200:
+                    raise Exception(f"Payment lookup failed: {response.text}")
+                payments = response.json().get("items", [])
+                if not payments:
+                    raise ValueError(f"No payments found for order {order_id}")
+                payment = next((p for p in payments if p.get("status") == "captured"), payments[0])
+                return payment
         
         if not self.is_configured():
             # Return mock verification for demo
