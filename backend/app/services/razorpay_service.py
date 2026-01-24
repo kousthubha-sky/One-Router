@@ -111,6 +111,18 @@ class RazorpayService:
         Raises:
             Exception: If payment_id is not provided or order_id does not match
         """
+        
+        if not self.is_configured():
+            # Return mock verification for demo
+            mock_payment_id = payment_id or f"pay_{uuid4().hex[:16]}"
+            return {
+                "id": mock_payment_id,
+                "entity": "payment",
+                "order_id": order_id,
+                "status": "captured",
+                "amount": 10000,  # Default amount
+                "currency": "INR"
+            }
 
         if not payment_id:
            # Fallback: look up payments for this order
@@ -128,16 +140,6 @@ class RazorpayService:
                 payment = next((p for p in payments if p.get("status") == "captured"), payments[0])
                 return payment
         
-        if not self.is_configured():
-            # Return mock verification for demo
-            return {
-                "id": payment_id,
-                "entity": "payment",
-                "order_id": order_id,
-                "status": "captured",
-                "amount": 10000,  # Default amount
-                "currency": "INR"
-            }
 
         async with httpx.AsyncClient() as client:
             response = await client.get(
