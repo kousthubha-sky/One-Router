@@ -3,7 +3,7 @@ import { useAuth } from '@clerk/nextjs';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 // Client-side API calls for client components
-export function useClientApiCall(): (endpoint: string, options?: RequestInit) => Promise<unknown> {
+export function useClientApiCall(): (url: string, options?: RequestInit) => Promise<Record<string, unknown>> {
   const { getToken } = useAuth();
 
   return async function clientApiCall(endpoint: string, options?: RequestInit) {

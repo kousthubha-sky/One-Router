@@ -53,8 +53,8 @@ export default function AnalyticsPage() {
         apiClient(`/api/analytics/timeseries?period=${period}`)
       ]);
 
-      setOverview(overviewRes as AnalyticsOverview);
-      setTimeSeries(timeSeriesRes as TimeSeriesData);
+      setOverview(overviewRes as unknown as AnalyticsOverview);
+      setTimeSeries(timeSeriesRes as unknown as TimeSeriesData);
     } catch (error) {
       console.error("Failed to load analytics:", error);
     } finally {

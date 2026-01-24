@@ -1,55 +1,16 @@
 'use client';
 
-import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Mail, MessageSquare, MapPin, FileText, ExternalLink, Phone, User, Github } from 'lucide-react';
+import { Mail, FileText, Phone, User, Github, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/nextjs';
 
 export default function ContactPage() {
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    subject: '',
-    message: '',
-    plan: 'starter'
-  });
-  const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    
-    try {
-      const response = await fetch('/api/contact', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (response.ok) {
-        setSubmitted(true);
-        setFormData({ name: '', email: '', subject: '', message: '', plan: 'starter' });
-      } else {
-        setError('Failed to send message. Please try again.');
-      }
-    } catch {
-      setError('An error occurred. Please try again.');
-    }
-  };
-
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-gradient-to-br from-black via-[#0a0a0a] to-black text-white">
       {/* Navbar */}
-      <header className="sticky top-0 z-50 bg-black border-b border-[#222]">
+      <header className="sticky top-0 z-50 bg-black/80 backdrop-blur-md border-b border-[#222]">
         <div className="w-full h-16 flex items-center border-l border-r border-[#222] relative">
           {/* Vertical gridlines - hidden on mobile */}
           <div className="absolute inset-0 pointer-events-none hidden md:flex">
@@ -61,7 +22,7 @@ export default function ContactPage() {
           <div className="w-full h-full flex justify-between items-center px-4 md:px-8 relative z-10">
             {/* Left - Logo */}
             <div className="flex items-center gap-2 border-r border-[#222] pr-4 md:pr-8 flex-1">
-              <div className="w-8 h-8 bg-linear-to-br from-black to-cyan-600 rounded-2xl flex items-center justify-center shadow-lg transition-all duration-300 hover:shadow-cyan-500/25 hover:scale-110"></div>
+              <div className="w-8 h-8 bg-gradient-to-br from-black to-cyan-600 rounded-2xl flex items-center justify-center shadow-lg transition-all duration-300 hover:shadow-cyan-500/25 hover:scale-110"></div>
               <Link href="/" className="font-bold text-sm md:text-lg font-mono cursor-pointer hover:opacity-80 transition">
                 <span className="text-white">One</span>
                 <span className="text-cyan-400">Router</span>
@@ -104,310 +65,237 @@ export default function ContactPage() {
       </header>
 
       {/* Page Header */}
-      <header className="border-b border-[#222]">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <h1 className="text-3xl font-bold">Contact Us</h1>
-          <p className="text-[#888] mt-2">We&apos;re here to help</p>
+      <header className="border-b border-[#222] bg-gradient-to-b from-[#0a0a0a] to-transparent">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24">
+          <div className="max-w-3xl">
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 bg-gradient-to-r from-white via-white to-cyan-400 bg-clip-text text-transparent">
+              Get In Touch
+            </h1>
+            <p className="text-lg md:text-xl text-[#aaa] mb-2">
+              We&apos;re here to help with any questions or support you need.
+            </p>
+            <p className="text-[#777]">
+              Multiple ways to reach us for faster response
+            </p>
+          </div>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid lg:grid-cols-2 gap-8">
-          {/* Contact Form */}
-          <Card className="bg-[#1a1a1a] border-[#222]">
-            <CardHeader>
-              <CardTitle className="text-2xl text-cyan-500">Send Us a Message</CardTitle>
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
+          {/* Email Support Card */}
+          <Card className="group bg-gradient-to-br from-[#0a0a0a] to-[#0f0f0f] border-[#222] hover:border-cyan-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/10 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <CardHeader className="relative z-10">
+              <Mail className="w-8 h-8 text-cyan-400 mb-4" />
+              <CardTitle className="text-2xl text-cyan-400">Email Support</CardTitle>
             </CardHeader>
-            <CardContent className="p-6">
-              {submitted ? (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <MessageSquare className="w-8 h-8 text-green-500" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-green-500 mb-2">Message Sent!</h3>
-                   <p className="text-[#888]">
-                     Thank you for reaching out. We&apos;ll get back to you within 24 hours.
-                   </p>
-                  <Button
-                    onClick={() => setSubmitted(false)}
-                    variant="outline"
-                    className="border-[#222] text-white hover:border-cyan-500"
-                  >
-                    Send Another Message
-                  </Button>
-                </div>
-              ) : (
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div>
-                    <label htmlFor="name" className="block text-sm font-medium text-white mb-2">
-                      Your Name
-                    </label>
-                    <input
-                      type="text"
-                      id="name"
-                      value={formData.name}
-                      onChange={(e) => handleInputChange('name', e.target.value)}
-                      required
-                      className="w-full bg-[#0a0a0a] border border-[#222] rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                      placeholder="John Doe"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-white mb-2">
-                      Email Address
-                    </label>
-                    <input
-                      type="email"
-                      id="email"
-                      value={formData.email}
-                      onChange={(e) => handleInputChange('email', e.target.value)}
-                      required
-                      className="w-full bg-[#0a0a0a] border border-[#222] rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                      placeholder="john@example.com"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="subject" className="block text-sm font-medium text-white mb-2">
-                      Subject
-                    </label>
-                    <select
-                      id="subject"
-                      value={formData.subject}
-                      onChange={(e) => handleInputChange('subject', e.target.value)}
-                      required
-                      className="w-full bg-[#0a0a0a] border border-[#222] rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                    >
-                      <option value="">Select a topic...</option>
-                      <option value="technical">Technical Support</option>
-                      <option value="billing">Billing & Payments</option>
-                      <option value="sales">Sales Inquiry</option>
-                      <option value="feature">Feature Request</option>
-                      <option value="security">Security Concern</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label htmlFor="plan" className="block text-sm font-medium text-white mb-2">
-                      Your Plan (Optional)
-                    </label>
-                    <select
-                      id="plan"
-                      value={formData.plan}
-                      onChange={(e) => handleInputChange('plan', e.target.value)}
-                      className="w-full bg-[#0a0a0a] border border-[#222] rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                    >
-                      <option value="starter">Starter</option>
-                      <option value="professional">Professional</option>
-                      <option value="enterprise">Enterprise</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label htmlFor="message" className="block text-sm font-medium text-white mb-2">
-                      Message
-                    </label>
-                    <textarea
-                      id="message"
-                      value={formData.message}
-                      onChange={(e) => handleInputChange('message', e.target.value)}
-                      required
-                      rows={5}
-                      className="w-full bg-[#0a0a0a] border border-[#222] rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 resize-none"
-                      placeholder="How can we help you today?"
-                    />
-                  </div>
-
-                  {error && (
-                    <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
-                      <p className="text-sm text-red-400">{error}</p>
-                    </div>
-                  )}
-
-                  <Button
-                    type="submit"
-                    className="w-full bg-cyan-500 hover:bg-cyan-600 text-black font-medium"
-                  >
-                    Send Message
-                  </Button>
-                </form>
-              )}
+            <CardContent className="relative z-10 space-y-4">
+              <div>
+                <p className="text-[#888] text-sm mb-2">Primary Email</p>
+                <a href="mailto:support@onerouter.com" className="text-white font-mono text-sm hover:text-cyan-400 transition">
+                  support@onerouter.com
+                </a>
+              </div>
+              <div>
+                <p className="text-[#888] text-sm mb-2">Response Time</p>
+                <p className="text-white text-sm">24-48 hours during business days</p>
+              </div>
+              <div className="pt-4 border-t border-[#222]">
+                <a href="mailto:support@onerouter.com" className="text-cyan-400 hover:text-cyan-300 text-sm flex items-center gap-2 transition">
+                  Send Email <ArrowRight className="w-4 h-4" />
+                </a>
+              </div>
             </CardContent>
           </Card>
 
-          {/* Contact Information */}
-          <div className="space-y-6">
-            <Card className="bg-[#1a1a1a] border-[#222]">
-              <CardHeader>
-                <CardTitle className="text-2xl text-cyan-500">Get In Touch</CardTitle>
-              </CardHeader>
-              <CardContent className="p-6 space-y-4">
-                <div className="flex items-start gap-4">
-                  <Mail className="w-6 h-6 text-cyan-500 shrink-0" />
-                  <div>
-                    <h3 className="text-lg font-semibold text-white mb-1">Email Support</h3>
-                    <p className="text-[#888] text-sm mb-2">privacy@onerouter.com</p>
-                    <p className="text-sm text-[#888]">
-                      Expect response within 24-48 hours during business days.
-                    </p>
-                  </div>
-                </div>
+          {/* Documentation Card */}
+          <Card className="group bg-gradient-to-br from-[#0a0a0a] to-[#0f0f0f] border-[#222] hover:border-cyan-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/10 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <CardHeader className="relative z-10">
+              <FileText className="w-8 h-8 text-cyan-400 mb-4" />
+              <CardTitle className="text-2xl text-cyan-400">Documentation</CardTitle>
+            </CardHeader>
+            <CardContent className="relative z-10 space-y-4">
+              <div>
+                <p className="text-[#888] text-sm mb-2">Self-Service Resources</p>
+                <p className="text-white text-sm">Comprehensive guides, API references, and examples</p>
+              </div>
+              <div>
+                <p className="text-[#888] text-sm mb-2">Availability</p>
+                <p className="text-white text-sm">24/7 - Available anytime</p>
+              </div>
+              <div className="pt-4 border-t border-[#222]">
+                <Link href="/docs" className="text-cyan-400 hover:text-cyan-300 text-sm flex items-center gap-2 transition">
+                  Read Docs <ArrowRight className="w-4 h-4" />
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
 
-                <div className="flex items-start gap-4">
-                  <ExternalLink className="w-6 h-6 text-cyan-500 shrink-0" />
-                  <div>
-                    <h3 className="text-lg font-semibold text-white mb-1">Documentation</h3>
-                    <p className="text-[#888] text-sm mb-2">
-                      Comprehensive guides, API references, and examples.
-                    </p>
-                    <Link
-                      href="/docs"
-                      className="text-cyan-500 hover:text-cyan-400 text-sm"
+          {/* Phone Support Card */}
+          <Card className="group bg-gradient-to-br from-[#0a0a0a] to-[#0f0f0f] border-[#222] hover:border-cyan-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/10 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <CardHeader className="relative z-10">
+              <Phone className="w-8 h-8 text-cyan-400 mb-4" />
+              <CardTitle className="text-2xl text-cyan-400">Enterprise Support</CardTitle>
+            </CardHeader>
+            <CardContent className="relative z-10 space-y-4">
+              <div>
+                <p className="text-[#888] text-sm mb-2">For Enterprise Plans</p>
+                <p className="text-white text-sm">Dedicated support and priority response</p>
+              </div>
+              <div>
+                <p className="text-[#888] text-sm mb-2">Available</p>
+                <p className="text-white text-sm">Monday - Friday: 9 AM - 6 PM IST</p>
+              </div>
+              <div className="pt-4 border-t border-[#222]">
+                <Link href="/pricing" className="text-cyan-400 hover:text-cyan-300 text-sm flex items-center gap-2 transition">
+                  Enterprise Plans <ArrowRight className="w-4 h-4" />
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Response Times Section */}
+        <div className="mb-12">
+          <h2 className="text-3xl font-bold mb-8 bg-gradient-to-r from-white to-cyan-400 bg-clip-text text-transparent">
+            Response Times by Category
+          </h2>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[
+              { title: 'Technical Support', time: '24-48 hours', icon: '🔧' },
+              { title: 'Billing & Payments', time: '1-2 business days', icon: '💳' },
+              { title: 'Feature Requests', time: '3-5 business days', icon: '💡' },
+              { title: 'Sales & Partnerships', time: '2-3 business days', icon: '🤝' }
+            ].map((item, idx) => (
+              <Card key={idx} className="bg-gradient-to-br from-[#0a0a0a] to-[#0f0f0f] border-[#222] hover:border-cyan-500/50 transition-all duration-300">
+                <CardContent className="p-6">
+                  <div className="text-3xl mb-3">{item.icon}</div>
+                  <h3 className="text-lg font-semibold text-white mb-2">{item.title}</h3>
+                  <p className="text-cyan-400 font-mono text-sm">{item.time}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+
+        {/* Additional Resources */}
+        <div className="mb-12">
+          <h2 className="text-3xl font-bold mb-8 bg-gradient-to-r from-white to-cyan-400 bg-clip-text text-transparent">
+            Additional Resources
+          </h2>
+          <div className="grid md:grid-cols-3 gap-6">
+            {[
+              {
+                icon: FileText,
+                title: 'Developer Docs',
+                description: 'Learn how to integrate OneRouter with your application',
+                link: '/docs',
+                cta: 'View Docs'
+              },
+              {
+                icon: Github,
+                title: 'GitHub Community',
+                description: 'Join our developer community and contribute to the project',
+                link: 'https://github.com/onerouter',
+                cta: 'Visit GitHub',
+                external: true
+              },
+              {
+                icon: User,
+                title: 'Status Page',
+                description: 'Check real-time status and incidents',
+                link: 'https://status.onerouter.com',
+                cta: 'Check Status',
+                external: true
+              }
+            ].map((resource, idx) => {
+              const Icon = resource.icon;
+              return (
+                <Card key={idx} className="group bg-gradient-to-br from-[#0a0a0a] to-[#0f0f0f] border-[#222] hover:border-cyan-500/50 transition-all duration-300 overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                  <CardContent className="p-6 relative z-10">
+                    <Icon className="w-8 h-8 text-cyan-400 mb-4" />
+                    <h3 className="text-lg font-semibold text-white mb-2">{resource.title}</h3>
+                    <p className="text-[#888] text-sm mb-4">{resource.description}</p>
+                    <Link 
+                      href={resource.link}
+                      {...(resource.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                      className="text-cyan-400 hover:text-cyan-300 text-sm flex items-center gap-2 transition"
                     >
-                      Read the Docs →
+                      {resource.cta} <ArrowRight className="w-4 h-4" />
                     </Link>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
 
-                <div className="flex items-start gap-4">
-                  <MapPin className="w-6 h-6 text-cyan-500 shrink-0" />
-                  <div>
-                    <h3 className="text-lg font-semibold text-white mb-1">Office Hours</h3>
-                    <p className="text-sm text-[#888] mb-2">Monday - Friday: 9:00 AM - 6:00 PM IST</p>
-                    <p className="text-sm text-[#666]">Saturday & Sunday: Closed</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-[#1a1a1a] border-[#222]">
-              <CardHeader>
-                <CardTitle className="text-2xl text-cyan-500">Response Times</CardTitle>
-              </CardHeader>
-              <CardContent className="p-6">
+        {/* Office Hours Section */}
+        <Card className="bg-gradient-to-r from-cyan-500/10 via-blue-500/10 to-black border border-cyan-500/30 mb-12">
+          <CardContent className="p-8 md:p-12">
+            <div className="grid md:grid-cols-2 gap-8">
+              <div>
+                <h3 className="text-2xl font-bold text-white mb-6">Office Hours</h3>
                 <div className="space-y-4">
                   <div>
-                    <h3 className="text-lg font-semibold text-white mb-2">Technical Support</h3>
-                    <p className="text-sm text-[#888]">
-                      <strong className="text-cyan-500">24-48 hours:</strong> For urgent technical issues
-                    </p>
+                    <p className="text-cyan-400 font-semibold">Monday - Friday</p>
+                    <p className="text-[#aaa]">9:00 AM - 6:00 PM IST</p>
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-white mb-2">Billing & Payments</h3>
-                    <p className="text-sm text-[#888]">
-                      <strong className="text-cyan-500">1-2 business days:</strong> For billing inquiries and payment disputes
-                    </p>
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-white mb-2">Feature Requests</h3>
-                    <p className="text-sm text-[#888]">
-                      <strong className="text-cyan-500">3-5 business days:</strong> For product feedback and feature suggestions
-                    </p>
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-white mb-2">Sales & Partnerships</h3>
-                    <p className="text-sm text-[#888]">
-                      <strong className="text-cyan-500">2-3 business days:</strong> For partnership and enterprise inquiries
-                    </p>
+                    <p className="text-cyan-400 font-semibold">Saturday & Sunday</p>
+                    <p className="text-[#666]">Closed (Emergency support available)</p>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold text-white mb-6">Quick Facts</h3>
+                <div className="space-y-3 text-[#aaa] text-sm">
+                  <p>✓ Fastest response for technical issues</p>
+                  <p>✓ Free tier support available</p>
+                  <p>✓ Dedicated enterprise support plans</p>
+                  <p>✓ Community support 24/7 on GitHub</p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-            <Card className="bg-[#1a1a1a] border-[#222]">
-              <CardHeader>
-                <CardTitle className="text-2xl text-cyan-500">Additional Resources</CardTitle>
-              </CardHeader>
-              <CardContent className="p-6 space-y-4">
-                <div className="flex items-start gap-4">
-                  <FileText className="w-6 h-6 text-cyan-500 shrink-0" />
-                  <div>
-                    <h3 className="text-lg font-semibold text-white mb-1">Documentation</h3>
-                    <p className="text-sm text-[#888] mb-2">
-                      Self-service documentation for developers.
-                    </p>
-                    <Link
-                      href="/docs"
-                      className="text-cyan-500 hover:text-cyan-400 text-sm"
-                    >
-                      View Documentation →
-                    </Link>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4">
-                  <Phone className="w-6 h-6 text-cyan-500 shrink-0" />
-                  <div>
-                    <h3 className="text-lg font-semibold text-white mb-1">Enterprise Support</h3>
-                    <p className="text-sm text-[#888] mb-2">
-                      Dedicated support for enterprise plans.
-                    </p>
-                    <Link
-                      href="/pricing"
-                      className="text-cyan-500 hover:text-cyan-400 text-sm"
-                    >
-                      View Enterprise Plans →
-                    </Link>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4">
-                  <User className="w-6 h-6 text-cyan-500 shrink-0" />
-                  <div>
-                    <h3 className="text-lg font-semibold text-white mb-1">Community</h3>
-                    <p className="text-sm text-[#888] mb-2">
-                      Join our developer community for peer support.
-                    </p>
-                    <Link
-                      href="https://github.com/onerouter"
-                      target="_blank"
-                      className="text-cyan-500 hover:text-cyan-400 text-sm"
-                    >
-                      Join on GitHub →
-                    </Link>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-linear-to-r from-cyan-500/20 to-blue-500/20 border-2 border-cyan-500/50">
-              <CardContent className="p-8 text-center">
-                <h3 className="text-xl font-bold text-white mb-3">Need Quick Help?</h3>
-                <p className="text-[#888] mb-6">
-                  Check our documentation first for immediate answers to common questions.
-                </p>
-                <div className="flex flex-col md:flex-row gap-4 justify-center">
-                  <Link href="/docs">
-                    <Button className="bg-cyan-500 hover:bg-cyan-600 text-black font-medium">
-                      Browse Docs
-                    </Button>
-                  </Link>
-                  <Link href="https://github.com/onerouter/issues"
-                    target="_blank"
-                  rel="noopener noreferrer"
-                  >
-                    <Button variant="outline" className="border-[#222] text-white hover:border-cyan-500">
-                      GitHub Issues
-                    </Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
+        {/* CTA Section */}
+        <div className="text-center bg-gradient-to-b from-[#0a0a0a] to-transparent rounded-2xl p-12 border border-[#222]">
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+            Ready to Get Started?
+          </h2>
+          <p className="text-[#888] mb-8 max-w-2xl mx-auto">
+            Check our documentation for quick answers, or reach out directly to our support team for personalized assistance.
+          </p>
+          <div className="flex flex-col md:flex-row gap-4 justify-center">
+            <Link href="/docs">
+              <Button className="bg-cyan-500 hover:bg-cyan-600 text-black font-bold px-8 py-3 rounded-lg transition-all hover:scale-105">
+                Explore Documentation
+              </Button>
+            </Link>
+            <a href="mailto:support@onerouter.com">
+              <Button variant="outline" className="border-cyan-500/50 text-white hover:border-cyan-400 hover:bg-cyan-500/10 px-8 py-3 rounded-lg transition-all">
+                Contact Support
+              </Button>
+            </a>
           </div>
         </div>
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-[#222] mt-16">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <footer className="border-t border-[#222] mt-16 bg-black">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-6 text-sm text-[#888]">
-              <Link href="/docs">Documentation</Link>
-              <Link href="/privacy">Privacy Policy</Link>
-              <Link href="/terms">Terms of Service</Link>
-              <Link href="/pricing">Pricing</Link>
+              <Link href="/docs" className="hover:text-white transition">Documentation</Link>
+              <Link href="/privacy" className="hover:text-white transition">Privacy Policy</Link>
+              <Link href="/terms" className="hover:text-white transition">Terms of Service</Link>
+              <Link href="/pricing" className="hover:text-white transition">Pricing</Link>
             </div>
             <p className="text-sm text-[#666]">
               © 2025 OneRouter. All rights reserved.

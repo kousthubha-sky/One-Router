@@ -106,21 +106,21 @@ async def switch_environment(
                 ServiceCredential.is_active == True
             )
         )
-        credential = result.scalar_one_or_none()
+        credential_result = result.scalar_one_or_none()
 
-        if not credential:
+        if not credential_result:
             raise HTTPException(status_code=404, detail=f"No active credential found for {service_name}")
+
+        credential = credential_result
 
         # Update the service credential environment
         print(f"Updating credential {credential.id} for service {service_name} to environment {environment}")
-
         stmt = (
             update(ServiceCredential)
             .where(ServiceCredential.id == credential.id)
             .values(environment=environment)
         )
         result = await db.execute(stmt)
-        await db.commit()
 
         print(f"Environment switch completed for {service_name}: {environment}")
 
@@ -141,14 +141,8 @@ async def switch_environment(
             user_obj.preferences["environments"][service_name] = environment  # type: ignore
             flag_modified(user_obj, "preferences")
 
-            await db.commit()
 
-        # Verify the update worked
-        result = await db.execute(
-            select(ServiceCredential).where(ServiceCredential.id == credential.id)
-        )
-        updated_credential = result.scalar_one_or_none()
-        print(f"Verification: {service_name} environment is now {updated_credential.environment if updated_credential else 'UNKNOWN'}")
+        await db.commit()  # Single commit for both changes
 
         return {
             "status": "switched",
@@ -195,8 +189,7 @@ async def debug_service_environments(
         }
 
     except Exception as e:
-        return {"error": str(e)}
-
+        raise HTTPException(status_code=500, detail=f"Failed to get debug info: {str(e)}")
 @router.get("/user/environment-preferences")
 async def get_environment_preferences(
     user=Depends(get_current_user),
@@ -234,3 +227,48 @@ async def get_environment_preferences(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get preferences: {str(e)}")
+
+
+@router.post("/user/set-environment")
+async def set_user_environment(
+    environment: str,
+    user: Dict[str, Any] = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Set the user's global environment preference"""
+    try:
+        if environment not in ["test", "live"]:
+            raise HTTPException(status_code=400, detail="Environment must be 'test' or 'live'")
+
+        # Check if user has credentials for the target environment
+        creds_count = await db.execute(
+            select(ServiceCredential).where(
+                ServiceCredential.user_id == user['id'],
+                ServiceCredential.environment == environment
+            )
+        )
+        creds_count = len(creds_count.scalars().all())
+
+        if creds_count == 0 and environment == "live":
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot switch to live environment. No live credentials configured. Please configure at least one service for live environment first."
+            )
+
+        user_obj = await db.execute(select(User).where(User.id == user['id']))
+        user_obj = user_obj.scalar_one_or_none()
+        if not user_obj:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        if user_obj.preferences is None:
+            user_obj.preferences = {}
+        user_obj.preferences["current_environment"] = environment
+        flag_modified(user_obj, "preferences")
+        await db.commit()
+
+        return {"success": True, "environment": environment}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to set environment preference: {str(e)}")

@@ -23,6 +23,13 @@ interface Service {
 export default function ServicesPage() {
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentEnvironment, setCurrentEnvironment] = useState<'test' | 'live'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('onerouter_environment');
+      return (saved === 'live' || saved === 'test') ? saved : 'test';
+    }
+    return 'test';
+  });
   // const [environments, setEnvironments] = useState<Record<string, { test: Environment; live: Environment }>>({});
   const [servicesData, setServicesData] = useState<Service[]>([]);
   const apiClient = useClientApiCall();
@@ -30,7 +37,7 @@ export default function ServicesPage() {
   const loadServices = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await apiClient('/api/services');
+      const response = await apiClient(`/api/services?environment=${currentEnvironment}`);
       setServices((response as { services: Service[] }).services || []);
       setServicesData((response as { services: Service[] }).services || []);
 
@@ -51,11 +58,16 @@ export default function ServicesPage() {
     } finally {
       setLoading(false);
     }
-  }, [apiClient]);
+  }, [apiClient, currentEnvironment]);
+
+  const handleEnvironmentChange = useCallback((env: 'test' | 'live') => {
+    setCurrentEnvironment(env);
+    localStorage.setItem('onerouter_environment', env);
+  }, []);
 
   useEffect(() => {
     loadServices();
-  }, []);
+  }, [loadServices]);
 
   // const switchEnvironment = async (serviceName: string, newEnv: 'test' | 'live') => {
   //   try {
@@ -88,7 +100,11 @@ export default function ServicesPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-l border-r border-white/10">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 py-6">
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto">
-                <GlobalEnvironmentToggle services={servicesData} />
+                <GlobalEnvironmentToggle 
+                  services={servicesData} 
+                  onGlobalSwitch={handleEnvironmentChange}
+                  apiClient={apiClient}
+                />
                 <div className="px-4 rounded-full text-sm font-medium text-cyan-500 transition-all duration-300 hover:bg-cyan-500/10">
                   Free Plan
                 </div>
@@ -120,7 +136,7 @@ export default function ServicesPage() {
               <BentoGrid items={[
               {
                 title: "Connected Services",
-                meta: `${services.length} active`,
+                meta: `${services.length} active in ${currentEnvironment}`,
                 description: "Payment providers and integrations configured",
                 icon: <CheckCircle2 className="w-4 h-4 text-cyan-500" />,
                 status: "Active",

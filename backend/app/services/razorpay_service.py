@@ -3,10 +3,12 @@ Razorpay Payment Service for OneRouter
 Handles payment processing for credit purchases.
 """
 
+import logging
 import httpx
 import hashlib
 import hmac
 
+logger = logging.getLogger(__name__)
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict, Any, Optional
 
@@ -236,8 +238,12 @@ class RazorpayService:
             Checkout options for Razorpay.js
         """
         # Use settings directly instead of creating an instance
+        key_id = getattr(settings, 'RAZORPAY_KEY_ID', None)
+        if not key_id:
+            raise ValueError("Razorpay key ID is not configured")
+        
         options = {
-            "key": settings.RAZORPAY_KEY_ID,
+            "key": key_id,
             "order_id": order_id,
             "name": name,
             "description": description,

@@ -8,6 +8,7 @@ import uuid
 from ..database import get_db
 from ..auth.dependencies import get_current_user
 from ..models import ApiKey
+from ..models.user import User
 from ..services.credential_manager import CredentialManager
 from pydantic import BaseModel
 
@@ -16,7 +17,7 @@ router = APIRouter(prefix="/api/keys", tags=["api-keys"])
 # Request/Response Models
 class CreateApiKeyRequest(BaseModel):
     key_name: str
-    environment: str = "test"  # Add environment parameter with default
+    environment: Optional[str] = None  # Will default to user's preferred environment
     rate_limit_per_min: Optional[int] = None  # Make optional for environment defaults
     rate_limit_per_day: Optional[int] = None  # Make optional for environment defaults
 
@@ -46,6 +47,15 @@ async def list_api_keys(
 ) -> Dict[str, Any]:
     """List API keys for current user, optionally filtered by environment"""
     try:
+        # Get user's preferred environment if not specified
+        if environment is None:
+            user_obj = await db.execute(select(User).where(User.id == user['id']))
+            user_obj = user_obj.scalar_one_or_none()
+            if user_obj and user_obj.preferences:
+                environment = user_obj.preferences.get("current_environment", "test")
+            else:
+                environment = "test"
+
         print(f"[DEBUG] list_api_keys called with environment: {environment}")
         credential_manager = CredentialManager()
         api_keys = await credential_manager.get_user_api_keys(db, user["id"], environment)
@@ -70,6 +80,15 @@ async def create_api_key(
 ) -> Dict[str, Any]:
     """Create a new API key for the current user"""
     try:
+        # Set environment to user's preference if not specified
+        if request.environment is None:
+            user_obj = await db.execute(select(User).where(User.id == user['id']))
+            user_obj = user_obj.scalar_one_or_none()
+            if user_obj and user_obj.preferences:
+                request.environment = user_obj.preferences.get("current_environment", "test")
+            else:
+                request.environment = "test"
+
         credential_manager = CredentialManager()
         result = await credential_manager.generate_api_key(
             db=db,
@@ -129,10 +148,12 @@ async def get_api_key_details(
         }
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid key_id format")
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-@router.patch("/{key_id}")
+        raise HTTPException(status_code=400, detail=str(e))    
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))@router.patch("/{key_id}")
 async def update_api_key(
     key_id: str,
     request: UpdateApiKeyRequest,

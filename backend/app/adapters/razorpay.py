@@ -1,22 +1,32 @@
 import logging
 import httpx
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Literal
 from pybreaker import CircuitBreaker
 from .base import BaseAdapter
 from .razorpay_transformer import RazorpayTransformer, UnifiedPaymentResponse, UnifiedRefundResponse, UnifiedSubscriptionResponse, UnifiedErrorResponse
 from decimal import Decimal
 
+logger = logging.getLogger(__name__)
+
 class RazorpayAdapter(BaseAdapter):
-    """Razorpay payment service adapter"""
+    """Razorpay payment service adapter with environment segregation"""
     
     # Circuit breakers for external API calls
     _order_breaker = CircuitBreaker(fail_max=5, reset_timeout=60, listeners=[])
     _verify_breaker = CircuitBreaker(fail_max=5, reset_timeout=60, listeners=[])
     _refund_breaker = CircuitBreaker(fail_max=5, reset_timeout=60, listeners=[])
 
-    def __init__(self, credentials: Dict[str, str]):
+    def __init__(self, credentials: Dict[str, str], environment: Literal["test", "live"] = "test"):
         super().__init__(credentials)
         self.transformer = RazorpayTransformer()
+        self.environment = environment
+        
+        # Validate that credentials match the environment
+        key_id = credentials.get("RAZORPAY_KEY_ID", "")
+        if environment == "live" and not key_id.startswith("rzp_live_"):
+            logger.warning(f"Live adapter initialized with test key: {key_id[:20]}")
+        elif environment == "test" and not key_id.startswith("rzp_test_"):
+            logger.warning(f"Test adapter initialized with live key: {key_id[:20]}")
 
     async def _get_base_url(self) -> str:
         """Return Razorpay API base URL"""
@@ -57,19 +67,26 @@ class RazorpayAdapter(BaseAdapter):
 
                 # If we get a successful response (even if it's an error about amount),
                 # it means credentials are valid
-                return response.status_code in [200, 400, 422]  # Success or validation errors
+                success = response.status_code in [200, 400, 422]  # Success or validation errors
+                
+                if success:
+                    logger.info(f"Validated Razorpay {self.environment} credentials")
+                else:
+                    logger.warning(f"Razorpay {self.environment} credential validation failed: {response.status_code}")
+                
+                return success
 
         except Exception as e:
-            print(f"Razorpay credential validation failed: {e}")
+            logger.error(f"Razorpay credential validation failed: {e}")
             return False
 
     async def create_order(self, amount: float, currency: str = "INR", **kwargs) -> Dict[str, Any]:
-        """Create a Razorpay order"""
+        """Create a Razorpay order using configured environment (test/live)"""
         try:
+            logger.info(f"Creating Razorpay {self.environment} order: {amount} {currency}")
             return await self._order_breaker.call(self._create_order_impl, amount, currency, **kwargs)
         except Exception as e:
-            logger = __import__('logging').getLogger(__name__)
-            logger.error(f"Failed to create Razorpay order: {e}")
+            logger.error(f"Failed to create Razorpay {self.environment} order: {e}")
             raise
 
     async def _create_order_impl(self, amount: float, currency: str = "INR", **kwargs) -> Dict[str, Any]:
@@ -146,8 +163,7 @@ class RazorpayAdapter(BaseAdapter):
         try:
             return await self._order_breaker.call(self._get_order_impl, order_id)
         except Exception as e:
-            logger = __import__('logging').getLogger(__name__)
-            logger.error(f"Failed to fetch Razorpay order: {e}")
+            logger.error(f"Failed to get Razorpay order {order_id}: {e}")
             raise
 
     async def create_payment_link(self, amount: float, currency: str = "INR", description: str = "", **kwargs) -> Dict[str, Any]:

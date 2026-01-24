@@ -653,14 +653,11 @@ async def _process_payment_callback(
         
         # Find payment with row-level lock to prevent concurrent processing
         # Using SELECT ... FOR UPDATE to lock the row
-        # Combined query to prevent race conditions between exact and pattern matches
+        # Using exact equality check to prevent SQL injection and ensure correct matches
         result = await db.execute(
             select(OneRouterPayment)
             .where(
-                or_(
-                    OneRouterPayment.provider_order_id == razorpay_payment_link_id,
-                    OneRouterPayment.provider_order_id.ilike(f"%{razorpay_payment_link_id}%")
-                )
+                OneRouterPayment.provider_order_id == razorpay_payment_link_id
             )
             .with_for_update()  # Row-level lock
         )

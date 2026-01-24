@@ -2,8 +2,9 @@
 
 import { useSearchParams } from "next/navigation";
 import { useEffect } from "react";
+import { Suspense } from "react";
 
-export default function PaymentCallbackPage() {
+function PaymentCallbackContent() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -63,5 +64,20 @@ export default function PaymentCallbackPage() {
         <p className="text-gray-400">Processing your payment...</p>
       </div>
     </div>
+  );
+}
+
+export default function PaymentCallbackPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500 mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading...</p>
+        </div>
+      </div>
+    }>
+      <PaymentCallbackContent />
+    </Suspense>
   );
 }

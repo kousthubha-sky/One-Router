@@ -87,32 +87,56 @@ class CredentialManager:
 
         return combined
 
-    def decrypt_credentials(self, encrypted_data: bytes | bytearray | memoryview | str) -> Dict[str, Any]:
+    def decrypt_credentials(self, encrypted_data: bytes | bytearray | memoryview) -> Dict[str, Any]:
         """
         Decrypt an encrypted credential blob and return the credential dictionary.
         
         Parameters:
-            encrypted_data (bytes | bytearray | memoryview | str): The encrypted payload in the internal format
-                [4-byte big-endian version][12-byte nonce][ciphertext]. Accepts bytes-like objects or a UTF-8
-                string; non-bytes inputs are coerced to bytes before decryption.
+            encrypted_data (bytes | bytearray | memoryview): The encrypted payload in binary format.
+                Format: [4-byte big-endian version][12-byte nonce][ciphertext].
+                Must be bytes, bytearray, or memoryview - NOT str (string input will raise TypeError).
         
         Returns:
             Dict[str, Any]: Credentials parsed from the decrypted JSON payload.
         
         Raises:
+            TypeError: If encrypted_data is a str or other non-binary type. String input indicates
+                the database/data source is returning text instead of binary data, which would corrupt
+                the ciphertext during decryption. Ensure encrypted_credential column returns bytes.
             ValueError: If the input cannot be decrypted with available keys or the payload is malformed.
         """
         try:
             combined = encrypted_data
 
-            # Convert to bytes if needed (PostgreSQL BYTEA may return str/memoryview)
+            # Convert to bytes only from memoryview; reject str to prevent binary corruption
             if not isinstance(combined, bytes):
-                if isinstance(combined, str):
-                    combined = bytes(combined, 'utf-8')
-                elif isinstance(combined, memoryview):
+                if isinstance(combined, memoryview):
                     combined = bytes(combined)
+                elif isinstance(combined, str):
+                    # String input indicates the data source is returning text instead of binary
+                    # This will corrupt the ciphertext - raise error so caller fixes it
+                    logger.error(
+                        f"TypeError in decrypt_credentials: encrypted_data received as str instead of bytes. "
+                        f"This indicates the database or data source is not returning binary data properly. "
+                        f"Ensure encrypted_credential column returns bytes/memoryview, not text. "
+                        f"Received str of length {len(combined)}"
+                    )
+                    raise TypeError(
+                        "encrypted_data must be bytes or memoryview, not str. "
+                        "The database encrypted_credential column is returning text instead of binary data. "
+                        "This would corrupt the ciphertext during decryption."
+                    )
                 else:
-                    combined = bytes(combined)
+                    # Try generic bytes conversion for other types
+                    try:
+                        combined = bytes(combined)
+                    except (TypeError, ValueError) as e:
+                        logger.error(
+                            f"TypeError in decrypt_credentials: Cannot convert encrypted_data type {type(combined).__name__} to bytes: {e}"
+                        )
+                        raise TypeError(
+                            f"encrypted_data must be bytes or memoryview, not {type(combined).__name__}"
+                        ) from e
 
             # Check if this looks like AES256-GCM format (version + nonce + ciphertext)
             if len(combined) > 16:  # minimum: 4 (version) + 12 (nonce) + 1 (ciphertext)
@@ -183,16 +207,23 @@ class CredentialManager:
         }
 
     async def store_service_credentials(
-    self,
-    db: AsyncSession,
-    user_id: str,
-    service_name: str,
-    credentials: Dict[str, str],
-    features: Dict[str, bool],
-    feature_metadata: Dict[str, Any] = {},  # NEW parameter
-    environment: str = "test"
-) -> ServiceCredential:
+        self,
+        db: AsyncSession,
+        user_id: str,
+        service_name: str,
+        credentials: Dict[str, str],
+        features: Dict[str, bool],
+        feature_metadata: Optional[Dict[str, Any]] = None,  # NEW parameter
+        environment: str = "test"
+    ) -> ServiceCredential:
         """Store encrypted service credentials in database"""
+        if feature_metadata is None:
+            feature_metadata = {}
+        
+        # TODO: Use feature_metadata or remove if not needed
+        errors = self.validate_credentials_format(service_name, credentials, environment)
+        if errors:
+            raise ValueError(f"Invalid credentials for {service_name}: {errors}")
 
         # Encrypt the credentials
         encrypted_creds = self.encrypt_credentials(credentials)
@@ -458,18 +489,31 @@ class CredentialManager:
             return self.decrypt_credentials(credential.encrypted_credential)
             
         except Exception as e:
-            logger.error(f"Error retrieving credentials: {e}")
+            logger.error(f"Error retrieving credentials: {e}", exc_info=True)
+            # Re-raise if this is a decryption failure (data corruption)
+            if "decrypt" in str(e).lower():
+                raise
             return None
-
-    def validate_credentials_format(self, service_name: str, credentials: Dict[str, str]) -> Dict[str, str]:
+    def validate_credentials_format(self, service_name: str, credentials: Dict[str, str], environment: str = "test") -> Dict[str, str]:
         """Validate credential format for a service"""
         errors = {}
 
         # Basic validation - check required fields exist and are not empty
+        
         if service_name == "razorpay":
-            if not credentials.get("RAZORPAY_KEY_ID"):
+            key_id = credentials.get("RAZORPAY_KEY_ID", "")
+            key_secret = credentials.get("RAZORPAY_KEY_SECRET", "")
+            
+            if not key_id:
                 errors["RAZORPAY_KEY_ID"] = "Required"
-            if not credentials.get("RAZORPAY_KEY_SECRET"):
+            elif environment == "live":
+                # Validate key prefix matches environment
+                if not key_id.startswith("rzp_live_"):
+                    errors["RAZORPAY_KEY_ID"] = f"Live key must start with 'rzp_live_', got: {key_id[:20]}..."
+            elif not key_id.startswith("rzp_test_"):
+                errors["RAZORPAY_KEY_ID"] = f"Test key must start with 'rzp_test_', got: {key_id[:20]}..."
+
+            if not key_secret:
                 errors["RAZORPAY_KEY_SECRET"] = "Required"
 
         elif service_name == "paypal":
@@ -493,3 +537,207 @@ class CredentialManager:
                 errors["AWS_S3_BUCKET"] = "Required"
 
         return errors
+
+    # ========================
+    # RAZORPAY-SPECIFIC METHODS
+    # ========================
+
+    async def store_razorpay_credentials(
+        self,
+        db: AsyncSession,
+        user_id: str,
+        environment: str,  # "test" or "live"
+        key_id: str,
+        key_secret: str,
+        webhook_secret: Optional[str] = None,
+        features: Optional[Dict[str, Any]] = None
+    ) -> ServiceCredential:
+        """
+        Store Razorpay credentials with environment segregation.
+        
+        Args:
+            user_id: User ID (UUID string)
+            environment: "test" or "live"
+            key_id: Razorpay key ID (must match environment prefix)
+            key_secret: Razorpay key secret
+            webhook_secret: Optional webhook signing secret
+            features: Optional feature config (e.g., {"payments": True, "refunds": True})
+        
+        Raises:
+            ValueError: If keys don't match environment prefix (rzp_test_ vs rzp_live_)
+        """
+        # Validate key format matches environment
+        if environment == "live":
+            if not key_id.startswith("rzp_live_"):
+                raise ValueError(
+                    f"Live key must start with 'rzp_live_', got: {key_id[:20]}..."
+                )
+        else:  # test
+            if not key_id.startswith("rzp_test_"):
+                raise ValueError(
+                    f"Test key must start with 'rzp_test_', got: {key_id[:20]}..."
+                )
+
+        # Prepare credentials dict
+        credentials = {
+            "RAZORPAY_KEY_ID": key_id,
+            "RAZORPAY_KEY_SECRET": key_secret
+        }
+        if webhook_secret:
+            credentials["RAZORPAY_WEBHOOK_SECRET"] = webhook_secret
+
+        # Encrypt credentials
+        encrypted_creds = self.encrypt_credentials(credentials)
+
+        # Check if credential already exists for this environment
+        from sqlalchemy import select
+        existing = await db.execute(
+            select(ServiceCredential).where(
+                ServiceCredential.user_id == user_id,
+                ServiceCredential.provider_name == "razorpay",
+                ServiceCredential.environment == environment,
+                ServiceCredential.is_active == True
+            )
+        )
+        existing_cred = existing.scalar_one_or_none()
+
+        # If exists, replace it (soft-delete or update in place)
+        if existing_cred:
+            existing_cred.encrypted_credential = encrypted_creds
+            existing_cred.features_config = features or {"payments": True, "refunds": True, "subscriptions": False}
+            existing_cred.last_verified_at = None
+            await db.commit()
+            await db.refresh(existing_cred)
+            logger.info(f"Updated Razorpay {environment} credentials for user {user_id}")
+            return existing_cred
+
+        # Create new credential record
+        credential = ServiceCredential(
+            user_id=user_id,
+            provider_name="razorpay",
+            environment=environment,
+            encrypted_credential=encrypted_creds,
+            features_config=features or {"payments": True, "refunds": True, "subscriptions": False},
+            is_active=True,
+            last_verified_at=None  # Will be set after webhook verification
+        )
+
+        db.add(credential)
+        await db.commit()
+        await db.refresh(credential)
+
+        logger.info(f"Stored Razorpay {environment} credentials for user {user_id}")
+        return credential
+
+    async def get_razorpay_credentials(
+        self,
+        db: AsyncSession,
+        user_id: str,
+        environment: str  # "test" or "live"
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get decrypted Razorpay credentials for specific environment.
+        
+        Args:
+            user_id: User ID (UUID string)
+            environment: "test" or "live"
+        
+        Returns:
+            Dict with keys, or None if not configured
+        """
+        credentials = await self.get_credentials(
+            db=db,
+            user_id=user_id,
+            provider_name="razorpay",
+            environment=environment
+        )
+
+        if credentials:
+            # Add environment metadata
+            credentials["environment"] = environment
+            credentials["environment_prefix"] = "rzp_live_" if environment == "live" else "rzp_test_"
+        
+        return credentials
+
+    async def get_active_razorpay_environment(
+        self,
+        db: AsyncSession,
+        user_id: str
+    ) -> Optional[str]:
+        """
+        Determine which Razorpay environment is currently active.
+        Default is "test", but if live credentials exist, return "live".
+        
+        Returns:
+            "test", "live", or None if no credentials configured
+        """
+        from sqlalchemy import select
+        
+        # Check live first (preferred)
+        live_result = await db.execute(
+            select(ServiceCredential).where(
+                ServiceCredential.user_id == user_id,
+                ServiceCredential.provider_name == "razorpay",
+                ServiceCredential.environment == "live",
+                ServiceCredential.is_active == True
+            )
+        )
+        if live_result.scalar_one_or_none():
+            return "live"
+
+        # Fall back to test
+        test_result = await db.execute(
+            select(ServiceCredential).where(
+                ServiceCredential.user_id == user_id,
+                ServiceCredential.provider_name == "razorpay",
+                ServiceCredential.environment == "test",
+                ServiceCredential.is_active == True
+            )
+        )
+        if test_result.scalar_one_or_none():
+            return "test"
+
+        return None
+
+    async def verify_razorpay_webhook(
+        self,
+        db: AsyncSession,
+        user_id: str,
+        environment: str
+    ) -> bool:
+        """
+        Mark Razorpay credentials as verified (webhook tested).
+        
+        Args:
+            user_id: User ID
+            environment: "test" or "live"
+            webhook_url: Webhook URL being tested
+        
+        Returns:
+            True if marked as verified
+        """
+        from sqlalchemy import select, update
+        
+        result = await db.execute(
+            select(ServiceCredential).where(
+                ServiceCredential.user_id == user_id,
+                ServiceCredential.provider_name == "razorpay",
+                ServiceCredential.environment == environment,
+                ServiceCredential.is_active == True
+            )
+        )
+        credential = result.scalar_one_or_none()
+
+        if not credential:
+            return False
+
+        # Update verification timestamp
+        await db.execute(
+            update(ServiceCredential)
+            .where(ServiceCredential.id == credential.id)
+            .values(last_verified_at=datetime.utcnow())
+        )
+        await db.commit()
+
+        logger.info(f"Verified Razorpay {environment} webhook for user {user_id}")
+        return True
