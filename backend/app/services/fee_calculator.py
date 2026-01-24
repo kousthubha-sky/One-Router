@@ -154,22 +154,22 @@ class CreditPricingService:
         {
             "id": "starter",
             "name": "Starter",
-            "amount_inr": 1000,
+            "amount_inr": 100,
             "credits": 1000,  # 1:1 ratio
             "discount_percent": 0
         },
         {
             "id": "pro",
             "name": "Pro",
-            "amount_inr": 5000,
-            "credits": 6000,  # 17% more credits
+            "amount_inr": 800,
+            "credits": 10000,  # 17% more credits
             "discount_percent": 17
         },
         {
             "id": "enterprise",
             "name": "Enterprise",
-            "amount_inr": 25000,
-            "credits": 35000,  # 29% more credits
+            "amount_inr": 8000,
+            "credits": 100000,  # 29% more credits
             "discount_percent": 29
         }
     ]
