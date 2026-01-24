@@ -151,9 +151,9 @@ async def get_api_key_details(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))    
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))@router.patch("/{key_id}")
+        raise HTTPException(status_code=400, detail=str(e)) from e
+@router.patch("/{key_id}")
+
 async def update_api_key(
     key_id: str,
     request: UpdateApiKeyRequest,
