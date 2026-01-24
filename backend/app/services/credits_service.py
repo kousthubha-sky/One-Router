@@ -338,6 +338,24 @@ class CreditsService:
         
         # Convert fee to credits (1 credit = ₹0.01)
         credits_to_consume = int(fee.fee_paise)  # fee_paise already in paise
+        fee_details = {
+            "service_type": fee.service_type,
+            "fee_rupees": fee.fee_rupees,
+            "fee_paise": fee.fee_paise,
+            "credits_consumed": credits_to_consume,
+            "breakdown": fee.breakdown
+        }
+
+        if credits_to_consume <= 0:
+            balance_info = await CreditsService.get_balance_info(user_id, db)
+            return {
+                "success": True,
+                "consumed": 0,
+                "balance": balance_info["balance"],
+                "total_consumed": balance_info["total_consumed"],
+                "fee_details": fee_details
+            }
+
         
         # Use existing consume_credit method
         result = await CreditsService.consume_credit(
@@ -348,13 +366,7 @@ class CreditsService:
         )
         
         # Add fee details to result
-        result["fee_details"] = {
-            "service_type": fee.service_type,
-            "fee_rupees": fee.fee_rupees,
-            "fee_paise": fee.fee_paise,
-            "credits_consumed": credits_to_consume,
-            "breakdown": fee.breakdown
-        }
+        result["fee_details"] = fee_details
         
         return result
 
