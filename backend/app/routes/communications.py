@@ -123,7 +123,7 @@ async def send_sms(
         # Decrypt credentials
         from ..services.credential_manager import CredentialManager
         cred_manager = CredentialManager()
-        decrypted_creds = await cred_manager.get_credentials(db, user.id, "twilio", "test")
+        decrypted_creds = await cred_manager.get_credentials(db, user_id, "twilio", "test")
 
         # Create adapter
         adapter = AdapterFactory.create_adapter("twilio", decrypted_creds)
