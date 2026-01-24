@@ -74,7 +74,13 @@ class CreditsService:
         and does not account for the order in which credits were consumed (FIFO assumption).
         Use the balance field for the actual remaining credits.
         """
-        credits = await CreditsService.get_or_create_user_credits(user_id, db)
+        await CreditsService.get_or_create_user_credits(user_id, db)
+        result = await db.execute(
+            select(UserCredit)
+            .where(UserCredit.user_id == user_id)
+            .with_for_update()
+        )
+        credits = result.scalar_one()
 
         # Get recent transactions
         result = await db.execute(
