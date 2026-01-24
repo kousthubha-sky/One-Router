@@ -376,14 +376,16 @@ async def razorpay_webhook(
                     await db.commit()
                 except Exception as e:
                     await db.rollback()
+                    # Revert payment status since credits weren't added
+                    payment.status = PaymentStatus.PENDING
+                    await db.commit()
                     logger.error(
-                        f"Failed to add credits for payment {payment.id}: {type(e).__name__}: {str(e)}"
+                        f"Failed to add credits for payment {payment.id}: {type(e).__name__}: {str(e)}",
+                        exc_info=True
                     )
-                    raise HTTPException(
-                        status_code=500,
-                        detail="Failed to process payment credits. Please contact support."
-                    )
-
+                    # Return 200 to prevent Razorpay retries, handle via reconciliation
+                    return {"status": "error", "message": "Credit addition failed, requires manual reconciliation"}                
+    
     elif razorpay_event == "payment.failed":
         # Payment failed
         error_code = payload.get("payload", {}).get("payment", {}).get("entity", {}).get("error_code", "UNKNOWN")
