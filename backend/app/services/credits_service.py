@@ -23,31 +23,45 @@ class CreditsService:
     @staticmethod
     async def get_or_create_user_credits(user_id: str, db: AsyncSession) -> UserCredit:
         """Get user credits, creating if doesn't exist with free tier balance"""
+        from sqlalchemy.dialects.postgresql import insert
+        
+        # Use upsert to handle race conditions
+        stmt = insert(UserCredit).values(
+            user_id=user_id,
+            balance=FREE_TIER_CREDITS,
+            total_purchased=0,
+            total_consumed=0
+        ).on_conflict_do_nothing(index_elements=['user_id'])
+        
+        await db.execute(stmt)
+        
+        # Now fetch the record (either existing or just created)
         result = await db.execute(
             select(UserCredit).where(UserCredit.user_id == user_id)
         )
         credits = result.scalar_one_or_none()
 
-        if not credits:
-            # Create new user credit with free tier
-            credits = UserCredit(
-                user_id=user_id,
-                balance=FREE_TIER_CREDITS,
-                total_purchased=0,
-                total_consumed=0
+        # Check if we need to record the bonus (new user case)
+        # This check should be more robust in production
+        if credits and credits.balance == FREE_TIER_CREDITS and credits.total_consumed == 0:
+            # Check if bonus already recorded
+            bonus_check = await db.execute(
+                select(CreditTransaction).where(
+                    CreditTransaction.user_id == user_id,
+                    CreditTransaction.transaction_type == TransactionType.BONUS
+                ).limit(1)
             )
-            db.add(credits)
-
-            # Record initial bonus
-            transaction = CreditTransaction(
-                user_id=user_id,
-                amount=FREE_TIER_CREDITS,
-                transaction_type=TransactionType.BONUS,
-                description=f"Free tier bonus - {FREE_TIER_CREDITS} credits/month"
-            )
-            db.add(transaction)
-            await db.commit()
-            await db.refresh(credits)
+            if not bonus_check.scalar_one_or_none():
+                transaction = CreditTransaction(
+                    user_id=user_id,
+                    amount=FREE_TIER_CREDITS,
+                    transaction_type=TransactionType.BONUS,
+                    description=f"Free tier bonus - {FREE_TIER_CREDITS} credits/month"
+                )
+                db.add(transaction)
+                await db.commit()
+                await db.refresh(credits)
+        
 
         return credits
 
