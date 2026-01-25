@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { Shield, Zap, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 
@@ -42,6 +43,7 @@ export function RazorpaySetup({ apiClient }: Props) {
   const [keyId, setKeyId] = useState("");
   const [keySecret, setKeySecret] = useState("");
   const [webhookSecret, setWebhookSecret] = useState("");
+  const router = useRouter();
 
   // Load status
   useEffect(() => {
@@ -123,15 +125,21 @@ export function RazorpaySetup({ apiClient }: Props) {
         return;
       }
 
+      const payload = {
+        environment,
+        key_id: keyId,
+        key_secret: keySecret,
+        webhook_secret: webhookSecret && webhookSecret.trim() !== "" ? webhookSecret : null,
+      };
+
+      console.log("Sending Razorpay credentials payload:", payload);
+
       const response = await apiClient("/api/razorpay/credentials", {
         method: "POST",
-        body: JSON.stringify({
-          environment,
-          key_id: keyId,
-          key_secret: keySecret,
-          webhook_secret: webhookSecret || null,
-        }),
+        body: JSON.stringify(payload),
       });
+
+      console.log("Razorpay credentials response:", response);
 
       if (response.success) {
         setSuccess(
@@ -143,6 +151,11 @@ export function RazorpaySetup({ apiClient }: Props) {
         setWebhookSecret("");
         // Reload status
         await loadStatus();
+        
+        // Redirect back to services after short delay to show success message
+        setTimeout(() => {
+          router.push("/services");
+        }, 1500);
       }
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : "Failed to store credentials";

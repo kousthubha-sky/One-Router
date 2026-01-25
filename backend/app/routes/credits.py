@@ -114,18 +114,20 @@ async def purchase_credits(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Initiate credit purchase. Returns Razorpay checkout URL.
+    Initiate credit purchase using OneRouter SDK (dogfooding).
+
+    Instead of directly calling Razorpay, this endpoint uses OneRouter's own
+    SDK to process payments - eating our own dogfood.
     """
-    from ..services.request_router import RequestRouter
-    
+    from onerouter import OneRouter, APIError, AuthenticationError
+
     user_id = str(user.get("id"))
+    user_email = user.get("email", "")
+
     logger.debug(
-        "Purchase credits initiated",
+        "Purchase credits initiated (via SDK dogfooding)",
         extra={"user_id_prefix": user_id[:8], "auth_type": user.get("auth_type", "unknown")}
     )
-    
-    request_router = RequestRouter()
-    environment = user.get("environment", "test")
 
     # Calculate credits and price
     if request.plan_id:
@@ -141,59 +143,74 @@ async def purchase_credits(
         credits_to_buy = request.credits
         price_inr = CreditPricingService.calculate_amount(credits_to_buy, request.currency)
 
-    amount_paise = CreditPricingService.credits_to_paise(price_inr)
-
-    # Get Razorpay adapter with user's database credentials
+    # Use OneRouter SDK to create payment link (dogfooding)
+    link = None
     try:
-        adapter = await request_router.get_adapter(
-            user_id,
-            "razorpay",
-            db,
-            target_environment=environment
+        async with OneRouter(
+            api_key=settings.ONEROUTER_API_KEY,
+            base_url=settings.ONEROUTER_API_BASE_URL
+        ) as client:
+            link = await client.payment_links.create(
+                amount=price_inr,
+                description=f"Purchase {credits_to_buy} OneRouter credits",
+                customer_email=user_email if user_email else None,
+                callback_url=f"{settings.FRONTEND_URL}/credits/payment-callback",
+                notes={
+                    "onerouter_user_id": user_id,
+                    "credits": str(credits_to_buy),
+                    "type": "credit_purchase"
+                }
+            )
+
+            logger.info(
+                "Payment link created via SDK dogfooding",
+                extra={"credits_purchased": credits_to_buy, "amount_inr": price_inr}
+            )
+
+    except AuthenticationError as e:
+        logger.error(
+            "SDK authentication failed - check ONEROUTER_API_KEY",
+            extra={"error": str(e), "user_id_prefix": user_id[:8]},
+            exc_info=True
         )
-        
-        logger.debug(
-            "Razorpay adapter obtained",
-            extra={"adapter_type": type(adapter).__name__, "environment": environment}
+        raise HTTPException(
+            status_code=503,
+            detail="Payment service configuration error. Please contact support."
         )
-        
-        # Create payment link using the adapter
-        order = await adapter.create_payment_link(
-            amount=price_inr,
-            currency=request.currency,
-            description=f"Purchase {credits_to_buy} credits",
-            callback_url=f"{settings.FRONTEND_URL}/credits/payment-callback",
-            notes={
-                "onerouter_user_id": user_id,
-                "credits": str(credits_to_buy),
-                "type": "credit_purchase"
+    except APIError as e:
+        logger.error(
+            "SDK API error during payment link creation",
+            extra={"error": str(e), "user_id_prefix": user_id[:8]},
+            exc_info=True
+        )
+
+        if settings.ENVIRONMENT == "development" or settings.DEBUG:
+            logger.warning(
+                f"Falling back to demo order for user {user_id} due to SDK error: {str(e)}"
+            )
+            link = {
+                "id": f"demo_link_{user_id[:8]}",
+                "short_url": f"https://demo.onerouter.com/pay/demo_link_{user_id[:8]}"
             }
-        )
-        
-        logger.info(
-            "Razorpay payment link created successfully",
-            extra={"credits_purchased": credits_to_buy, "amount_inr": price_inr}
-        )
+        else:
+            raise HTTPException(
+                status_code=503,
+                detail="Payment service temporarily unavailable. Please try again later."
+            )
     except Exception as e:
         logger.error(
-            "Razorpay payment link creation failed",
+            "Unexpected error during SDK payment link creation",
             extra={"error_type": type(e).__name__, "user_id_prefix": user_id[:8]},
             exc_info=True
         )
-        logger.error(
-            f"Razorpay order creation failed for user {user_id}: {type(e).__name__}: {str(e)}"
-        )
-        
+
         if settings.ENVIRONMENT == "development" or settings.DEBUG:
             logger.warning(
                 f"Falling back to demo order for user {user_id} due to: {str(e)}"
             )
-            order_id = f"demo_order_{user_id[:8]}"
-            order = {
-                "id": order_id,
-                "amount": amount_paise,
-                "currency": request.currency,
-                "checkout_url": f"https://checkout.razorpay.com/demo/{order_id}"
+            link = {
+                "id": f"demo_link_{user_id[:8]}",
+                "short_url": f"https://demo.onerouter.com/pay/demo_link_{user_id[:8]}"
             }
         else:
             raise HTTPException(
@@ -207,9 +224,9 @@ async def purchase_credits(
         amount=price_inr,
         currency=request.currency,
         credits_purchased=credits_to_buy,
-        provider="razorpay",
-        provider_order_id=order.get("provider_order_id") or order.get("id"),
-        checkout_url=order.get("checkout_url") or order.get("provider_data", {}).get("checkout_url"),
+        provider="onerouter",  # Changed from "razorpay" - we're dogfooding
+        provider_order_id=link.get("id"),
+        checkout_url=link.get("short_url") or link.get("checkout_url"),
         status=PaymentStatus.PENDING
     )
     db.add(payment)
@@ -218,11 +235,11 @@ async def purchase_credits(
 
     return CreditPurchaseResponse(
         payment_id=str(payment.id),
-        order_id=order.get("provider_order_id") or order.get("id"),
+        order_id=link.get("id"),
         credits=credits_to_buy,
         amount=price_inr,
         currency=request.currency,
-        checkout_url=order.get("checkout_url") or order.get("provider_data", {}).get("checkout_url", "")
+        checkout_url=link.get("short_url") or link.get("checkout_url", "")
     )
 
 

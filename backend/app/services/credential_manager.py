@@ -480,11 +480,25 @@ class CredentialManager:
                     ServiceCredential.is_active == True
                 )
             )
-            credential = result.scalar_one_or_none()
+            credentials_list = result.scalars().all()
             
-            if not credential:
+            if not credentials_list:
                 logger.warning(f"No active credentials found for user {user_id}, provider {provider_name}, environment {environment}")
                 return None
+            
+            # If multiple duplicates exist, consolidate by keeping the most recent one
+            if len(credentials_list) > 1:
+                logger.warning(f"Found {len(credentials_list)} duplicate {provider_name} credentials for user {user_id} in {environment}. Using most recent.")
+                # Sort by created_at descending and keep the newest
+                credentials_list.sort(key=lambda x: x.created_at, reverse=True)
+                credential = credentials_list[0]
+                
+                # Optionally delete the old duplicates
+                for old_cred in credentials_list[1:]:
+                    old_cred.is_active = False
+                await db.commit()
+            else:
+                credential = credentials_list[0]
             
             return self.decrypt_credentials(credential.encrypted_credential)
             
@@ -590,8 +604,8 @@ class CredentialManager:
         encrypted_creds = self.encrypt_credentials(credentials)
 
         # Check if credential already exists for this environment
-        from sqlalchemy import select
-        existing = await db.execute(
+        from sqlalchemy import select, delete
+        existing_query = await db.execute(
             select(ServiceCredential).where(
                 ServiceCredential.user_id == user_id,
                 ServiceCredential.provider_name == "razorpay",
@@ -599,9 +613,22 @@ class CredentialManager:
                 ServiceCredential.is_active == True
             )
         )
-        existing_cred = existing.scalar_one_or_none()
+        existing_creds = existing_query.scalars().all()
 
-        # If exists, replace it (soft-delete or update in place)
+        # If multiple duplicates exist (data corruption), clean them up
+        if len(existing_creds) > 1:
+            logger.warning(f"Found {len(existing_creds)} duplicate Razorpay {environment} credentials for user {user_id}. Consolidating...")
+            # Keep the first one, delete the rest
+            for dup_cred in existing_creds[1:]:
+                await db.delete(dup_cred)
+            await db.commit()
+            existing_cred = existing_creds[0]
+        elif len(existing_creds) == 1:
+            existing_cred = existing_creds[0]
+        else:
+            existing_cred = None
+
+        # If exists, update it
         if existing_cred:
             existing_cred.encrypted_credential = encrypted_creds
             existing_cred.features_config = features or {"payments": True, "refunds": True, "subscriptions": False}

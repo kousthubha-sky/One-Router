@@ -441,7 +441,7 @@ async def switch_all_environments_atomic(
             )
             
             # Filter by specific service IDs if provided
-            if request.service_ids:
+            if request.service_ids and len(request.service_ids) > 0:
                 query = query.where(
                     ServiceCredential.id.in_(request.service_ids)
                 )
@@ -450,11 +450,27 @@ async def switch_all_environments_atomic(
             result = await db.execute(query)
             services_to_update = result.scalars().all()
             
+            # If no services to update, that's OK - just update user preference instead
             if not services_to_update:
-                raise HTTPException(
-                    status_code=404,
-                    detail="No active services found to update"
+                # Update user's preferred environment even if no services exist yet
+                # This allows users to set their environment preference before adding services
+                user_record = await db.execute(
+                    select(User).where(User.id == user_id)
                 )
+                user_obj = user_record.scalar_one_or_none()
+                if user_obj:
+                    if not user_obj.preferences:
+                        user_obj.preferences = {}
+                    user_obj.preferences["current_environment"] = target_env
+                    await db.commit()
+                
+                return {
+                    "status": "switched",
+                    "environment": target_env,
+                    "count": 0,
+                    "message": "Environment preference updated (no services to migrate)",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
             
             # Update all services in a single query for efficiency
             update_query = update(ServiceCredential).where(
@@ -462,7 +478,7 @@ async def switch_all_environments_atomic(
                 ServiceCredential.is_active == True
             )
             
-            if request.service_ids:
+            if request.service_ids and len(request.service_ids) > 0:
                 update_query = update_query.where(
                     ServiceCredential.id.in_(request.service_ids)
                 )
@@ -474,6 +490,16 @@ async def switch_all_environments_atomic(
             
             result = await db.execute(update_query)
             updated_count = result.rowcount
+            
+            # Also update user's preferred environment
+            user_record = await db.execute(
+                select(User).where(User.id == user_id)
+            )
+            user_obj = user_record.scalar_one_or_none()
+            if user_obj:
+                if not user_obj.preferences:
+                    user_obj.preferences = {}
+                user_obj.preferences["current_environment"] = target_env
         
         # Commit the transaction
         await db.commit()

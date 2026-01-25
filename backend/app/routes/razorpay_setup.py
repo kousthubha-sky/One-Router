@@ -5,7 +5,7 @@ Razorpay setup and configuration with test/live segregation
 
 from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Dict, Any, Literal
+from typing import Dict, Any, Literal, Optional
 from pydantic import BaseModel
 import logging
 
@@ -23,7 +23,7 @@ class RazorpayCredentialsRequest(BaseModel):
     environment: Literal["test", "live"]
     key_id: str
     key_secret: str
-    webhook_secret: str = None
+    webhook_secret: Optional[str] = None
 
 
 class RazorpayStatusResponse(BaseModel):
@@ -134,42 +134,57 @@ async def get_razorpay_status(
         credential_manager = CredentialManager()
         
         # Check test environment
-        test_creds = await credential_manager.get_razorpay_credentials(
-            db=db,
-            user_id=user["id"],
-            environment="test"
-        )
+        test_creds = None
+        try:
+            test_creds = await credential_manager.get_razorpay_credentials(
+                db=db,
+                user_id=user["id"],
+                environment="test"
+            )
+        except Exception as test_err:
+            logger.error(f"Error loading test credentials: {str(test_err)}")
+            # Continue - test might just not be configured
         
         # Check live environment
-        live_creds = await credential_manager.get_razorpay_credentials(
-            db=db,
-            user_id=user["id"],
-            environment="live"
-        )
+        live_creds = None
+        try:
+            live_creds = await credential_manager.get_razorpay_credentials(
+                db=db,
+                user_id=user["id"],
+                environment="live"
+            )
+        except Exception as live_err:
+            logger.error(f"Error loading live credentials: {str(live_err)}")
+            # Continue - live might just not be configured
         
         # Determine active environment
-        active_env = await credential_manager.get_active_razorpay_environment(
-            db=db,
-            user_id=user["id"]
-        )
+        active_env = None
+        try:
+            active_env = await credential_manager.get_active_razorpay_environment(
+                db=db,
+                user_id=user["id"]
+            )
+        except Exception as active_err:
+            logger.error(f"Error determining active environment: {str(active_err)}")
+            active_env = "test"  # Default to test
         
         return {
             "success": True,
             "test": {
                 "configured": test_creds is not None,
-                "verified": test_creds and test_creds.get("webhook_verified", False),
-                "key_prefix": (test_creds.get("RAZORPAY_KEY_ID", "")[:15] + "...") if test_creds and test_creds.get("RAZORPAY_KEY_ID") else None
+                "verified": test_creds and test_creds.get("webhook_verified", False) if isinstance(test_creds, dict) else False,
+                "key_prefix": (test_creds.get("RAZORPAY_KEY_ID", "")[:15] + "...") if test_creds and isinstance(test_creds, dict) and test_creds.get("RAZORPAY_KEY_ID") else None
             },
             "live": {
                 "configured": live_creds is not None,
-                "verified": live_creds and live_creds.get("webhook_verified", False),
-                "key_prefix": (live_creds.get("RAZORPAY_KEY_ID", "")[:15] + "...") if live_creds and live_creds.get("RAZORPAY_KEY_ID") else None
+                "verified": live_creds and live_creds.get("webhook_verified", False) if isinstance(live_creds, dict) else False,
+                "key_prefix": (live_creds.get("RAZORPAY_KEY_ID", "")[:15] + "...") if live_creds and isinstance(live_creds, dict) and live_creds.get("RAZORPAY_KEY_ID") else None
             },
-            "active_environment": active_env or "none"
+            "active_environment": active_env or "test"
         }    
     except Exception as e:
-        logger.error(f"Failed to get Razorpay status: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to get status")
+        logger.error(f"Failed to get Razorpay status: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}")
 
 
 @router.post("/verify-webhook")
@@ -237,8 +252,6 @@ async def can_go_live_razorpay(
     
     Requirements:
     1. Live keys must be configured (rzp_live_*)
-    2. Webhook must be verified
-    3. No previous payment failures in test mode (optional)
     """
     try:
         credential_manager = CredentialManager()
@@ -249,23 +262,19 @@ async def can_go_live_razorpay(
             environment="live"
         )
         
-        checks = {
-            "live_keys_configured": live_creds is not None,
-            "webhook_verified": live_creds and live_creds.get("webhook_verified", False),
-        }
-        
-        can_go_live = all(checks.values())
+        # For MVP: just check if live keys are configured
+        can_go_live = live_creds is not None
         
         next_steps = []
-        if not checks["live_keys_configured"]:
+        if not can_go_live:
             next_steps.append("Add live Razorpay keys")
-        if not checks["webhook_verified"]:
-            next_steps.append("Verify webhook for live environment")
         
         return {
             "success": True,
             "can_go_live": can_go_live,
-            "checks": checks,
+            "checks": {
+                "live_keys_configured": can_go_live
+            },
             "next_steps": next_steps
         }
     

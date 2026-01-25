@@ -40,17 +40,6 @@ export default function ServicesPage() {
       const response = await apiClient(`/api/services?environment=${currentEnvironment}`);
       setServices((response as { services: Service[] }).services || []);
       setServicesData((response as { services: Service[] }).services || []);
-
-      // Load environment status for each service
-      // const envPromises = response.services.map((service: Service) =>
-      //   apiClient(`/api/services/${service.service_name}/environments`)
-      //     .then(env => ({ [service.service_name]: env }))
-      //     .catch(() => ({ [service.service_name]: { test: { configured: false, last_used: null }, live: { configured: false, last_used: null } } }))
-      // );
-
-      // const envResults = await Promise.all(envPromises);
-      // const envMap = Object.assign({}, ...envResults);
-      // setEnvironments(envMap);
     } catch (error) {
       console.error('Failed to load services:', error);
       setServices([]);
@@ -65,9 +54,10 @@ export default function ServicesPage() {
     localStorage.setItem('onerouter_environment', env);
   }, []);
 
+  // Load services whenever currentEnvironment changes
   useEffect(() => {
     loadServices();
-  }, [loadServices]);
+  }, [currentEnvironment, apiClient]);
 
   // const switchEnvironment = async (serviceName: string, newEnv: 'test' | 'live') => {
   //   try {

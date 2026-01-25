@@ -70,6 +70,14 @@ class Settings:
         "true" if os.getenv("ENVIRONMENT", "development") == "production" else "false"
     ).lower() == "true"
 
+    # OneRouter Dogfooding Configuration
+    # API key for OneRouter to call its own API (dogfooding credit purchases)
+    ONEROUTER_API_KEY: str = os.getenv("ONEROUTER_API_KEY", "")
+    ONEROUTER_API_BASE_URL: str = os.getenv(
+        "ONEROUTER_API_BASE_URL",
+        "https://one-router-clyl.onrender.com"
+    )
+
     def __init__(self):
         """Initialize settings and validate/generate encryption key"""
         # Load admin user IDs from environment variable (comma-separated)

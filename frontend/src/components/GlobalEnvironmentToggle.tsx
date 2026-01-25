@@ -99,7 +99,7 @@ export function GlobalEnvironmentToggle({ services, onGlobalSwitch, apiClient }:
     try {
       console.log('Atomically switching all services to:', targetEnvironment);
 
-      await apiClient("/api/services/switch-all-environments", {
+      const response = await apiClient("/api/services/switch-all-environments", {
         method: "POST",
         body: JSON.stringify({
           environment: targetEnvironment,
@@ -107,14 +107,16 @@ export function GlobalEnvironmentToggle({ services, onGlobalSwitch, apiClient }:
         })
       });
       
-      // Update UI to show the target mode
+      console.log('Switch response:', response);
+      
+      // Only update UI AFTER successful API response
       setCurrentMode(targetEnvironment);
       onGlobalSwitch?.(targetEnvironment);
       console.log('All services switched successfully');
 
     } catch (error) {
       console.error("Failed to switch all services:", error);
-       // Restore previous mode on error
+       // Restore previous mode on error (UI never changed, so this is just for safety)
       setCurrentMode(previousMode);
       
       // Show user-friendly error message
@@ -127,10 +129,9 @@ export function GlobalEnvironmentToggle({ services, onGlobalSwitch, apiClient }:
 
 
 
-  if (services.length === 0) {
-    return null; // Don't show if no services
-  }
-
+  // Always show the toggle for environment switching, even if no services are configured yet
+  // This allows users to switch between test/live modes
+  
   const isLiveMode = currentMode === "live";
 
   return (

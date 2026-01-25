@@ -45,7 +45,23 @@ export function useClientApiCall(): (url: string, options?: RequestInit) => Prom
       });
 
       if (!response.ok) {
-        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+        let errorDetail = response.statusText;
+        const contentType = response.headers.get('content-type');
+        
+        try {
+          if (contentType?.includes('application/json')) {
+            const errorBody = await response.json();
+            errorDetail = errorBody.detail || errorBody.message || JSON.stringify(errorBody);
+          } else {
+            const text = await response.text();
+            errorDetail = text || response.statusText;
+          }
+        } catch (parseError) {
+          console.warn('Could not parse error response:', parseError);
+        }
+        
+        console.error(`API Error Details - Status: ${response.status}, Detail: ${errorDetail}`);
+        throw new Error(`API Error: ${response.status} ${errorDetail}`);
       }
 
       return await response.json();
