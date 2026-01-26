@@ -22,6 +22,7 @@ class ServiceInfo(BaseModel):
     features: dict
     is_active: bool
     created_at: str
+    credential_hint: str = ""  # Masked credential prefix for display (e.g., "rzp_test_Rrql***")
 
 class ServicesResponse(BaseModel):
     """Response with all user's services"""
@@ -38,16 +39,18 @@ class UpdateCredentialsRequest(BaseModel):
 async def get_user_services(
     user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    environment: str = "test"
+    environment: str = "test",
+    check_all: bool = False  # If true, check all environments (for has_services check)
 ):
     """
     Get all services connected by the user, filtered by environment
-    
+
     Query Parameters:
     - environment: 'test' or 'live' (default: 'test')
-    
+    - check_all: If true, returns services from ALL environments (for dashboard redirect check)
+
     This endpoint is called by the dashboard to check:
-    1. Does user have ANY services? (show onboarding vs dashboard)
+    1. Does user have ANY services? (show onboarding vs dashboard) - use check_all=true
     2. Which services are connected? (display service cards)
     3. What features are enabled? (show feature toggles)
     4. Filter by environment: Only show test services in test mode, live in live mode
@@ -67,27 +70,74 @@ async def get_user_services(
         # Validate environment parameter
         if environment not in ["test", "live"]:
             environment = "test"
-        
-        # Query services for this user AND the requested environment
-        result = await db.execute(
-            select(ServiceCredential).where(
-                ServiceCredential.user_id == user["id"],
-                ServiceCredential.is_active,
-                ServiceCredential.environment == environment  # Filter by environment
+
+        # Query services - either all environments or filtered
+        if check_all:
+            # For has_services check: get ALL active services regardless of environment
+            result = await db.execute(
+                select(ServiceCredential).where(
+                    ServiceCredential.user_id == user["id"],
+                    ServiceCredential.is_active
+                )
             )
-        )
+        else:
+            # For display: filter by environment
+            result = await db.execute(
+                select(ServiceCredential).where(
+                    ServiceCredential.user_id == user["id"],
+                    ServiceCredential.is_active,
+                    ServiceCredential.environment == environment
+                )
+            )
         credentials = result.scalars().all()
         
+        # Helper to create masked credential hint
+        def get_credential_hint(provider_name: str, decrypted_creds: dict) -> str:
+            """Create a masked hint from credentials (e.g., 'rzp_test_Rrql***')"""
+            try:
+                if provider_name == "razorpay":
+                    key_id = decrypted_creds.get("RAZORPAY_KEY_ID", "")
+                    if key_id and len(key_id) > 8:
+                        return f"{key_id[:12]}***"
+                    return key_id[:8] + "***" if key_id else ""
+                elif provider_name == "paypal":
+                    client_id = decrypted_creds.get("PAYPAL_CLIENT_ID", "")
+                    if client_id and len(client_id) > 8:
+                        return f"{client_id[:12]}***"
+                    return client_id[:8] + "***" if client_id else ""
+                elif provider_name == "twilio":
+                    sid = decrypted_creds.get("TWILIO_ACCOUNT_SID", "")
+                    if sid and len(sid) > 8:
+                        return f"{sid[:12]}***"
+                    return sid[:8] + "***" if sid else ""
+                return ""
+            except Exception:
+                return ""
+
+        # Initialize credential manager for decryption
+        credential_manager = CredentialManager()
+
         # Convert to response format
         services = []
         for cred in credentials:
+            # Decrypt credentials to get hint (key ID only, not secrets)
+            credential_hint = ""
+            try:
+                encrypted_bytes = bytes(cred.encrypted_credential)
+                decrypted = credential_manager.decrypt_credentials(encrypted_bytes)
+                credential_hint = get_credential_hint(cred.provider_name, decrypted)
+            except Exception as e:
+                print(f"Could not decrypt credentials for hint: {e}")
+                credential_hint = "***configured***"
+
             services.append(ServiceInfo(
                 id=str(cred.id),
                 service_name=cred.provider_name,
                 environment=cred.environment,
                 features=cred.features_config or {},
                 is_active=cred.is_active,
-                created_at=cred.created_at.isoformat() if cred.created_at else ""
+                created_at=cred.created_at.isoformat() if cred.created_at else "",
+                credential_hint=credential_hint
             ))
         
         return ServicesResponse(

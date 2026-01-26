@@ -125,6 +125,7 @@ class PaymentLinkRequest(BaseModel):
     notes: Optional[Dict[str, str]] = None
     provider: Optional[str] = None
     idempotency_key: Optional[str] = None
+    environment: Optional[str] = Field(None, description="Override environment for credential selection (test/live)")
 
 
 class UnifiedPaymentResponse(BaseModel):
@@ -686,6 +687,8 @@ async def create_payment_link(
     notes = request.notes
     provider = request.provider or "razorpay"
     idempotency_key = request.idempotency_key
+    # Allow request to override API key's environment (for dogfooding)
+    target_environment = request.environment or user.get("environment", "test")
     start_time = time.time()
     transaction_id = f"txn_{user['id']}_{int(start_time)}_{uuid.uuid4().hex[:8]}"
     
@@ -713,15 +716,15 @@ async def create_payment_link(
         http_method="POST",
         request_payload={"amount": amount, "description": description, "customer_email": customer_email, "callback_url": callback_url, "notes": notes},
         status="pending",
-        environment=user.get("environment", "development")
+        environment=target_environment
     )
-    
+
     try:
         async with db.begin_nested():
             db.add(log_entry)
             await db.flush()
-            
-            adapter = await request_router.get_adapter(user["id"], provider, db)
+
+            adapter = await request_router.get_adapter(user["id"], provider, db, target_environment=target_environment)
             
             # Check if adapter supports create_payment_link
             if not hasattr(adapter, 'create_payment_link'):

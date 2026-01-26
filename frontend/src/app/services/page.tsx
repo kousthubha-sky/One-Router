@@ -3,11 +3,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useClientApiCall } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, Settings, Loader2 } from 'lucide-react';
+import { CheckCircle2, Settings, Loader2, Pencil, Key, Shield } from 'lucide-react';
 import Link from 'next/link';
 import DashboardLayout from '@/components/DashboardLayout';
 import { GlobalEnvironmentToggle } from '@/components/GlobalEnvironmentToggle';
 import { BentoGrid } from '@/components/ui/bento-grid';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EditServiceModal } from '@/components/EditServiceModal';
 
 interface Service {
   id: string;
@@ -16,6 +19,7 @@ interface Service {
   features: Record<string, boolean>;
   is_active: boolean;
   created_at: string;
+  credential_hint: string;  // Masked credential prefix (e.g., "rzp_test_Rrql***")
 }
 
 
@@ -123,7 +127,7 @@ export default function ServicesPage() {
             </div>
 
             {/* Services Metrics */}
-              <BentoGrid items={[
+            <BentoGrid items={[
               {
                 title: "Connected Services",
                 meta: `${services.length} active in ${currentEnvironment}`,
@@ -143,6 +147,180 @@ export default function ServicesPage() {
                 tags: ["Environment", "Testing"],
               },
             ]} />
+
+            {/* Connected Services Table */}
+            <Card className="bg-black border border-black mt-8 hover:border-black transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/10">
+              <CardHeader className="pb-6">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-white flex items-center gap-3 text-xl">
+                    <div className="w-10 h-10 bg-gradient-to-br from-cyan-500/20 to-blue-500/20 rounded-xl flex items-center justify-center border border-cyan-500/30">
+                      <Shield className="w-5 h-5" />
+                    </div>
+                    Service Credentials ({currentEnvironment.toUpperCase()})
+                  </CardTitle>
+                  <Badge className={`${
+                    currentEnvironment === 'live'
+                      ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                      : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                  } border`}>
+                    {currentEnvironment.toUpperCase()} MODE
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {services.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="w-16 h-16 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 rounded-xl flex items-center justify-center mb-4 mx-auto border border-cyan-500/20">
+                      <Key className="w-8 h-8 text-cyan-500" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-white mb-2">No {currentEnvironment} credentials configured</h3>
+                    <p className="text-[#888] mb-6">Configure your {currentEnvironment} environment credentials to get started</p>
+                    <Link href="/onboarding">
+                      <Button className="bg-cyan-500 text-white hover:bg-cyan-600">
+                        Add Credentials
+                      </Button>
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="bg-black border border-[#222] rounded-2xl overflow-hidden">
+                    {/* Desktop Table */}
+                    <div className="hidden md:block">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-[#222] bg-black">
+                            <th className="px-6 py-4 text-left text-sm font-semibold text-white">Service</th>
+                            <th className="px-6 py-4 text-left text-sm font-semibold text-white">Credential</th>
+                            <th className="px-6 py-4 text-left text-sm font-semibold text-white">Environment</th>
+                            <th className="px-6 py-4 text-left text-sm font-semibold text-white">Status</th>
+                            <th className="px-6 py-4 text-left text-sm font-semibold text-white">Created</th>
+                            <th className="px-6 py-4 text-right text-sm font-semibold text-white">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {services.map((service, index) => (
+                            <tr
+                              key={service.id}
+                              className={`border-b border-[#222] hover:bg-[#111] transition-colors ${
+                                index === services.length - 1 ? 'border-b-0' : ''
+                              }`}
+                            >
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 rounded-lg flex items-center justify-center border border-cyan-500/20">
+                                    <CheckCircle2 className="w-4 h-4 text-cyan-500" />
+                                  </div>
+                                  <span className="text-white font-medium capitalize">{service.service_name}</span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <code className="text-[#888] text-sm font-mono bg-[#1a1a1a] px-2 py-1 rounded">
+                                  {service.credential_hint || '***configured***'}
+                                </code>
+                              </td>
+                              <td className="px-6 py-4">
+                                <Badge className={`${
+                                  service.environment === 'live'
+                                    ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                                    : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                                } border`}>
+                                  {service.environment.toUpperCase()}
+                                </Badge>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                                  <span className="text-green-400 text-sm">Active</span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className="text-[#888] text-sm">
+                                  {service.created_at ? new Date(service.created_at).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric'
+                                  }) : '-'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                <EditServiceModal
+                                  service={service}
+                                  trigger={
+                                    <button
+                                      className="p-2 rounded-lg hover:bg-[#222] transition-colors"
+                                      title="Edit credentials"
+                                    >
+                                      <Pencil className="w-4 h-4 text-[#888] hover:text-cyan-400" />
+                                    </button>
+                                  }
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Mobile Cards */}
+                    <div className="md:hidden space-y-4 p-4">
+                      {services.map((service) => (
+                        <div
+                          key={service.id}
+                          className="border border-[#222] rounded-xl p-4 hover:bg-[#111] transition-colors"
+                        >
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 rounded-lg flex items-center justify-center border border-cyan-500/20">
+                                <CheckCircle2 className="w-5 h-5 text-cyan-500" />
+                              </div>
+                              <div>
+                                <p className="text-white font-medium capitalize">{service.service_name}</p>
+                                <code className="text-[#666] text-xs font-mono">
+                                  {service.credential_hint || '***configured***'}
+                                </code>
+                              </div>
+                            </div>
+                            <Badge className={`${
+                              service.environment === 'live'
+                                ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                                : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                            } border`}>
+                              {service.environment.toUpperCase()}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center justify-between pt-3 border-t border-[#222]">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                              <span className="text-green-400 text-xs">Active</span>
+                            </div>
+                            <EditServiceModal
+                              service={service}
+                              trigger={
+                                <button className="p-2 rounded-lg hover:bg-[#222] transition-colors">
+                                  <Pencil className="w-4 h-4 text-[#888]" />
+                                </button>
+                              }
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Add Service Button */}
+                {services.length > 0 && (
+                  <div className="mt-6 pt-6 border-t border-[#333]">
+                    <div className="flex items-center justify-center">
+                      <Link href="/onboarding">
+                        <Button className="bg-transparent border-2 border-dashed border-[#333] text-[#888] hover:border-cyan-500 hover:text-cyan-400 hover:bg-cyan-500/5 rounded-xl py-3 px-6 transition-all duration-300">
+                          <span className="mr-2">+</span> Add More Services
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         </main>
       </div>

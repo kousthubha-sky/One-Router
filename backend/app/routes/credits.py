@@ -120,13 +120,27 @@ async def purchase_credits(
     SDK to process payments - eating our own dogfood.
     """
     from onerouter import OneRouter, APIError, AuthenticationError
+    from sqlalchemy import select
+    from ..models import User
 
     user_id = str(user.get("id"))
     user_email = user.get("email", "")
 
+    # Get user's preferred environment for payment processing
+    # Check API key environment first, then user preferences, default to "test"
+    user_environment = user.get("environment")  # From API key auth
+    if not user_environment:
+        # Get from user preferences in database
+        result = await db.execute(select(User.preferences).where(User.id == user_id))
+        preferences = result.scalar_one_or_none()
+        if preferences:
+            user_environment = preferences.get("current_environment", "test")
+        else:
+            user_environment = "test"
+
     logger.debug(
         "Purchase credits initiated (via SDK dogfooding)",
-        extra={"user_id_prefix": user_id[:8], "auth_type": user.get("auth_type", "unknown")}
+        extra={"user_id_prefix": user_id[:8], "auth_type": user.get("auth_type", "unknown"), "environment": user_environment}
     )
 
     # Calculate credits and price
@@ -159,7 +173,8 @@ async def purchase_credits(
                     "onerouter_user_id": user_id,
                     "credits": str(credits_to_buy),
                     "type": "credit_purchase"
-                }
+                },
+                environment=user_environment  # Pass user's preferred environment
             )
 
             logger.info(

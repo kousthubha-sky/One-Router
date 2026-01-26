@@ -15,6 +15,7 @@ interface Service {
   service_name: string;
   environment: string;
   features: Record<string, boolean>;
+  credential_hint?: string;  // Masked credential prefix (e.g., "rzp_test_Rrql***")
 }
 
 // Server-side API call to check user services
@@ -23,7 +24,9 @@ async function getUserServices(token: string) {
 
   try {
     console.log('Fetching services with token:', token ? 'present' : 'missing');
-    const response = await fetch(`${API_BASE_URL}/api/services`, {
+    // Use check_all=true to check if user has ANY services (regardless of environment)
+    // This prevents redirect to onboarding if user only has live credentials but is in test mode
+    const response = await fetch(`${API_BASE_URL}/api/services?check_all=true`, {
       headers: {
         'Authorization': `Bearer ${token}`,
       },
