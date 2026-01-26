@@ -111,8 +111,8 @@ async def get_api_user(
             detail="API key has expired"
         )
 
-    # Update last used timestamp
-    api_key_obj.last_used_at = datetime.now(timezone.utc)  # type: ignore
+    # Update last used timestamp (use naive UTC datetime to match TIMESTAMP WITHOUT TIME ZONE column)
+    api_key_obj.last_used_at = datetime.utcnow()  # type: ignore
     db.add(api_key_obj)
     await db.commit()
     # Return simplified auth data
@@ -227,8 +227,8 @@ async def get_api_or_current_user(
                     detail="API key has expired"
                 )
             
-            # Update last used
-            api_key_obj.last_used_at = datetime.now(timezone.utc)  # type: ignore
+            # Update last used (use naive UTC datetime to match TIMESTAMP WITHOUT TIME ZONE column)
+            api_key_obj.last_used_at = datetime.utcnow()  # type: ignore
             db.add(api_key_obj)
             await db.commit()
             

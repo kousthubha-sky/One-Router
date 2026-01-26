@@ -65,9 +65,9 @@ class RequestRouter:
                     ServiceCredential.provider_name == service,
                     ServiceCredential.is_active == True,
                     ServiceCredential.environment == environment
-                )
+                ).order_by(ServiceCredential.created_at.desc())  # Get most recent if duplicates exist
             )
-            credential = result.scalar_one_or_none()
+            credential = result.scalars().first()  # Use first() to handle potential duplicates
             if credential:
                 return credential
         

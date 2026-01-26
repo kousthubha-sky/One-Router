@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, validator
 from typing import Optional, Dict, Any, Annotated, List
 from ..database import get_db
 from ..services.request_router import RequestRouter
-from ..auth.dependencies import get_current_user, get_api_user
+from ..auth.dependencies import get_current_user, get_api_user, get_api_or_current_user
 from ..services.transaction_logger import TransactionLogger
 from ..services.idempotency_service import IdempotencyService
 from ..services.credits_service import CreditsService
@@ -114,6 +114,18 @@ class PaymentOrderRequest(BaseModel):
             )
         
         return v
+
+
+class PaymentLinkRequest(BaseModel):
+    """Request model for creating payment links"""
+    amount: float = Field(..., gt=0, description="Payment amount")
+    description: str = Field(..., min_length=1, description="Payment description")
+    customer_email: Optional[str] = None
+    callback_url: Optional[str] = None
+    notes: Optional[Dict[str, str]] = None
+    provider: Optional[str] = None
+    idempotency_key: Optional[str] = None
+
 
 class UnifiedPaymentResponse(BaseModel):
     transaction_id: str
@@ -649,21 +661,31 @@ def _detect_provider_from_id(subscription_id: str) -> str:
 
 @router.post("/payment-links")
 async def create_payment_link(
-    amount: float,
-    description: str,
-    customer_email: Optional[str] = None,
-    provider: Optional[str] = None,
-    idempotency_key: Optional[str] = None,
-    user = Depends(get_current_user),
+    request: PaymentLinkRequest,
+    user = Depends(get_api_or_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Create payment link (unified API) with proper transaction management and idempotency"""
+    """
+    Create payment link (unified API).
+
+    Accepts JSON body with amount, description, and optional callback_url/notes.
+    Used by OneRouter SDK for dogfooding credit purchases.
+    """
     import time
+    import json as json_module
+    from decimal import Decimal as DecimalType
     from ..models import TransactionLog
     from ..cache import cache_service
     import uuid
-    
-    provider = provider or "razorpay"
+
+    # Extract fields from request body
+    amount = request.amount
+    description = request.description
+    customer_email = request.customer_email
+    callback_url = request.callback_url
+    notes = request.notes
+    provider = request.provider or "razorpay"
+    idempotency_key = request.idempotency_key
     start_time = time.time()
     transaction_id = f"txn_{user['id']}_{int(start_time)}_{uuid.uuid4().hex[:8]}"
     
@@ -689,7 +711,7 @@ async def create_payment_link(
         service_name=provider,
         endpoint="/payment-links",
         http_method="POST",
-        request_payload={"amount": amount, "description": description, "customer_email": customer_email},
+        request_payload={"amount": amount, "description": description, "customer_email": customer_email, "callback_url": callback_url, "notes": notes},
         status="pending",
         environment=user.get("environment", "development")
     )
@@ -710,24 +732,33 @@ async def create_payment_link(
             
             # Call create_payment_link with proper signature
             result = await adapter.create_payment_link(  # type: ignore
-                amount=amount, 
-                description=description, 
-                customer_email=customer_email  # type: ignore
+                amount=amount,
+                description=description,
+                customer_email=customer_email,  # type: ignore
+                callback_url=callback_url,
+                notes=notes or {}
             )
-            
+
             response_time_ms = int((time.time() - start_time) * 1000)
-            
-            log_entry.response_payload = result
+
+            # Convert Decimal values to float for JSON serialization
+            def decimal_default(obj):
+                if isinstance(obj, DecimalType):
+                    return float(obj)
+                raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+            serialized_result = json_module.loads(json_module.dumps(result, default=decimal_default))
+
+            log_entry.response_payload = serialized_result
             log_entry.response_status = 200
             log_entry.response_time_ms = response_time_ms
             log_entry.status = "completed"
-        
+
         await db.commit()
-        
+
         # Cache the response for idempotent retrieval
-        await cache_service.cache_idempotent_response(user["id"], idempotency_key, result)
-        
-        return result
+        await cache_service.cache_idempotent_response(user["id"], idempotency_key, serialized_result)
+
+        return serialized_result
         
     except HTTPException:
         raise

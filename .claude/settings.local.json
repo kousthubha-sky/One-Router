@@ -9,7 +9,10 @@
       "Bash(docker logs:*)",
       "Bash(docker-compose build:*)",
       "Bash(docker-compose up:*)",
-      "Bash(docker exec:*)"
+      "Bash(docker exec:*)",
+      "Bash(timeout:*)",
+      "Bash(docker restart:*)",
+      "Bash(ping:*)"
     ]
   }
 }
