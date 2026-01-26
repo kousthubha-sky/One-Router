@@ -15,7 +15,8 @@
       "Bash(ping:*)",
       "Bash(claude mcp list:*)",
       "WebFetch(domain:one-router-clyl.onrender.com)",
-      "WebFetch(domain:api.render.com)"
+      "WebFetch(domain:api.render.com)",
+      "Bash(ls:*)"
     ]
   }
 }

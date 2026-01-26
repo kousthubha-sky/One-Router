@@ -211,12 +211,19 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                     {item.label}
                   </Link>
                 ))}
-                <button className="block w-full text-left px-4 py-3 rounded-lg hover:bg-white/10 transition-all text-base font-medium">
-                  Pricing
-                </button>
-                <button className="block w-full text-left px-4 py-3 rounded-lg hover:bg-white/10 transition-all text-base font-medium">
-                  Docs
-                </button>
+                {/* Pricing */}
+                 <NavigationMenuItem>
+                   <Link href="/pricing" className={navigationMenuTriggerStyle()}>
+                     Pricing
+                   </Link>
+                 </NavigationMenuItem>
+
+                 {/* Docs */}
+                 <NavigationMenuItem>
+                   <Link href="/docs" className={navigationMenuTriggerStyle()}>
+                     Docs
+                   </Link>
+                 </NavigationMenuItem>
               </div>
             </div>
           )}
