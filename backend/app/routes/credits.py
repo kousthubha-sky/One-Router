@@ -189,8 +189,8 @@ async def purchase_credits(
                 f"Falling back to demo order for user {user_id} due to SDK error: {str(e)}"
             )
             link = {
-                "id": f"demo_link_{user_id[:8]}",
-                "short_url": f"https://demo.onerouter.com/pay/demo_link_{user_id[:8]}"
+                "provider_order_id": f"demo_link_{user_id[:8]}",
+                "checkout_url": f"https://demo.onerouter.com/pay/demo_link_{user_id[:8]}"
             }
         else:
             raise HTTPException(
@@ -209,8 +209,8 @@ async def purchase_credits(
                 f"Falling back to demo order for user {user_id} due to: {str(e)}"
             )
             link = {
-                "id": f"demo_link_{user_id[:8]}",
-                "short_url": f"https://demo.onerouter.com/pay/demo_link_{user_id[:8]}"
+                "provider_order_id": f"demo_link_{user_id[:8]}",
+                "checkout_url": f"https://demo.onerouter.com/pay/demo_link_{user_id[:8]}"
             }
         else:
             raise HTTPException(
@@ -219,14 +219,18 @@ async def purchase_credits(
             )
 
     # Store pending payment
+    # Note: Adapter returns "provider_order_id" and "checkout_url" keys
+    order_id = link.get("provider_order_id") or link.get("id") or link.get("transaction_id", "")
+    checkout_url = link.get("checkout_url") or link.get("short_url", "")
+
     payment = OneRouterPayment(
         user_id=user_id,
         amount=price_inr,
         currency=request.currency,
         credits_purchased=credits_to_buy,
         provider="onerouter",  # Changed from "razorpay" - we're dogfooding
-        provider_order_id=link.get("id"),
-        checkout_url=link.get("short_url") or link.get("checkout_url"),
+        provider_order_id=order_id,
+        checkout_url=checkout_url,
         status=PaymentStatus.PENDING
     )
     db.add(payment)
@@ -235,11 +239,11 @@ async def purchase_credits(
 
     return CreditPurchaseResponse(
         payment_id=str(payment.id),
-        order_id=link.get("id"),
+        order_id=order_id,
         credits=credits_to_buy,
         amount=price_inr,
         currency=request.currency,
-        checkout_url=link.get("short_url") or link.get("checkout_url", "")
+        checkout_url=checkout_url
     )
 
 
