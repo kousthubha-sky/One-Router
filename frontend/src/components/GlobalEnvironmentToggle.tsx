@@ -61,7 +61,7 @@ export function GlobalEnvironmentToggle({ services, onGlobalSwitch, apiClient }:
 
   const switchAllServices = async (targetEnvironment: "test" | "live") => {
     const previousMode = currentMode;
-    if (services.length === 0) return;
+    // Don't block switching based on displayed services - user can switch env preference anytime
     
     // Require apiClient for switching environments
     if (!apiClient) {
@@ -99,11 +99,12 @@ export function GlobalEnvironmentToggle({ services, onGlobalSwitch, apiClient }:
     try {
       console.log('Atomically switching all services to:', targetEnvironment);
 
+      // Don't pass service_ids - let backend switch ALL services atomically
+      // This ensures all environments get updated, not just currently displayed ones
       const response = await apiClient("/api/services/switch-all-environments", {
         method: "POST",
         body: JSON.stringify({
-          environment: targetEnvironment,
-          service_ids: services.map(s => s.id)
+          environment: targetEnvironment
         })
       });
       

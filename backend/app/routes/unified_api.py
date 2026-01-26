@@ -688,7 +688,9 @@ async def create_payment_link(
     provider = request.provider or "razorpay"
     idempotency_key = request.idempotency_key
     # Allow request to override API key's environment (for dogfooding)
-    target_environment = request.environment or user.get("environment", "test")
+    # Check request.environment first, then notes.environment (fallback for old SDK), then user's env
+    notes_environment = notes.get("environment") if notes else None
+    target_environment = request.environment or notes_environment or user.get("environment", "test")
     start_time = time.time()
     transaction_id = f"txn_{user['id']}_{int(start_time)}_{uuid.uuid4().hex[:8]}"
     

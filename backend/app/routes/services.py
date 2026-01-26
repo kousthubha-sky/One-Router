@@ -512,8 +512,9 @@ async def switch_all_environments_atomic(
                     if not user_obj.preferences:
                         user_obj.preferences = {}
                     user_obj.preferences["current_environment"] = target_env
+                    flag_modified(user_obj, "preferences")
                     await db.commit()
-                
+
                 return {
                     "status": "switched",
                     "environment": target_env,
@@ -550,7 +551,9 @@ async def switch_all_environments_atomic(
                 if not user_obj.preferences:
                     user_obj.preferences = {}
                 user_obj.preferences["current_environment"] = target_env
-        
+                # Flag the JSONB column as modified so SQLAlchemy detects the change
+                flag_modified(user_obj, "preferences")
+
         # Commit the transaction
         await db.commit()
         

@@ -164,18 +164,33 @@ async def purchase_credits(
             api_key=settings.ONEROUTER_API_KEY,
             base_url=settings.ONEROUTER_API_BASE_URL
         ) as client:
-            link = await client.payment_links.create(
-                amount=price_inr,
-                description=f"Purchase {credits_to_buy} OneRouter credits",
-                customer_email=user_email if user_email else None,
-                callback_url=f"{settings.FRONTEND_URL}/credits/payment-callback",
-                notes={
+            # Build kwargs - only include environment if SDK supports it
+            create_kwargs = {
+                "amount": price_inr,
+                "description": f"Purchase {credits_to_buy} OneRouter credits",
+                "customer_email": user_email if user_email else None,
+                "callback_url": f"{settings.FRONTEND_URL}/credits/payment-callback",
+                "notes": {
                     "onerouter_user_id": user_id,
                     "credits": str(credits_to_buy),
-                    "type": "credit_purchase"
-                },
-                environment=user_environment  # Pass user's preferred environment
-            )
+                    "type": "credit_purchase",
+                    "environment": user_environment  # Pass environment in notes as fallback
+                }
+            }
+
+            # Try with environment parameter first (newer SDK), fall back to without
+            try:
+                link = await client.payment_links.create(
+                    **create_kwargs,
+                    environment=user_environment
+                )
+            except TypeError as te:
+                if "environment" in str(te):
+                    # Old SDK version - call without environment parameter
+                    logger.warning("SDK doesn't support environment parameter, using notes fallback")
+                    link = await client.payment_links.create(**create_kwargs)
+                else:
+                    raise
 
             logger.info(
                 "Payment link created via SDK dogfooding",

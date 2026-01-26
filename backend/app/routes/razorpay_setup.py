@@ -249,26 +249,31 @@ async def can_go_live_razorpay(
 ) -> Dict[str, Any]:
     """
     Check if user is ready to switch to live mode for Razorpay.
-    
+
     Requirements:
     1. Live keys must be configured (rzp_live_*)
     """
+    from sqlalchemy import select
+    from ..models import ServiceCredential
+
     try:
-        credential_manager = CredentialManager()
-        
-        live_creds = await credential_manager.get_razorpay_credentials(
-            db=db,
-            user_id=user["id"],
-            environment="live"
+        # Just check if live credentials EXIST in DB (don't decrypt - that can fail with wrong key)
+        result = await db.execute(
+            select(ServiceCredential).where(
+                ServiceCredential.user_id == user["id"],
+                ServiceCredential.provider_name == "razorpay",
+                ServiceCredential.environment == "live",
+                ServiceCredential.is_active == True
+            )
         )
-        
-        # For MVP: just check if live keys are configured
-        can_go_live = live_creds is not None
-        
+        live_cred = result.scalar_one_or_none()
+
+        can_go_live = live_cred is not None
+
         next_steps = []
         if not can_go_live:
             next_steps.append("Add live Razorpay keys")
-        
+
         return {
             "success": True,
             "can_go_live": can_go_live,
@@ -277,7 +282,7 @@ async def can_go_live_razorpay(
             },
             "next_steps": next_steps
         }
-    
+
     except Exception as e:
         logger.error(f"Failed to check live readiness: {str(e)}")
         raise HTTPException(status_code=500, detail="Check failed")
