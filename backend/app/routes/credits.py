@@ -176,7 +176,7 @@ async def purchase_credits(
                 payment_currency = "USD"
                 payment_amount = round(price_inr / 83, 2)  # Approximate INR to USD
 
-            # Build kwargs - only include environment if SDK supports it
+            # Build kwargs for SDK call
             create_kwargs = {
                 "amount": payment_amount,
                 "description": f"Purchase {credits_to_buy} OneRouter credits",
@@ -185,25 +185,14 @@ async def purchase_credits(
                 "notes": {
                     "onerouter_user_id": user_id,
                     "credits": str(credits_to_buy),
-                    "type": "credit_purchase",
-                    "environment": user_environment,  # Pass environment in notes as fallback
-                    "provider": selected_provider  # Pass provider selection
-                }
+                    "type": "credit_purchase"
+                },
+                "environment": user_environment,
+                "provider": selected_provider
             }
 
-            # Try with environment parameter first (newer SDK), fall back to without
-            try:
-                link = await client.payment_links.create(
-                    **create_kwargs,
-                    environment=user_environment
-                )
-            except TypeError as te:
-                if "environment" in str(te):
-                    # Old SDK version - call without environment parameter
-                    logger.warning("SDK doesn't support environment parameter, using notes fallback")
-                    link = await client.payment_links.create(**create_kwargs)
-                else:
-                    raise
+            # Create payment link via SDK
+            link = await client.payment_links.create(**create_kwargs)
 
             logger.info(
                 "Payment link created via SDK dogfooding",
