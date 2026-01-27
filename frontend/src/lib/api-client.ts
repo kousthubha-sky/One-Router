@@ -1,4 +1,5 @@
 import { useAuth } from '@clerk/nextjs';
+import { useCallback } from 'react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -6,7 +7,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 export function useClientApiCall(): (url: string, options?: RequestInit) => Promise<Record<string, unknown>> {
   const { getToken } = useAuth();
 
-  return async function clientApiCall(endpoint: string, options?: RequestInit) {
+  return useCallback(async function clientApiCall(endpoint: string, options?: RequestInit) {
     const token = await getToken();
     console.log('useClientApiCall: Token available:', !!token);
 
@@ -69,7 +70,7 @@ export function useClientApiCall(): (url: string, options?: RequestInit) => Prom
       console.error('Client API Call Error:', error);
       throw error;
     }
-  };
+  }, [getToken]);
 }
 
 // Specific client-side API functions using the hook

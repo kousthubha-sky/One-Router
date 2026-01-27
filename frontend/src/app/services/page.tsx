@@ -61,7 +61,7 @@ export default function ServicesPage() {
   // Load services whenever currentEnvironment changes
   useEffect(() => {
     loadServices();
-  }, [currentEnvironment, apiClient]);
+  }, [loadServices]);
 
   // const switchEnvironment = async (serviceName: string, newEnv: 'test' | 'live') => {
   //   try {

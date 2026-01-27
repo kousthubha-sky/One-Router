@@ -216,11 +216,12 @@ class CredentialManager:
         feature_metadata: Optional[Dict[str, Any]] = None,  # NEW parameter
         environment: str = "test"
     ) -> ServiceCredential:
-        """Store encrypted service credentials in database"""
+        """Store encrypted service credentials in database (upsert - update if exists)"""
+        from sqlalchemy import select
+
         if feature_metadata is None:
             feature_metadata = {}
-        
-        # TODO: Use feature_metadata or remove if not needed
+
         errors = self.validate_credentials_format(service_name, credentials, environment)
         if errors:
             raise ValueError(f"Invalid credentials for {service_name}: {errors}")
@@ -228,17 +229,34 @@ class CredentialManager:
         # Encrypt the credentials
         encrypted_creds = self.encrypt_credentials(credentials)
 
-        # Create database record
-        credential = ServiceCredential(
-            user_id=user_id,
-            provider_name=service_name,
-            environment=environment,
-            encrypted_credential=encrypted_creds,
-            features_config=features,
-            is_active=True
+        # Check if credential already exists for this user/service/environment
+        result = await db.execute(
+            select(ServiceCredential).where(
+                ServiceCredential.user_id == user_id,
+                ServiceCredential.provider_name == service_name,
+                ServiceCredential.environment == environment
+            )
         )
+        existing = result.scalar_one_or_none()
 
-        db.add(credential)
+        if existing:
+            # Update existing credential
+            existing.encrypted_credential = encrypted_creds
+            existing.features_config = features
+            existing.is_active = True
+            credential = existing
+        else:
+            # Create new credential
+            credential = ServiceCredential(
+                user_id=user_id,
+                provider_name=service_name,
+                environment=environment,
+                encrypted_credential=encrypted_creds,
+                features_config=features,
+                is_active=True
+            )
+            db.add(credential)
+
         await db.commit()
         await db.refresh(credential)
 

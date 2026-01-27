@@ -57,7 +57,7 @@ async def store_paypal_credentials(
         credential = await credential_manager.store_service_credentials(
             db=db,
             user_id=user["id"],
-            provider_name="paypal",
+            service_name="paypal",
             environment=request.environment,
             credentials={
                 "PAYPAL_CLIENT_ID": request.client_id,

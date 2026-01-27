@@ -403,8 +403,71 @@ async def delete_all_services(
         await db.rollback()
         print(f"Error deleting all services: {e}")
         raise HTTPException(
-            status_code=500, 
+            status_code=500,
             detail=f"Failed to disconnect services: {str(e)}"
+        )
+
+
+@router.get("/services/can-go-live")
+async def can_go_live(
+    user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Check if user can switch to live mode.
+
+    Returns which services have live credentials configured and which are missing.
+    Only services with test credentials need live credentials to switch.
+
+    Returns:
+        {
+            "can_go_live": true/false,
+            "services_with_live": ["razorpay"],
+            "services_missing_live": ["paypal"],
+            "message": "Configure live credentials for: paypal"
+        }
+    """
+    try:
+        user_id = str(user.get("id"))
+
+        # Get all services with test credentials (these need live creds to switch)
+        test_services_result = await db.execute(
+            select(ServiceCredential.provider_name).where(
+                ServiceCredential.user_id == user_id,
+                ServiceCredential.environment == "test",
+                ServiceCredential.is_active == True
+            ).distinct()
+        )
+        test_services = [row[0] for row in test_services_result.fetchall()]
+
+        # Get all services with live credentials
+        live_services_result = await db.execute(
+            select(ServiceCredential.provider_name).where(
+                ServiceCredential.user_id == user_id,
+                ServiceCredential.environment == "live",
+                ServiceCredential.is_active == True
+            ).distinct()
+        )
+        live_services = [row[0] for row in live_services_result.fetchall()]
+
+        # Find services missing live credentials
+        missing_live = [s for s in test_services if s not in live_services]
+
+        can_go_live = len(missing_live) == 0
+
+        return {
+            "can_go_live": can_go_live,
+            "services_with_test": test_services,
+            "services_with_live": live_services,
+            "services_missing_live": missing_live,
+            "message": f"Configure live credentials for: {', '.join(missing_live)}" if missing_live else "Ready to go live"
+        }
+
+    except Exception as e:
+        print(f"Error checking can-go-live: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to check live readiness: {str(e)}"
         )
 
 
@@ -464,103 +527,60 @@ async def switch_all_environments_atomic(
                 detail="Invalid environment. Must be 'test' or 'live'"
             )
         
-        # If switching to live, verify user has live credentials configured
+        # If switching to live, verify user has live credentials for all test services
         if target_env == "live":
-            result = await db.execute(
-                select(ServiceCredential).where(
+            # Get all services with test credentials
+            test_services_result = await db.execute(
+                select(ServiceCredential.provider_name).where(
                     ServiceCredential.user_id == user_id,
-                    ServiceCredential.provider_name == "razorpay",
+                    ServiceCredential.environment == "test",
+                    ServiceCredential.is_active == True
+                ).distinct()
+            )
+            test_services = [row[0] for row in test_services_result.fetchall()]
+
+            # Get all services with live credentials
+            live_services_result = await db.execute(
+                select(ServiceCredential.provider_name).where(
+                    ServiceCredential.user_id == user_id,
                     ServiceCredential.environment == "live",
                     ServiceCredential.is_active == True
-                )
+                ).distinct()
             )
-            live_creds = result.scalar_one_or_none()
-            
-            if not live_creds:
+            live_services = [row[0] for row in live_services_result.fetchall()]
+
+            # Find services missing live credentials
+            missing_live = [s for s in test_services if s not in live_services]
+
+            if missing_live:
                 raise HTTPException(
                     status_code=403,
-                    detail="Cannot switch to live mode: Please configure live Razorpay credentials first"
+                    detail=f"Cannot switch to live mode: Please configure live credentials for: {', '.join(missing_live)}"
                 )
         
-        # Use database transaction for atomicity
-        async with db.begin_nested() as nested_transaction:
-            # Build query for services to update
-            query = select(ServiceCredential).where(
-                ServiceCredential.user_id == user_id,
-                ServiceCredential.is_active == True
-            )
-            
-            # Filter by specific service IDs if provided
-            if request.service_ids and len(request.service_ids) > 0:
-                query = query.where(
-                    ServiceCredential.id.in_(request.service_ids)
-                )
-            
-            # Fetch all matching services
-            result = await db.execute(query)
-            services_to_update = result.scalars().all()
-            
-            # If no services to update, that's OK - just update user preference instead
-            if not services_to_update:
-                # Update user's preferred environment even if no services exist yet
-                # This allows users to set their environment preference before adding services
-                user_record = await db.execute(
-                    select(User).where(User.id == user_id)
-                )
-                user_obj = user_record.scalar_one_or_none()
-                if user_obj:
-                    if not user_obj.preferences:
-                        user_obj.preferences = {}
-                    user_obj.preferences["current_environment"] = target_env
-                    flag_modified(user_obj, "preferences")
-                    await db.commit()
+        # Environment switching should ONLY update user preference
+        # NOT change the environment of credentials (they stay as test/live separately)
+        # The system uses credentials matching the user's current_environment preference
 
-                return {
-                    "status": "switched",
-                    "environment": target_env,
-                    "count": 0,
-                    "message": "Environment preference updated (no services to migrate)",
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-            
-            # Update all services in a single query for efficiency
-            update_query = update(ServiceCredential).where(
-                ServiceCredential.user_id == user_id,
-                ServiceCredential.is_active == True
-            )
-            
-            if request.service_ids and len(request.service_ids) > 0:
-                update_query = update_query.where(
-                    ServiceCredential.id.in_(request.service_ids)
-                )
-            
-            update_query = update_query.values(
-                environment=target_env,
-                updated_at=datetime.utcnow()
-            )
-            
-            result = await db.execute(update_query)
-            updated_count = result.rowcount
-            
-            # Also update user's preferred environment
-            user_record = await db.execute(
-                select(User).where(User.id == user_id)
-            )
-            user_obj = user_record.scalar_one_or_none()
-            if user_obj:
-                if not user_obj.preferences:
-                    user_obj.preferences = {}
-                user_obj.preferences["current_environment"] = target_env
-                # Flag the JSONB column as modified so SQLAlchemy detects the change
-                flag_modified(user_obj, "preferences")
+        # Update user's preferred environment
+        user_record = await db.execute(
+            select(User).where(User.id == user_id)
+        )
+        user_obj = user_record.scalar_one_or_none()
+        if user_obj:
+            if not user_obj.preferences:
+                user_obj.preferences = {}
+            user_obj.preferences["current_environment"] = target_env
+            # Flag the JSONB column as modified so SQLAlchemy detects the change
+            flag_modified(user_obj, "preferences")
 
         # Commit the transaction
         await db.commit()
-        
+
         return {
             "status": "switched",
             "environment": target_env,
-            "count": updated_count,
+            "message": f"Environment switched to {target_env}",
             "timestamp": datetime.utcnow().isoformat()
         }
         

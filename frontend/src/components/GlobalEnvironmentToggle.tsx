@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useAuth } from "@clerk/nextjs";
 
 
@@ -19,6 +20,14 @@ interface RequestOptions {
   headers?: Record<string, string>;
 }
 
+interface CanGoLiveResponse {
+  can_go_live: boolean;
+  services_with_test: string[];
+  services_with_live: string[];
+  services_missing_live: string[];
+  message: string;
+}
+
 interface GlobalEnvironmentToggleProps {
   services: Service[];
   onGlobalSwitch?: (newEnvironment: "test" | "live") => void;
@@ -29,6 +38,7 @@ export function GlobalEnvironmentToggle({ services, onGlobalSwitch, apiClient }:
   const [isSwitching, setIsSwitching] = useState(false);
   const [currentMode, setCurrentMode] = useState<"test" | "live" | "mixed">("test");
   const [showLiveModal, setShowLiveModal] = useState(false);
+  const [missingLiveServices, setMissingLiveServices] = useState<string[]>([]);
   const { getToken } = useAuth();
 
   // Warn if apiClient is missing
@@ -70,18 +80,20 @@ export function GlobalEnvironmentToggle({ services, onGlobalSwitch, apiClient }:
       return;
     }
     
-    // If switching to live, check if live credentials are configured
+    // If switching to live, check if live credentials are configured for ALL services
     if (targetEnvironment === "live") {
       try {
-        const response = await apiClient("/api/razorpay/can-go-live");
+        const response = await apiClient("/api/services/can-go-live") as unknown as CanGoLiveResponse;
         if (!response.can_go_live) {
-          // Show modal with message to configure live keys
+          // Store which services are missing live credentials
+          setMissingLiveServices(response.services_missing_live || []);
           setShowLiveModal(true);
           return;
         }
       } catch (error) {
         console.error("Failed to check live credentials:", error);
         // If check fails, show modal to be safe
+        setMissingLiveServices([]);
         setShowLiveModal(true);
         return;
       }
@@ -173,19 +185,49 @@ export function GlobalEnvironmentToggle({ services, onGlobalSwitch, apiClient }:
       </button>
     </div>
 
-    {/* Modal: Configure Live Keys First */}
-    {showLiveModal && (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-gray-900 border border-gray-700 rounded-lg p-6 max-w-md mx-4">
+    {/* Modal: Configure Live Keys First - rendered via Portal to escape stacking context */}
+    {showLiveModal && typeof document !== 'undefined' && createPortal(
+      <div className="fixed inset-0 bg-black/70 flex items-center justify-center" style={{ zIndex: 99999 }}>
+        <div className="bg-gray-900 border border-gray-700 rounded-lg p-6 max-w-md mx-4 shadow-2xl">
           <div className="flex items-center gap-3 mb-4">
             <Shield className="w-6 h-6 text-green-500" />
             <h2 className="text-lg font-semibold text-white">Live Mode Requires Configuration</h2>
           </div>
-          
-          <p className="text-gray-300 mb-6">
-            To switch to live mode, you need to configure and verify your live Razorpay credentials first.
+
+          <p className="text-gray-300 mb-4">
+            To switch to live mode, you need to configure live credentials for the following services:
           </p>
-          
+
+          {missingLiveServices.length > 0 && (
+            <ul className="mb-6 space-y-3">
+              {missingLiveServices.map((service) => {
+                // Map service names to their setup routes
+                const setupRoutes: Record<string, string> = {
+                  razorpay: '/razorpay-setup',
+                  paypal: '/paypal-setup',
+                  stripe: '/stripe-setup',
+                  twilio: '/onboarding',
+                };
+                const setupRoute = setupRoutes[service.toLowerCase()] || '/onboarding';
+
+                return (
+                  <li key={service} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-yellow-400">
+                      <span className="w-2 h-2 bg-yellow-400 rounded-full"></span>
+                      <span className="capitalize">{service}</span>
+                    </div>
+                    <a
+                      href={`${setupRoute}?environment=live`}
+                      className="text-xs px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                    >
+                      Configure
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
           <div className="flex gap-3">
             <button
               onClick={() => setShowLiveModal(false)}
@@ -193,15 +235,10 @@ export function GlobalEnvironmentToggle({ services, onGlobalSwitch, apiClient }:
             >
               Cancel
             </button>
-            <a
-              href="/razorpay-setup"
-              className="flex-1 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-center"
-            >
-              Configure Live Keys
-            </a>
           </div>
         </div>
-      </div>
+      </div>,
+      document.body
     )}
     </>
   );
