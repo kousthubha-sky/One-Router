@@ -9,6 +9,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { GlobalEnvironmentToggle } from "@/components/GlobalEnvironmentToggle";
 import { EditServiceModal } from "@/components/EditServiceModal";
 import { BentoGrid } from "@/components/ui/bento-grid";
+import { ConnectedServicesSection } from "@/components/ConnectedServicesSection";
 
 interface Service {
   id: string;
@@ -170,110 +171,7 @@ export default async function DashboardPage() {
                </div>
              </CardHeader>
              <CardContent>
-               {services.length === 0 ? (
-                 <div className="text-center py-16">
-                   <div className="w-24 h-24 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 rounded-2xl flex items-center justify-center mb-8 mx-auto border border-cyan-500/20 transition-all duration-300 hover:bg-gradient-to-br hover:from-cyan-500/20 hover:to-blue-500/20 hover:scale-110 hover:shadow-lg hover:shadow-cyan-500/20">
-                     <LinkIcon className="w-12 h-12 text-cyan-500" />
-                   </div>
-                   <h3 className="text-2xl font-semibold text-white mb-3">No services connected yet</h3>
-                   <p className="text-[#888] mb-8 max-w-lg mx-auto text-lg leading-relaxed">
-                     Connect your first payment service to start processing payments securely
-                   </p>
-                   <Link href="/onboarding">
-                     <Button className="bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:from-cyan-600 hover:to-blue-600 px-10 py-4 rounded-xl transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/25 hover:scale-105 text-lg font-medium">
-                       <Sparkles className="w-5 h-5 mr-2" />
-                       Connect Services
-                     </Button>
-                   </Link>
-                 </div>
-               ) : (
-                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                   {services.map((service: Service) => (
-                     <div key={service.id} className="group relative">
-                       {/* Service Card */}
-                       <div className="p-5 bg-[#0a0a0a] border border-[#222] rounded-xl  transition-all duration-300 hover:shadow-xl hover:bg-[#0f0f0f] hover:shadow-cyan-500/10">
-                         {/* Header with Service Info and Actions */}
-                         <div className="flex items-start justify-between mb-4">
-                           <div className="flex items-center gap-4">
-                             <div className="w-10 h-10 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 rounded-lg flex items-center justify-center border border-cyan-500/20 group-hover:from-cyan-500/20 group-hover:to-blue-500/20 transition-all duration-300">
-                               <CheckCircle2 className="w-6 h-6 text-cyan-500" />
-                             </div>
-                             <div>
-                               <p className="font-semibold text-white text-base capitalize mb-1">{service.service_name}</p>
-                               <div className="flex items-center gap-2">
-                                 <Badge variant="secondary" className="bg-cyan-500/10 text-cyan-400 border-cyan-500/20 text-xs px-2 py-0.5">
-                                   {service.environment}
-                                 </Badge>
-                                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                                 <span className="text-xs text-[#666]">Active</span>
-                               </div>
-                             </div>
-                           </div>
-
-                           {/* Edit Button */}
-                           <EditServiceModal
-                             service={service}
-                             trigger={
-                               <button
-                                 className="opacity-0 group-hover:opacity-100 p-2 rounded-lg hover:bg-[#333] transition-all duration-300 hover:scale-110"
-                                 title="Edit service credentials"
-                               >
-                                 <Pencil className="w-4 h-4 text-[#888] hover:text-cyan-400" />
-                               </button>
-                             }
-                           />
-                         </div>
-
-                         {/* Service Status */}
-                         <div className="mb-3">
-                           <div className="flex items-center gap-2">
-                             <Badge variant="secondary" className={`text-xs px-2 py-0.5 ${
-                               service.environment === 'live'
-                                 ? 'bg-green-500/10 text-green-400 border-green-500/20'
-                                 : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                             }`}>
-                               {service.environment.toUpperCase()}
-                             </Badge>
-                             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                             <span className="text-xs text-[#666]">Active</span>
-                           </div>
-                         </div>
-
-
-
-                         {/* Status Indicator */}
-                         <div className="mt-3 pt-3 border-t border-[#333]">
-                           <div className="flex items-center justify-between">
-                             <span className="text-xs text-[#666]">Last used</span>
-                             <span className="text-xs text-[#888]">2 hours ago</span>
-                           </div>
-                         </div>
-                       </div>
-
-                       {/* Hover Effect Overlay */}
-                       <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-500/0 to-blue-500/0 group-hover:from-cyan-500/5 group-hover:to-blue-500/5 transition-all duration-300 pointer-events-none"></div>
-                     </div>
-                   ))}
-                 </div>
-               )}
-
-               {/* Add Service Button */}
-               {services.length > 0 && (
-                 <div className="mt-8 pt-6 border-t border-[#333]">
-                   <div className="flex items-center justify-center">
-                     <Link href="/onboarding">
-                       <Button className="bg-transparent border-2 border-dashed border-[#333] text-[#888] hover:border-cyan-500 hover:text-cyan-400 hover:bg-cyan-500/5 rounded-xl py-4 px-8 transition-all duration-300 hover:scale-105">
-                         <div className="flex items-center gap-3">
-                           <div className="w-6 h-6 bg-cyan-500/20 rounded-lg flex items-center justify-center">
-                             <span className="text-cyan-500 text-lg">+</span>
-                           </div>
-                           <span className="font-medium">Add More Services</span>
-                         </div>
-                       </Button>
-                     </Link>
-                   </div>
-                 </div>
-               )}
+               <ConnectedServicesSection services={services} />
              </CardContent>
            </Card>
 

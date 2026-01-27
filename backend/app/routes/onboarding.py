@@ -16,8 +16,68 @@ from ..config import settings
 from ..cache import cache_service
 
 def get_credential_environment() -> str:
-    """Determine the credential environment based on deployment settings"""
+    """Determine the credential environment based on deployment settings (DEPRECATED)"""
     return "live" if settings.ENVIRONMENT == "production" else "test"
+
+
+def detect_credential_environment(service_name: str, credentials: dict) -> str:
+    """
+    Detect whether credentials are for test/sandbox or live/production environment
+    by inspecting the actual credential values.
+
+    This properly separates deployment environment from credential environment.
+    """
+    service_name_lower = service_name.lower()
+
+    if service_name_lower == "paypal":
+        # Check PAYPAL_MODE if present
+        paypal_mode = credentials.get("PAYPAL_MODE", "").lower()
+        if paypal_mode == "sandbox":
+            return "test"
+        elif paypal_mode == "live":
+            return "live"
+        # Default to test for PayPal if mode not specified (safer)
+        return "test"
+
+    elif service_name_lower == "razorpay":
+        # Razorpay keys have format: rzp_test_xxx or rzp_live_xxx
+        key_id = credentials.get("RAZORPAY_KEY_ID", "")
+        if key_id.startswith("rzp_test_"):
+            return "test"
+        elif key_id.startswith("rzp_live_"):
+            return "live"
+        # Check key secret as fallback
+        key_secret = credentials.get("RAZORPAY_KEY_SECRET", "")
+        if "test" in key_secret.lower():
+            return "test"
+        elif "live" in key_secret.lower():
+            return "live"
+        # Default to test if can't determine
+        return "test"
+
+    elif service_name_lower == "stripe":
+        # Stripe test keys start with sk_test_ or pk_test_
+        secret_key = credentials.get("STRIPE_SECRET_KEY", "")
+        publishable_key = credentials.get("STRIPE_PUBLISHABLE_KEY", "")
+        if secret_key.startswith("sk_test_") or publishable_key.startswith("pk_test_"):
+            return "test"
+        elif secret_key.startswith("sk_live_") or publishable_key.startswith("pk_live_"):
+            return "live"
+        return "test"
+
+    elif service_name_lower == "twilio":
+        # Twilio test credentials have specific test account SID format
+        account_sid = credentials.get("TWILIO_ACCOUNT_SID", "")
+        # Twilio test account SIDs start with AC and have "test" in docs examples
+        # In practice, check if using test credentials magic numbers
+        if account_sid.startswith("AC") and len(account_sid) == 34:
+            # This is a real format, can't easily distinguish test vs live
+            # Default to test for safety
+            return "test"
+        return "test"
+
+    # Default to test for unknown services (safer default)
+    return "test"
 import secrets
 import time
 import json
@@ -432,6 +492,11 @@ async def configure_services(
             # Store credentials
             try:
                 feature_metadata = getattr(service_config, 'feature_metadata', {})
+
+                # Detect environment from actual credentials (not deployment settings)
+                credential_env = detect_credential_environment(service_name, credentials)
+                logger.info(f"Detected {credential_env} environment for {service_name} credentials")
+
                 credential = await credential_manager.store_service_credentials(
                     db=db,
                     user_id=user["id"],
@@ -439,7 +504,7 @@ async def configure_services(
                     credentials=credentials,
                     features=features,
                     feature_metadata=feature_metadata,
-                    environment=get_credential_environment()
+                    environment=credential_env
                 )
 
                 stored_services.append(StoredService(
