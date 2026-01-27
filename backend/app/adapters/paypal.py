@@ -53,7 +53,7 @@ class PayPalAdapter(BaseAdapter):
         """Implementation of access token fetch (protected by circuit breaker)"""
         try:
             base_url = await self._get_base_url()
-            token_url = base_url.replace("/v1", "/v1/oauth2/token")
+            token_url = f"{base_url}/v1/oauth2/token"
 
             # Basic auth with client credentials
             auth = (
