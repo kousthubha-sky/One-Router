@@ -62,10 +62,11 @@ if is_dev:
     cors_allow_origins.extend(["http://localhost:3000", "http://localhost:3001"])
 
 # Add CORS middleware
+# allow_credentials=True is needed for authentication tokens in both dev and prod
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_allow_origins,
-    allow_credentials=is_dev,
+    allow_credentials=True,  # Always allow credentials for auth tokens
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -419,6 +420,10 @@ app.include_router(csrf_router, tags=["security"])
 # Import and include Razorpay setup router
 from .routes.razorpay_setup import router as razorpay_setup_router
 app.include_router(razorpay_setup_router, tags=["razorpay"])
+
+# Import and include PayPal setup router
+from .routes.paypal_setup import router as paypal_setup_router
+app.include_router(paypal_setup_router, tags=["paypal"])
 
 # Import and include service discovery router
 app.include_router(service_discovery_router, prefix="/v1", tags=["service-discovery"])

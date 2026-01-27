@@ -37,6 +37,7 @@ class CreditPurchaseRequest(BaseModel):
     credits: int = Field(..., ge=100, le=100000, description="Number of credits to purchase")
     currency: str = Field(default="INR", description="Currency for payment")
     plan_id: Optional[str] = Field(None, description="Predefined plan ID")
+    provider: Optional[str] = Field(default="razorpay", description="Payment provider: razorpay or paypal")
 
 
 class CreditPurchaseResponse(BaseModel):
@@ -164,9 +165,20 @@ async def purchase_credits(
             api_key=settings.ONEROUTER_API_KEY,
             base_url=settings.ONEROUTER_API_BASE_URL
         ) as client:
+            # Get selected provider (default: razorpay)
+            selected_provider = request.provider or "razorpay"
+
+            # Adjust currency for PayPal (default to USD)
+            payment_currency = request.currency
+            payment_amount = price_inr
+            if selected_provider == "paypal" and request.currency == "INR":
+                # PayPal doesn't support INR well, convert to USD
+                payment_currency = "USD"
+                payment_amount = round(price_inr / 83, 2)  # Approximate INR to USD
+
             # Build kwargs - only include environment if SDK supports it
             create_kwargs = {
-                "amount": price_inr,
+                "amount": payment_amount,
                 "description": f"Purchase {credits_to_buy} OneRouter credits",
                 "customer_email": user_email if user_email else None,
                 "callback_url": f"{settings.FRONTEND_URL}/credits/payment-callback",
@@ -174,7 +186,8 @@ async def purchase_credits(
                     "onerouter_user_id": user_id,
                     "credits": str(credits_to_buy),
                     "type": "credit_purchase",
-                    "environment": user_environment  # Pass environment in notes as fallback
+                    "environment": user_environment,  # Pass environment in notes as fallback
+                    "provider": selected_provider  # Pass provider selection
                 }
             }
 

@@ -249,6 +249,52 @@ class PayPalAdapter(BaseAdapter):
         except Exception as e:
             raise Exception(f"Failed to create PayPal order: {str(e)}")
 
+    async def create_payment_link(
+        self,
+        amount: float,
+        description: str,
+        currency: str = "USD",
+        callback_url: Optional[str] = None,
+        notes: Optional[Dict[str, Any]] = None,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """
+        Create a PayPal payment link (checkout URL).
+
+        This wraps create_order to provide a consistent interface with Razorpay.
+
+        Args:
+            amount: Payment amount
+            description: Payment description (stored in notes)
+            currency: Currency code (default: USD)
+            callback_url: URL to redirect after payment
+            notes: Additional metadata
+
+        Returns:
+            Dict with checkout_url, provider_order_id, etc.
+        """
+        # Build custom_id from notes if provided
+        custom_id = None
+        if notes:
+            # Use user_id from notes as custom_id for webhook identification
+            custom_id = notes.get("onerouter_user_id") or notes.get("user_id")
+
+        # Create order with return URL
+        order = await self.create_order(
+            amount=amount,
+            currency=currency,
+            custom_id=custom_id,
+            return_url=callback_url,
+            cancel_url=callback_url,
+            **kwargs
+        )
+
+        # Add description to response for consistency
+        order["description"] = description
+        order["notes"] = notes
+
+        return order
+
     async def get_order(self, order_id: str) -> Dict[str, Any]:
         """Get order details using v2 API"""
         try:

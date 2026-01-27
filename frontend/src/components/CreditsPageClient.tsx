@@ -50,6 +50,7 @@ const PRICING_PLANS: PricingPlan[] = [
 export function CreditsPageClient() {
   const [purchasing, setPurchasing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedProvider, setSelectedProvider] = useState<"razorpay" | "paypal">("razorpay");
   const apiClient = useClientApiCall();
 
   async function purchaseCredits(plan: PricingPlan) {
@@ -62,6 +63,7 @@ export function CreditsPageClient() {
         body: JSON.stringify({
           credits: plan.credits,
           plan_id: plan.id,
+          provider: selectedProvider,
         }),
       }) as { checkout_url?: string; error?: string; [key: string]: unknown };
 
@@ -75,8 +77,11 @@ export function CreditsPageClient() {
 
       // Demo flow: show informational alert instead of redirecting
       if (response?.checkout_url?.includes("demo")) {
+        const priceDisplay = selectedProvider === "razorpay"
+          ? `₹${plan.price_inr}`
+          : `$${plan.price_usd.toFixed(2)}`;
         alert(
-          `Demo Mode: Would purchase ${plan.credits} credits for ₹${plan.price_inr}\n\nIn production, this would redirect to Razorpay checkout.`
+          `Demo Mode: Would purchase ${plan.credits} credits for ${priceDisplay}\n\nIn production, this would redirect to ${selectedProvider === "razorpay" ? "Razorpay" : "PayPal"} checkout.`
         );
         return;
       }
@@ -118,6 +123,35 @@ export function CreditsPageClient() {
         </Card>
       </div>
 
+      {/* Provider Selection */}
+      <div className="mb-8">
+        <h2 className="text-2xl font-bold text-white mb-4">Choose Payment Method</h2>
+        <div className="flex gap-4">
+          <button
+            onClick={() => setSelectedProvider("razorpay")}
+            className={`flex-1 p-4 rounded-lg border-2 transition-all ${
+              selectedProvider === "razorpay"
+                ? "border-cyan-500 bg-cyan-500/10"
+                : "border-gray-700 bg-gray-800/50 hover:border-gray-600"
+            }`}
+          >
+            <div className="text-lg font-semibold text-white mb-1">Razorpay</div>
+            <div className="text-sm text-gray-400">UPI, Cards, Net Banking (INR)</div>
+          </button>
+          <button
+            onClick={() => setSelectedProvider("paypal")}
+            className={`flex-1 p-4 rounded-lg border-2 transition-all ${
+              selectedProvider === "paypal"
+                ? "border-cyan-500 bg-cyan-500/10"
+                : "border-gray-700 bg-gray-800/50 hover:border-gray-600"
+            }`}
+          >
+            <div className="text-lg font-semibold text-white mb-1">PayPal</div>
+            <div className="text-sm text-gray-400">PayPal, Cards (USD)</div>
+          </button>
+        </div>
+      </div>
+
       {/* Pricing Plans */}
       <div>
         <h2 className="text-2xl font-bold text-white mb-6">Purchase Credits</h2>
@@ -146,15 +180,31 @@ export function CreditsPageClient() {
                 </div>
 
                 <div className="mb-4">
-                  <div className="text-2xl font-bold text-cyan-400">
-                    ₹{plan.price_inr}
-                  </div>
-                  <div className="text-gray-400 text-sm">
-                    ${plan.price_usd.toFixed(2)} USD
-                  </div>
-                  <div className="text-green-400 text-sm mt-1">
-                    ₹{plan.per_credit}/credit
-                  </div>
+                  {selectedProvider === "razorpay" ? (
+                    <>
+                      <div className="text-2xl font-bold text-cyan-400">
+                        ₹{plan.price_inr}
+                      </div>
+                      <div className="text-gray-400 text-sm">
+                        ${plan.price_usd.toFixed(2)} USD
+                      </div>
+                      <div className="text-green-400 text-sm mt-1">
+                        ₹{plan.per_credit}/credit
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-2xl font-bold text-cyan-400">
+                        ${plan.price_usd.toFixed(2)}
+                      </div>
+                      <div className="text-gray-400 text-sm">
+                        ₹{plan.price_inr} INR
+                      </div>
+                      <div className="text-green-400 text-sm mt-1">
+                        ${(plan.price_usd / plan.credits).toFixed(4)}/credit
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <p className="text-gray-400 text-sm mb-4">{plan.description}</p>
@@ -199,9 +249,9 @@ export function CreditsPageClient() {
               <div className="w-12 h-12 bg-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
                 <span className="text-cyan-400 font-bold">2</span>
               </div>
-              <h4 className="text-white font-medium mb-2">Pay with Razorpay</h4>
+              <h4 className="text-white font-medium mb-2">Choose Provider</h4>
               <p className="text-gray-400 text-sm">
-                Secure payment via UPI, Cards, or Net Banking
+                Pay with Razorpay (INR) or PayPal (USD)
               </p>
             </div>
             <div className="text-center">
