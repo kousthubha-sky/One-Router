@@ -9,7 +9,6 @@ export function useClientApiCall(): (url: string, options?: RequestInit) => Prom
 
   return useCallback(async function clientApiCall(endpoint: string, options?: RequestInit) {
     const token = await getToken();
-    console.log('useClientApiCall: Token available:', !!token);
 
     const url = `${API_BASE_URL}${endpoint}`;
     const method = options?.method || 'GET';

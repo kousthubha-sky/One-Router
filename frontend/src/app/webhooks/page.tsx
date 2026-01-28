@@ -35,11 +35,10 @@ export default function WebhooksPage() {
 
   const loadWebhookConfig = useCallback(async () => {
     try {
-      const response = await apiClient('/api/webhooks/configure');
-      // Handle webhook configuration
-      console.log('Webhook config:', response);
-    } catch (error) {
-      console.error('Failed to load webhook config:', error);
+      await apiClient('/api/webhooks/configure');
+      // Webhook configuration loaded
+    } catch {
+      // Failed to load webhook config
     }
   }, [apiClient]);
 
@@ -47,8 +46,8 @@ export default function WebhooksPage() {
     try {
       const response = await apiClient('/api/webhooks/logs?limit=50');
       setEvents((response as { events: WebhookEvent[] }).events || []);
-    } catch (error) {
-      console.error('Failed to load webhook logs:', error);
+    } catch {
+      // Failed to load webhook logs
     }
   }, [apiClient]);
 
@@ -56,8 +55,7 @@ export default function WebhooksPage() {
     try {
       const response = await apiClient('/api/services');
       setServices((response as { services: Service[] }).services || []);
-    } catch (error) {
-      console.error('Failed to load services:', error);
+    } catch {
       setServices([]);
     }
   }, [apiClient]);
@@ -83,8 +81,7 @@ export default function WebhooksPage() {
         })
       });
       alert('Webhook URL saved successfully!');
-    } catch (error) {
-      console.error('Failed to save webhook URL:', error);
+    } catch {
       alert('Failed to save webhook URL');
     } finally {
       setLoading(false);

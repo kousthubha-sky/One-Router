@@ -541,9 +541,11 @@ class CredentialManager:
             elif environment == "live":
                 # Validate key prefix matches environment
                 if not key_id.startswith("rzp_live_"):
-                    errors["RAZORPAY_KEY_ID"] = f"Live key must start with 'rzp_live_', got: {key_id[:20]}..."
+                    # SECURITY: Don't expose credential values in error messages
+                    errors["RAZORPAY_KEY_ID"] = "Live key must start with 'rzp_live_'"
             elif not key_id.startswith("rzp_test_"):
-                errors["RAZORPAY_KEY_ID"] = f"Test key must start with 'rzp_test_', got: {key_id[:20]}..."
+                # SECURITY: Don't expose credential values in error messages
+                errors["RAZORPAY_KEY_ID"] = "Test key must start with 'rzp_test_'"
 
             if not key_secret:
                 errors["RAZORPAY_KEY_SECRET"] = "Required"
@@ -599,15 +601,16 @@ class CredentialManager:
             ValueError: If keys don't match environment prefix (rzp_test_ vs rzp_live_)
         """
         # Validate key format matches environment
+        # SECURITY: Don't expose credential values in error messages
         if environment == "live":
             if not key_id.startswith("rzp_live_"):
                 raise ValueError(
-                    f"Live key must start with 'rzp_live_', got: {key_id[:20]}..."
+                    "Live key must start with 'rzp_live_'"
                 )
         else:  # test
             if not key_id.startswith("rzp_test_"):
                 raise ValueError(
-                    f"Test key must start with 'rzp_test_', got: {key_id[:20]}..."
+                    "Test key must start with 'rzp_test_'"
                 )
 
         # Prepare credentials dict

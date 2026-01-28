@@ -116,14 +116,12 @@ export function PayPalSetup({ apiClient }: Props) {
         webhook_id: webhookId && webhookId.trim() !== "" ? webhookId : null,
       };
 
-      console.log("Sending PayPal credentials payload:", payload);
+      // SECURITY: Never log credentials to console
 
       const response = await apiClient("/api/paypal/credentials", {
         method: "POST",
         body: JSON.stringify(payload),
       });
-
-      console.log("PayPal credentials response:", response);
 
       if (response.success) {
         setSuccess(

@@ -56,12 +56,8 @@ async def list_api_keys(
             else:
                 environment = "test"
 
-        print(f"[DEBUG] list_api_keys called with environment: {environment}")
         credential_manager = CredentialManager()
         api_keys = await credential_manager.get_user_api_keys(db, user["id"], environment)
-        print(f"[DEBUG] Returning {len(api_keys)} keys for environment: {environment or 'all'}")
-        for key in api_keys:
-            print(f"[DEBUG] Key: {key['key_name']}, Env: {key['environment']}")
         
         return {
             "success": True,

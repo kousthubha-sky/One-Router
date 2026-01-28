@@ -132,14 +132,12 @@ export function RazorpaySetup({ apiClient }: Props) {
         webhook_secret: webhookSecret && webhookSecret.trim() !== "" ? webhookSecret : null,
       };
 
-      console.log("Sending Razorpay credentials payload:", payload);
+      // SECURITY: Never log credentials to console
 
       const response = await apiClient("/api/razorpay/credentials", {
         method: "POST",
         body: JSON.stringify(payload),
       });
-
-      console.log("Razorpay credentials response:", response);
 
       if (response.success) {
         setSuccess(

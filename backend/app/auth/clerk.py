@@ -1,4 +1,5 @@
 import os
+import logging
 import httpx
 from fastapi import HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -11,6 +12,7 @@ from sqlalchemy import select
 from ..models import User
 
 security = HTTPBearer()
+logger = logging.getLogger(__name__)
 
 class ClerkAuth:
     def __init__(self):
@@ -65,11 +67,12 @@ class ClerkAuth:
                 try:
                     # Just decode without verification in development with test keys
                     payload = jwt.decode(token, options={"verify_signature": False})
-                    print(f"DEBUG: Decoded token payload: {payload}")
+                    # SECURITY: Don't log full payload - only log that token was decoded
+                    logger.debug("Token decoded in development mode", extra={"sub": payload.get("sub", "unknown")[:8]})
                     return payload
                 except jwt.DecodeError as e:
-                    print(f"DEBUG: JWT decode error: {e}")
-                    raise HTTPException(status_code=401, detail=f"Invalid token format: {str(e)}")
+                    logger.debug("JWT decode error in development mode")
+                    raise HTTPException(status_code=401, detail="Invalid token format")
 
             # For production: verify with Clerk's public keys
             header = jwt.get_unverified_header(token)
@@ -103,7 +106,7 @@ class ClerkAuth:
 
         # Clerk API endpoint for user profile
         url = f"https://api.clerk.com/v1/users/{user_id}"
-        print(f"DEBUG: Fetching user profile from: {url}")
+        logger.debug("Fetching user profile from Clerk API")
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
@@ -114,22 +117,22 @@ class ClerkAuth:
                         "Content-Type": "application/json"
                     }
                 )
-                print(f"DEBUG: Clerk API response status: {response.status_code}")
+                logger.debug(f"Clerk API response", extra={"status_code": response.status_code})
 
                 if response.status_code == 401:
-                    print("ERROR: Authentication failed - CLERK_SECRET_KEY may be invalid")
-                    print(f"ERROR: Secret key starts with: {self.secret_key[:10]}...")
+                    # SECURITY: Don't log any part of the secret key
+                    logger.error("Clerk authentication failed - check CLERK_SECRET_KEY configuration")
                     return {}
                 elif response.status_code == 404:
-                    print(f"ERROR: User {user_id} not found in Clerk")
+                    logger.warning("User not found in Clerk", extra={"user_id_prefix": user_id[:8] if user_id else "unknown"})
                     return {}
                 elif response.status_code == 403:
-                    print("ERROR: Forbidden - check your Clerk API permissions")
+                    logger.error("Clerk API returned forbidden - check API permissions")
                     return {}
 
                 response.raise_for_status()
                 user_data = response.json()
-                print(f"DEBUG: Successfully fetched user data for: {user_data.get('id')}")
+                logger.debug("Successfully fetched user data from Clerk")
 
                 # Extract user information
                 email_addresses = user_data.get("email_addresses", [])
@@ -160,16 +163,13 @@ class ClerkAuth:
                 }
 
         except httpx.TimeoutException:
-            print("ERROR: Timeout fetching user profile from Clerk API")
+            logger.error("Timeout fetching user profile from Clerk API")
             return {}
         except httpx.HTTPError as e:
-            print(f"ERROR: HTTP error fetching user profile: {e}")
-            if hasattr(e, 'response') and e.response:
-                print(f"ERROR: Response status: {e.response.status_code}")
-                print(f"ERROR: Response body: {e.response.text[:500]}...")
+            logger.error("HTTP error fetching user profile from Clerk", extra={"error_type": type(e).__name__})
             return {}
         except Exception as e:
-            print(f"ERROR: Unexpected error fetching user profile: {e}")
+            logger.error("Unexpected error fetching user profile", extra={"error_type": type(e).__name__})
             return {}
 
 # Global auth instance

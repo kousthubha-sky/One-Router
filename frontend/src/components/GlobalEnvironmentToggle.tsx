@@ -41,12 +41,7 @@ export function GlobalEnvironmentToggle({ services, onGlobalSwitch, apiClient }:
   const [missingLiveServices, setMissingLiveServices] = useState<string[]>([]);
   const { getToken } = useAuth();
 
-  // Warn if apiClient is missing
-  useEffect(() => {
-    if (!apiClient) {
-      console.warn('GlobalEnvironmentToggle: apiClient prop is missing. Environment switching will not work.');
-    }
-  }, [apiClient]);
+  // apiClient is required for environment switching
 
 
 
@@ -75,7 +70,6 @@ export function GlobalEnvironmentToggle({ services, onGlobalSwitch, apiClient }:
     
     // Require apiClient for switching environments
     if (!apiClient) {
-      console.error("apiClient is required to switch environments");
       alert("Configuration error: Unable to switch environments. Please refresh the page.");
       return;
     }
@@ -90,8 +84,7 @@ export function GlobalEnvironmentToggle({ services, onGlobalSwitch, apiClient }:
           setShowLiveModal(true);
           return;
         }
-      } catch (error) {
-        console.error("Failed to check live credentials:", error);
+      } catch {
         // If check fails, show modal to be safe
         setMissingLiveServices([]);
         setShowLiveModal(true);
@@ -109,8 +102,6 @@ export function GlobalEnvironmentToggle({ services, onGlobalSwitch, apiClient }:
     setIsSwitching(true);
     
     try {
-      console.log('Atomically switching all services to:', targetEnvironment);
-
       // Don't pass service_ids - let backend switch ALL services atomically
       // This ensures all environments get updated, not just currently displayed ones
       const response = await apiClient("/api/services/switch-all-environments", {
@@ -119,16 +110,12 @@ export function GlobalEnvironmentToggle({ services, onGlobalSwitch, apiClient }:
           environment: targetEnvironment
         })
       });
-      
-      console.log('Switch response:', response);
-      
+
       // Only update UI AFTER successful API response
       setCurrentMode(targetEnvironment);
       onGlobalSwitch?.(targetEnvironment);
-      console.log('All services switched successfully');
 
     } catch (error) {
-      console.error("Failed to switch all services:", error);
        // Restore previous mode on error (UI never changed, so this is just for safety)
       setCurrentMode(previousMode);
       

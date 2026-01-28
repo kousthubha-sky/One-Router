@@ -589,9 +589,10 @@ async def get_encryption_status(user = Depends(get_admin_user)):
 
 @app.get("/api/debug/redis")
 async def debug_redis(user = Depends(get_current_user)):
-    """Debug Redis connection and keys"""
-    if settings.ENVIRONMENT == "production":
-        raise HTTPException(status_code=404, detail="Not found")
+    """Debug Redis connection - ONLY available when DEBUG=True"""
+    # SECURITY: Only allow in debug mode
+    if not settings.DEBUG:
+        raise HTTPException(status_code=403, detail="Debug endpoints are disabled in production")
     try:
         redis_connected = await cache_service.ping()
         
@@ -974,12 +975,19 @@ async def get_billing_analytics(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Billing analytics error: {str(e)}")
 
-# Debug endpoints
+# Debug endpoints - RESTRICTED TO DEBUG MODE ONLY
 @app.get("/api/debug/db")
 async def debug_database(db: AsyncSession = Depends(get_db)):
-    """Debug database connection and data"""
+    """Debug database connection - ONLY available when DEBUG=True"""
+    # SECURITY: Only allow in debug mode
+    if not settings.DEBUG:
+        raise HTTPException(
+            status_code=403,
+            detail="Debug endpoints are disabled in production"
+        )
+
     try:
-        # Get table list
+        # Get table list only - no sensitive data
         tables_result = await db.execute(text("""
             SELECT tablename FROM pg_tables
             WHERE schemaname = :schema
@@ -987,39 +995,21 @@ async def debug_database(db: AsyncSession = Depends(get_db)):
         """), {"schema": "public"})
         table_list = [row[0] for row in tables_result.fetchall()]
 
-        # Get user count
+        # Get user count only
         user_count_result = await db.execute(text("SELECT COUNT(*) FROM users"))
         user_count = user_count_result.scalar()
 
-        # Get all users (for debugging)
-        users_result = await db.execute(text("""
-            SELECT id, clerk_user_id, email, name, created_at
-            FROM users
-            ORDER BY created_at DESC
-            LIMIT 5
-        """))
-        users = []
-        for row in users_result.fetchall():
-            users.append({
-                "id": str(row[0]),
-                "clerk_user_id": row[1],
-                "email": row[2],
-                "name": row[3],
-                "created_at": row[4].isoformat() if row[4] else None
-            })
-
         return {
             "status": "success",
-            "database_url": settings.DATABASE_URL.replace(settings.DATABASE_URL.split('@')[0].split('//')[1], '***:***'),
+            "debug_mode": True,
             "tables": table_list,
-            "user_count": user_count,
-            "users": users
+            "user_count": user_count
+            # SECURITY: Removed database_url and user details
         }
 
     except Exception as e:
         return {
             "status": "error",
-            "error": str(e),
-            "error_type": type(e).__name__
+            "error": "Database connection failed" if not settings.DEBUG else str(e)
         }
 

@@ -1,8 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+/**
+ * @deprecated This component is not currently in use.
+ * If needed in the future, it must be updated to use Clerk authentication
+ * instead of localStorage API keys.
+ */
+
 import { useForm } from 'react-hook-form';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { useAuth } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -36,12 +42,15 @@ interface DynamicServiceConfigProps {
 }
 
 function DynamicServiceConfig({ serviceName, onSave, onCancel }: DynamicServiceConfigProps) {
+  const { getToken } = useAuth();
+
   const { data: schema, isLoading, error } = useQuery<ServiceSchema>({
     queryKey: ['service-schema', serviceName],
     queryFn: async () => {
+      const token = await getToken();
       const res = await fetch(`/api/v1/services/${serviceName}/schema`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('api_key')}`,
+          'Authorization': `Bearer ${token}`,
         },
       });
       if (!res.ok) {
@@ -53,11 +62,12 @@ function DynamicServiceConfig({ serviceName, onSave, onCancel }: DynamicServiceC
 
   const { mutate, isPending, isSuccess, isError } = useMutation({
     mutationFn: async (credentials: Record<string, string>) => {
+      const token = await getToken();
       const res = await fetch(`/api/services/${serviceName}/configure`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('api_key')}`,
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify(credentials),
       });

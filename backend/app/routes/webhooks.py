@@ -50,10 +50,10 @@ async def forward_webhook_to_developer(
                     "X-OneRouter-Service": service_name
                 }
             )
-            print(f"✓ Forwarded webhook to {user_webhook_url}: {response.status_code}")
+            logger.info(f"Forwarded webhook to developer endpoint", extra={"status_code": response.status_code})
             return response.status_code
     except Exception as e:
-        print(f"✗ Failed to forward webhook: {e}")
+        logger.error(f"Failed to forward webhook", extra={"error": str(e)})
         return None
 
 
@@ -85,26 +85,55 @@ async def razorpay_webhook(
         event = await request.json()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
-    
-    # Extract user identifier from webhook payload
-    # Razorpay sends notes in payload - we can add user_id there during order creation
+
+    # SECURITY FIX: Look up user from our database using order_id, NOT from payload
+    # This prevents attackers from injecting arbitrary user_ids
+    from ..models import OneRouterPayment
+
     user_id = None
-    
-    # Try to get user_id from event payload
+    order_id = None
+    payment_id = None
+
+    # Extract order_id/payment_id from event payload
     if event.get("payload"):
         entity = event["payload"].get("payment", {}).get("entity") or \
                  event["payload"].get("order", {}).get("entity") or \
                  event["payload"].get("subscription", {}).get("entity")
-        
-        if entity and entity.get("notes"):
-            user_id = entity["notes"].get("onerouter_user_id")
-    
+
+        if entity:
+            order_id = entity.get("order_id")
+            payment_id = entity.get("id")
+
+    # Look up order in our database to get the trusted user_id
+    if order_id:
+        result = await db.execute(
+            select(OneRouterPayment).where(
+                OneRouterPayment.provider_order_id == order_id,
+                OneRouterPayment.provider == "razorpay"
+            )
+        )
+        payment_record = result.scalar_one_or_none()
+        if payment_record:
+            user_id = str(payment_record.user_id)
+
+    # Fallback: try payment_id lookup
+    if not user_id and payment_id:
+        result = await db.execute(
+            select(OneRouterPayment).where(
+                OneRouterPayment.provider_payment_id == payment_id,
+                OneRouterPayment.provider == "razorpay"
+            )
+        )
+        payment_record = result.scalar_one_or_none()
+        if payment_record:
+            user_id = str(payment_record.user_id)
+
     if not user_id:
-        # Fallback: try to match by order_id/payment_id in our transaction logs
-        # This requires querying transaction_logs table
+        # Log for debugging but don't expose details
+        logger.warning(f"Webhook received but no matching order found: order_id={order_id}, payment_id={payment_id}")
         raise HTTPException(
-            status_code=400, 
-            detail="Cannot identify user. Add 'onerouter_user_id' in notes when creating orders."
+            status_code=400,
+            detail="Cannot identify associated order. Ensure orders are created through OneRouter API."
         )
     
     # Get user's Razorpay credentials to verify signature
@@ -218,7 +247,7 @@ async def handle_payment_success(db: AsyncSession, event: dict, user_id: str):
             db=db
         )
         
-        print(f"SUCCESS: Added {payment.credits_purchased} credits to user {user_id} for payment {payment_id}")
+        logger.info(f"Credits added successfully", extra={"credits": payment.credits_purchased, "user_id_prefix": user_id[:8]})
 
 
 @router.post("/webhooks/paypal")
@@ -251,15 +280,31 @@ async def paypal_webhook(
         event = await request.json()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
-    
-    # Extract user_id from event
-    # PayPal events include custom_id which we set during order creation
-    user_id = event.get("resource", {}).get("custom_id")
-    
+
+    # SECURITY FIX: Look up user from our database using order_id, NOT from payload
+    # This prevents attackers from injecting arbitrary user_ids
+    from ..models import OneRouterPayment
+
+    user_id = None
+    paypal_order_id = event.get("resource", {}).get("id")
+
+    # Look up order in our database to get the trusted user_id
+    if paypal_order_id:
+        result = await db.execute(
+            select(OneRouterPayment).where(
+                OneRouterPayment.provider_order_id == paypal_order_id,
+                OneRouterPayment.provider == "paypal"
+            )
+        )
+        payment_record = result.scalar_one_or_none()
+        if payment_record:
+            user_id = str(payment_record.user_id)
+
     if not user_id:
+        logger.warning(f"PayPal webhook received but no matching order found: order_id={paypal_order_id}")
         raise HTTPException(
             status_code=400,
-            detail="Cannot identify user. Add 'custom_id' when creating PayPal orders."
+            detail="Cannot identify associated order. Ensure orders are created through OneRouter API."
         )
     
     # Get user's PayPal credentials

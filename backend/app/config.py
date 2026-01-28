@@ -13,7 +13,8 @@ class Settings:
 
     # Environment
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
-    DEBUG: bool = os.getenv("DEBUG", "true").lower() == "true"
+    # SECURITY: DEBUG defaults to False - must be explicitly enabled
+    DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
 
     # Database
     DATABASE_URL: str
@@ -28,7 +29,8 @@ class Settings:
     API_BASE_URL: str = os.getenv("API_BASE_URL", "http://localhost:8000")
 
     # Security
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+    # SECURITY: No default - must be set via environment variable
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "")
     ENCRYPTION_KEY: str = os.getenv("ENCRYPTION_KEY", "")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
@@ -151,6 +153,24 @@ class Settings:
 
         if not self.ENCRYPTION_KEY:
             raise ValueError("ENCRYPTION_KEY is required")
+
+        # SECURITY: Require SECRET_KEY in production
+        if not self.SECRET_KEY:
+            if self.ENVIRONMENT == "production":
+                raise ValueError("SECRET_KEY is required in production")
+            else:
+                # Generate a random key for development
+                import secrets
+                self.SECRET_KEY = secrets.token_urlsafe(32)
+
+        # SECURITY: Warn if DEBUG is enabled in production
+        if self.ENVIRONMENT == "production" and self.DEBUG:
+            import warnings
+            warnings.warn(
+                "DEBUG mode is enabled in production! This exposes sensitive information. "
+                "Set DEBUG=false in production.",
+                RuntimeWarning
+            )
 
         # Validate Razorpay credentials if enabled (required in production, optional in development)
         if self.RAZORPAY_REQUIRED or self.ENVIRONMENT == "production":

@@ -24,7 +24,6 @@ async function getUserServices(token: string) {
   const API_BASE_URL = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
   try {
-    console.log('Fetching services with token:', token ? 'present' : 'missing');
     // Use check_all=true to check if user has ANY services (regardless of environment)
     // This prevents redirect to onboarding if user only has live credentials but is in test mode
     const response = await fetch(`${API_BASE_URL}/api/services?check_all=true`, {
@@ -36,20 +35,16 @@ async function getUserServices(token: string) {
     });
 
     if (!response.ok) {
-      console.error('Failed to fetch services:', response.status, response.statusText);
       // If unauthorized, don't redirect - let the client handle it
       if (response.status === 401) {
-        console.log('Authentication failed, returning empty services');
         return { services: [], has_services: false, total_count: 0 };
       }
       return { services: [], has_services: false, total_count: 0 };
     }
 
     const data = await response.json();
-    console.log('Services data:', data);
     return data;
   } catch (error) {
-    console.error('Error fetching services:', error);
     // Don't fail completely on network errors - return empty state
     return { services: [], has_services: false, total_count: 0 };
   }
@@ -78,8 +73,6 @@ export default async function DashboardPage() {
   if (!hasServices || services.length === 0) {
     redirect("/onboarding");
   }
-
-  console.log('Dashboard: Services check result:', { hasServices, servicesCount: services.length, services });
 
   // API Keys count (placeholder - you can fetch real data)
   const apiKeysCount = 0;
