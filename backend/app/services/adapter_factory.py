@@ -9,6 +9,34 @@ logger = logging.getLogger(__name__)
 class AdapterFactory:
     """Factory to auto-generate adapters from service registry definitions"""
 
+    # Maps stored credential keys to the registry/adapter-expected keys
+    CREDENTIAL_KEY_MAPPINGS = {
+        "twilio": {
+            "TWILIO_ACCOUNT_SID": "account_sid",
+            "TWILIO_AUTH_TOKEN": "auth_token",
+        },
+        "resend": {
+            "RESEND_API_KEY": "api_key",
+        },
+    }
+
+    @staticmethod
+    def _normalize_credentials_for_adapter(service_name: str, credentials: Dict[str, str]) -> Dict[str, str]:
+        """
+        Normalize credential keys from storage format (e.g. TWILIO_ACCOUNT_SID)
+        to adapter/registry format (e.g. account_sid).
+        Preserves original keys alongside normalized ones.
+        """
+        mapping = AdapterFactory.CREDENTIAL_KEY_MAPPINGS.get(service_name, {})
+        if not mapping:
+            return credentials
+
+        normalized = dict(credentials)
+        for stored_key, adapter_key in mapping.items():
+            if stored_key in normalized and adapter_key not in normalized:
+                normalized[adapter_key] = normalized[stored_key]
+        return normalized
+
     @staticmethod
     def create_adapter(service_name: str, credentials: Dict[str, str]):
         """
@@ -30,12 +58,15 @@ class AdapterFactory:
         service_def = SERVICE_REGISTRY[service_name]
         auth_type = service_def.get("auth_type", "basic")
 
+        # Normalize credential keys for the adapter
+        normalized_creds = AdapterFactory._normalize_credentials_for_adapter(service_name, credentials)
+
         if auth_type == "basic":
-            return BasicAuthAdapter(service_name, service_def, credentials)
+            return BasicAuthAdapter(service_name, service_def, normalized_creds)
         elif auth_type == "bearer":
-            return BearerAuthAdapter(service_name, service_def, credentials)
+            return BearerAuthAdapter(service_name, service_def, normalized_creds)
         elif auth_type == "oauth":
-            return OAuthAdapter(service_name, service_def, credentials)
+            return OAuthAdapter(service_name, service_def, normalized_creds)
         else:
             raise ValueError(f"Unsupported auth type: {auth_type}")
 
@@ -104,12 +135,13 @@ class BasicAuthAdapter(BaseDynamicAdapter):
         # Build URL
         url = self.service_def["base_url"] + endpoint["path"]
 
-        # Replace placeholders in URL with credentials
-        url = url.format(**self.credentials)
+        # Replace placeholders in URL with credentials and params merged
+        format_vars = {**self.credentials, **params}
+        url = url.format(**format_vars)
 
         # Map parameters using endpoint["params"] mapping
         payload = {}
-        for api_key, param_key in endpoint["params"].items():
+        for api_key, param_key in endpoint.get("params", {}).items():
             if param_key in params:
                 payload[api_key] = params[param_key]
             elif param_key in self.credentials:
@@ -197,12 +229,13 @@ class BearerAuthAdapter(BaseDynamicAdapter):
         # Build URL
         url = self.service_def["base_url"] + endpoint["path"]
 
-        # Replace placeholders in URL with credentials (if any)
-        url = url.format(**self.credentials)
+        # Replace placeholders in URL with credentials and params merged
+        format_vars = {**self.credentials, **params}
+        url = url.format(**format_vars)
 
         # Map parameters using endpoint["params"] mapping
         payload = {}
-        for api_key, param_key in endpoint["params"].items():
+        for api_key, param_key in endpoint.get("params", {}).items():
             if param_key in params:
                 payload[api_key] = params[param_key]
             elif param_key in self.credentials:

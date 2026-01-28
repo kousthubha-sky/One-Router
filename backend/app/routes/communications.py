@@ -191,7 +191,7 @@ async def send_sms(
 
         # Log transaction
         transaction = TransactionLog(
-            user_id=user.id,
+            user_id=user_id,
             api_key_id=api_key_obj.id if api_key_obj else None,
             transaction_id=sms_result.get("id", ""),
             idempotency_key=request.idempotency_key,

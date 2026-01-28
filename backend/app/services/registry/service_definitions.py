@@ -29,6 +29,7 @@ SERVICE_REGISTRY = {
             "get_sms": {
                 "method": "GET",
                 "path": "/Accounts/{account_sid}/Messages/{message_id}.json",
+                "params": {},
                 "response_mapping": {
                     "id": "sid",
                     "status": "status"
