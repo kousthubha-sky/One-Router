@@ -206,6 +206,25 @@ class CredentialManager:
             "algorithm": "AES256-GCM"
         }
 
+    def _normalize_credentials(self, service_name: str, credentials: Dict[str, str]) -> Dict[str, str]:
+        """
+        Normalize credential keys for consistency across different input formats.
+        For example, Twilio phone number can come as TWILIO_PHONE_NUMBER, TWILIO_FROM_NUMBER, or from_number.
+        """
+        normalized = credentials.copy()
+
+        if service_name == "twilio":
+            # Normalize phone number key to 'from_number'
+            if "from_number" not in normalized:
+                phone_number = (
+                    normalized.pop("TWILIO_PHONE_NUMBER", None) or
+                    normalized.pop("TWILIO_FROM_NUMBER", None)
+                )
+                if phone_number:
+                    normalized["from_number"] = phone_number
+
+        return normalized
+
     async def store_service_credentials(
         self,
         db: AsyncSession,
@@ -221,6 +240,9 @@ class CredentialManager:
 
         if feature_metadata is None:
             feature_metadata = {}
+
+        # Normalize credentials before validation (e.g., Twilio phone number keys)
+        credentials = self._normalize_credentials(service_name, credentials)
 
         errors = self.validate_credentials_format(service_name, credentials, environment)
         if errors:
@@ -557,10 +579,26 @@ class CredentialManager:
                 errors["PAYPAL_CLIENT_SECRET"] = "Required"
 
         elif service_name == "twilio":
-            if not credentials.get("TWILIO_ACCOUNT_SID"):
+            account_sid = credentials.get("TWILIO_ACCOUNT_SID", "")
+            if not account_sid:
                 errors["TWILIO_ACCOUNT_SID"] = "Required"
+            elif not account_sid.startswith("AC"):
+                errors["TWILIO_ACCOUNT_SID"] = "Account SID must start with 'AC'"
+
             if not credentials.get("TWILIO_AUTH_TOKEN"):
                 errors["TWILIO_AUTH_TOKEN"] = "Required"
+
+            # Accept multiple phone number key formats
+            from_number = (
+                credentials.get("from_number") or
+                credentials.get("TWILIO_PHONE_NUMBER") or
+                credentials.get("TWILIO_FROM_NUMBER") or
+                ""
+            )
+            if not from_number:
+                errors["from_number"] = "Required - phone number to send SMS from (use from_number, TWILIO_PHONE_NUMBER, or TWILIO_FROM_NUMBER)"
+            elif not from_number.startswith("+"):
+                errors["from_number"] = "Must be in E.164 format (e.g., +15005550006)"
 
         elif service_name == "aws_s3":
             if not credentials.get("AWS_ACCESS_KEY_ID"):

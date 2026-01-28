@@ -468,6 +468,15 @@ async def configure_services(
                             credentials[key] = value
                             break
 
+                # Normalize Twilio phone number key to 'from_number' for consistency
+                if service_name == 'twilio':
+                    phone_number = (
+                        credentials.pop('TWILIO_PHONE_NUMBER', None) or
+                        credentials.pop('TWILIO_FROM_NUMBER', None)
+                    )
+                    if phone_number:
+                        credentials['from_number'] = phone_number
+
             # Validate credentials format
             if not credentials:
                 logger.error(f"No credentials found for {service_name}. Session may have expired or credentials not provided.")

@@ -425,6 +425,10 @@ app.include_router(razorpay_setup_router, tags=["razorpay"])
 from .routes.paypal_setup import router as paypal_setup_router
 app.include_router(paypal_setup_router, tags=["paypal"])
 
+# Import and include Twilio setup router
+from .routes.twilio_setup import router as twilio_setup_router
+app.include_router(twilio_setup_router, tags=["twilio"])
+
 # Import and include service discovery router
 app.include_router(service_discovery_router, prefix="/v1", tags=["service-discovery"])
 

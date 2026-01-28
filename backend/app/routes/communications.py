@@ -11,10 +11,23 @@ from ..services.adapter_factory import AdapterFactory
 from ..services.cost_tracker import cost_tracker
 from ..services.credits_service import CreditsService
 from ..models import ServiceCredential, TransactionLog, ApiKey
+from ..models.user import User
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+async def get_user_environment(db: AsyncSession, user_id: str) -> str:
+    """Get user's current environment preference (test or live)"""
+    try:
+        result = await db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        if user and user.preferences:
+            return user.preferences.get("current_environment", "test")
+    except Exception as e:
+        logger.warning(f"Could not get user environment preference: {e}")
+    return "test"  # Default to test
 
 
 class SMSRequest(BaseModel):
@@ -83,6 +96,9 @@ async def send_sms(
         user = {"id": user_id}
         api_key_obj = auth_data["api_key"]
 
+        # Get user's environment preference
+        environment = await get_user_environment(db, user_id)
+
         # Check idempotency key first (no credit consumed for cached response)
         if request.idempotency_key:
             result = await db.execute(
@@ -103,12 +119,12 @@ async def send_sms(
                     created_at=existing.created_at.isoformat() if existing.created_at else None
                 )
 
-        # Get Twilio credentials
+        # Get Twilio credentials for user's current environment
         result = await db.execute(
             select(ServiceCredential).where(
                 ServiceCredential.user_id == user_id,
                 ServiceCredential.provider_name == "twilio",
-                ServiceCredential.environment == "test",
+                ServiceCredential.environment == environment,
                 ServiceCredential.is_active == True
             )
         )
@@ -117,13 +133,13 @@ async def send_sms(
         if not creds_result:
             raise HTTPException(
                 status_code=400,
-                detail="Twilio not configured. Please add your credentials in dashboard."
+                detail=f"Twilio {environment} credentials not configured. Please add your credentials in dashboard."
             )
 
         # Decrypt credentials
         from ..services.credential_manager import CredentialManager
         cred_manager = CredentialManager()
-        decrypted_creds = await cred_manager.get_credentials(db, user_id, "twilio", "test")
+        decrypted_creds = await cred_manager.get_credentials(db, user_id, "twilio", environment)
 
         # Create adapter
         adapter = AdapterFactory.create_adapter("twilio", decrypted_creds)
@@ -190,7 +206,7 @@ async def send_sms(
             status="sent",
             cost=cost,
             currency="USD",
-            environment="test",
+            environment=environment,
             created_at=datetime.utcnow()
         )
 
@@ -218,112 +234,6 @@ async def send_sms(
             status_code=500,
             detail=f"Failed to send SMS: {str(e)}"
         )
-        if request.idempotency_key:
-            result = await db.execute(
-                select(TransactionLog).where(
-                    TransactionLog.user_id == user_id,
-                    TransactionLog.idempotency_key == request.idempotency_key
-                )
-            )
-            existing = result.scalar_one_or_none()
-
-            if existing:
-                return SMSResponse(
-                    message_id=existing.transaction_id,
-                    status=existing.status,
-                    service=existing.service_name,
-                    cost=existing.cost or 0.0,
-                    currency="USD",
-                    created_at=existing.created_at.isoformat() if existing.created_at else None
-                )
-
-        # Get Twilio credentials
-        result = await db.execute(
-            select(ServiceCredential).where(
-                ServiceCredential.user_id == user_id,
-                ServiceCredential.provider_name == "twilio",
-                ServiceCredential.environment == "test",
-                ServiceCredential.is_active == True
-            )
-        )
-        creds_result = result.scalar_one_or_none()
-
-        if not creds_result:
-            raise HTTPException(
-                status_code=400,
-                detail="Twilio not configured. Please add your credentials in dashboard."
-            )
-
-        # Decrypt credentials
-        from ..services.credential_manager import CredentialManager
-        cred_manager = CredentialManager()
-        decrypted_creds = await cred_manager.get_credentials(db, user.id, "twilio", "test")
-
-        # Create adapter
-        adapter = AdapterFactory.create_adapter("twilio", decrypted_creds)
-
-        # Prepare parameters
-        params = {
-            "to": request.to,
-            "body": request.body
-        }
-
-        if request.from_number:
-            params["from_number"] = request.from_number
-        else:
-            params["from_number"] = decrypted_creds.get("from_number")
-
-        # Start timer
-        start_time = time.time()
-
-        # Send SMS
-        result = await adapter.execute("send_sms", params)
-
-        # Calculate cost
-        cost = await cost_tracker.calculate_cost("twilio", "send_sms", params)
-        response_time_ms = int((time.time() - start_time) * 1000)
-
-        # Log transaction
-        transaction = TransactionLog(
-            user_id=user.id,
-            api_key_id=api_key_obj.id if api_key_obj else None,
-            transaction_id=result.get("id", ""),
-            idempotency_key=request.idempotency_key,
-            service_name="twilio",
-            provider_txn_id=result.get("id"),
-            endpoint="/Messages.json",
-            http_method="POST",
-            request_payload=params,
-            response_payload=result,
-            response_status=200,
-            response_time_ms=response_time_ms,
-            status="sent",
-            cost=cost,
-            currency="USD",
-            environment="test",
-            created_at=datetime.utcnow()
-        )
-
-        db.add(transaction)
-        await db.commit()
-
-        return SMSResponse(
-            message_id=result.get("id", ""),
-            status="sent",
-            service="twilio",
-            cost=cost,
-            currency="USD",
-            created_at=datetime.utcnow().isoformat()
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"SMS sending failed: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to send SMS: {str(e)}"
-        )
 
 
 @router.get("/sms/{message_id}")
@@ -338,10 +248,16 @@ async def get_sms_status(
     Returns the current status of a previously sent SMS message.
     """
     try:
+        # Get user ID (handle both dict and object formats)
+        user_id = user.get("id") if isinstance(user, dict) else user.id
+
+        # Get user's environment preference
+        environment = await get_user_environment(db, str(user_id))
+
         # Get credentials
         from ..services.credential_manager import CredentialManager
         cred_manager = CredentialManager()
-        decrypted_creds = await cred_manager.get_user_credentials(db, user.id, "twilio", "test")
+        decrypted_creds = await cred_manager.get_credentials(db, str(user_id), "twilio", environment)
 
         # Create adapter
         adapter = AdapterFactory.create_adapter("twilio", decrypted_creds)
@@ -381,11 +297,17 @@ async def send_email(
     import time
 
     try:
+        # Get user ID (handle both dict and object formats)
+        user_id = user.get("id") if isinstance(user, dict) else user.id
+
+        # Get user's environment preference
+        environment = await get_user_environment(db, str(user_id))
+
         # Check idempotency key first (no credit consumed for cached response)
         if request.idempotency_key:
             result = await db.execute(
                 select(TransactionLog).where(
-                    TransactionLog.user_id == user.id,
+                    TransactionLog.user_id == user_id,
                     TransactionLog.idempotency_key == request.idempotency_key
                 )
             )
@@ -401,12 +323,12 @@ async def send_email(
                     created_at=existing.created_at.isoformat() if existing.created_at else None
                 )
 
-        # Get Resend credentials
+        # Get Resend credentials for user's current environment
         result = await db.execute(
             select(ServiceCredential).where(
-                ServiceCredential.user_id == user.id,
+                ServiceCredential.user_id == user_id,
                 ServiceCredential.provider_name == "resend",
-                ServiceCredential.environment == "test",
+                ServiceCredential.environment == environment,
                 ServiceCredential.is_active == True
             )
         )
@@ -415,13 +337,13 @@ async def send_email(
         if not creds_result:
             raise HTTPException(
                 status_code=400,
-                detail="Resend not configured. Please add your credentials in dashboard."
+                detail=f"Resend {environment} credentials not configured. Please add your credentials in dashboard."
             )
 
         # Decrypt credentials
         from ..services.credential_manager import CredentialManager
         cred_manager = CredentialManager()
-        decrypted_creds = await cred_manager.get_credentials(db, user.id, "resend", "test")
+        decrypted_creds = await cred_manager.get_credentials(db, str(user_id), "resend", environment)
 
         # Create adapter
         adapter = AdapterFactory.create_adapter("resend", decrypted_creds)
@@ -484,7 +406,7 @@ async def send_email(
 
         # Log transaction
         transaction = TransactionLog(
-            user_id=user.id,
+            user_id=user_id,
             api_key_id=api_key_obj.id if api_key_obj else None,
             transaction_id=email_result.get("id", ""),
             idempotency_key=request.idempotency_key,
@@ -499,7 +421,7 @@ async def send_email(
             status="sent",
             cost=cost,
             currency="USD",
-            environment="test",
+            environment=environment,
             created_at=datetime.utcnow()
         )
 
@@ -521,124 +443,6 @@ async def send_email(
     except HTTPException:
         raise
 
-    except Exception as e:
-        logger.error(f"Email sending failed: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to send email: {str(e)}"
-        )
-
-        # Check idempotency key
-        if request.idempotency_key:
-            result = await db.execute(
-                select(TransactionLog).where(
-                    TransactionLog.user_id == user.id,
-                    TransactionLog.idempotency_key == request.idempotency_key
-                )
-            )
-            existing = result.scalar_one_or_none()
-
-            if existing:
-                return EmailResponse(
-                    email_id=existing.transaction_id,
-                    status=existing.status,
-                    service=existing.service_name,
-                    cost=existing.cost or 0.0,
-                    currency="USD",
-                    created_at=existing.created_at.isoformat() if existing.created_at else None
-                )
-
-        # Get Resend credentials
-        result = await db.execute(
-            select(ServiceCredential).where(
-                ServiceCredential.user_id == user.id,
-                ServiceCredential.provider_name == "resend",
-                ServiceCredential.environment == "test",
-                ServiceCredential.is_active == True
-            )
-        )
-        creds_result = result.scalar_one_or_none()
-
-        if not creds_result:
-            raise HTTPException(
-                status_code=400,
-                detail="Resend not configured. Please add your credentials in dashboard."
-            )
-
-        # Decrypt credentials
-        from ..services.credential_manager import CredentialManager
-        cred_manager = CredentialManager()
-        decrypted_creds = await cred_manager.get_credentials(db, user.id, "resend", "test")
-
-        # Create adapter
-        adapter = AdapterFactory.create_adapter("resend", decrypted_creds)
-
-        # Prepare parameters
-        params = {
-            "to": request.to,
-            "subject": request.subject
-        }
-
-        if request.html_body:
-            params["html_body"] = request.html_body
-        elif request.text_body:
-            params["text_body"] = request.text_body
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail="Either html_body or text_body is required"
-            )
-
-        if request.from_email:
-            params["from_email"] = request.from_email
-        else:
-            params["from_email"] = decrypted_creds.get("from_email")
-
-        # Start timer
-        start_time = time.time()
-
-        # Send email
-        result = await adapter.execute("send_email", params)
-
-        # Calculate cost
-        cost = await cost_tracker.calculate_cost("resend", "send_email", params)
-        response_time_ms = int((time.time() - start_time) * 1000)
-
-        # Log transaction
-        transaction = TransactionLog(
-            user_id=user.id,
-            api_key_id=api_key_obj.id if api_key_obj else None,
-            transaction_id=result.get("id", ""),
-            idempotency_key=request.idempotency_key,
-            service_name="resend",
-            provider_txn_id=result.get("id"),
-            endpoint="/emails",
-            http_method="POST",
-            request_payload=params,
-            response_payload=result,
-            response_status=200,
-            response_time_ms=response_time_ms,
-            status="sent",
-            cost=cost,
-            currency="USD",
-            environment="test",
-            created_at=datetime.utcnow()
-        )
-
-        db.add(transaction)
-        await db.commit()
-
-        return EmailResponse(
-            email_id=result.get("id", ""),
-            status="sent",
-            service="resend",
-            cost=cost,
-            currency="USD",
-            created_at=datetime.utcnow().isoformat()
-        )
-
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Email sending failed: {str(e)}")
         raise HTTPException(
