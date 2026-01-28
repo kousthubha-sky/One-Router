@@ -30,11 +30,6 @@ SERVICE_ENV_PATTERNS = {
         "optional": ["AWS_REGION", "AWS_ENDPOINT_URL"],
         "prefix": ""
     },
-    "stripe": {
-        "required": ["STRIPE_SECRET_KEY", "STRIPE_PUBLISHABLE_KEY"],
-        "optional": ["STRIPE_WEBHOOK_SECRET", "STRIPE_API_VERSION"],
-        "prefix": "STRIPE_"
-    },
     "resend": {
         "required": ["RESEND_API_KEY"],
         "optional": [],

@@ -92,15 +92,23 @@ export interface PaymentLinkRequest {
   customer_name?: string;
   expire_by?: string;
   metadata?: Record<string, string>;
+  notes?: Record<string, string>;
+  callback_url?: string;
+  provider?: 'razorpay' | 'paypal';
+  environment?: 'test' | 'live';
 }
 
 export interface PaymentLink {
-  link_id: string;
-  short_url: string;
-  original_url: string;
+  transaction_id: string;
+  provider: string;
+  provider_order_id: string;
   amount: number;
+  currency: string;
+  status: string;
+  checkout_url: string;
   description?: string;
-  created_at: string;
+  notes?: Record<string, any>;
+  provider_data?: Record<string, any>;
 }
 
 export interface SmsRequest {

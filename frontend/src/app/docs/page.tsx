@@ -4,1914 +4,588 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
-import { Github } from 'lucide-react';
+import { Github, ExternalLink, Copy, Check } from 'lucide-react';
 
-/**
- * Render the main documentation page with a sticky header, responsive navigation, a sidebar (desktop), a mobile section selector, and the content area for selectable documentation sections.
- *
- * @returns The JSX element for the DocsPage layout containing navigation, section controls, and the active documentation section's content.
- */
 export default function DocsPage() {
   const [activeSection, setActiveSection] = useState('overview');
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+  
   const sections = [
     { id: 'overview', title: 'Overview' },
-    { id: 'quickstart', title: 'Quick Start' },
-    { id: 'integrations', title: 'Integrations' },
-    { id: 'sdk', title: 'Python SDK' },
-    { id: 'js-sdk', title: 'JavaScript SDK' },
-    { id: 'api', title: 'REST API' },
-    { id: 'management', title: 'Management API' },
-    { id: 'troubleshooting', title: 'Troubleshooting' }
+    { id: 'authentication', title: 'Authentication' },
+    { id: 'endpoints', title: 'Endpoints' },
+    { id: 'examples', title: 'Examples' },
+    { id: 'errors', title: 'Errors' },
+    { id: 'sdk', title: 'SDKs' },
   ];
+
+  const apiBaseUrl = 'https://one-router-clyl.onrender.com';
+  const swaggerUrl = `${apiBaseUrl}/docs`;
+
+  const copyToClipboard = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(id);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  const CodeBlock = ({ code, language = 'bash', id }: { code: string; language?: string; id: string }) => (
+    <div className="bg-[#0a0a0a] border border-[#222] rounded-lg p-4 mb-4">
+      <div className="flex justify-between items-center mb-3">
+        <span className="text-[#666] text-xs uppercase tracking-widest">{language}</span>
+        <button
+          onClick={() => copyToClipboard(code, id)}
+          className="text-[#666] hover:text-white transition-colors flex items-center gap-1 text-xs"
+        >
+          {copied === id ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+          {copied === id ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+      <pre className="text-[#00ff88] text-xs overflow-x-auto font-mono">
+        <code>{code}</code>
+      </pre>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-black text-white">
       {/* Header */}
-      {/* Modern Navbar */}
-        <header className="sticky top-0 z-50 bg-black border-b border-[#222]">
-          <div className="w-full h-16 flex items-center border-l border-r border-[#222] relative">
-            {/* Vertical gridlines - hidden on mobile */}
-            <div className="absolute inset-0 pointer-events-none hidden md:flex">
-              <div className="flex-1 border-r border-[#222]"></div>
-              <div className="flex-1 border-r border-[#222]"></div>
-              <div className="flex-1 border-r border-[#222]"></div>
+      <header className="sticky top-0 z-50 bg-black border-b border-[#222]">
+        <div className="w-full h-16 flex items-center px-4 md:px-8">
+          <div className="flex items-center gap-3 flex-1">
+            <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold text-sm">OR</span>
             </div>
+            <span className="font-bold font-mono text-lg hidden sm:inline">
+              One<span className="text-cyan-400">Router</span> Docs
+            </span>
+          </div>
+          <div className="flex items-center gap-4">
+            <a
+              href="https://github.com"
+              className="text-[#888] hover:text-white transition-colors"
+            >
+              <Github className="w-5 h-5" />
+            </a>
+            <SignedOut>
+              <SignInButton mode="modal">
+                <Button className="bg-white text-black hover:bg-gray-200 font-mono text-sm px-4 py-2">
+                  Sign In
+                </Button>
+              </SignInButton>
+            </SignedOut>
+            <SignedIn>
+              <Link href="/dashboard">
+                <Button className="bg-white text-black hover:bg-gray-200 font-mono text-sm px-4 py-2">
+                  Dashboard
+                </Button>
+              </Link>
+              <UserButton />
+            </SignedIn>
+          </div>
+        </div>
+      </header>
 
-            <div className="w-full h-full flex justify-between items-center px-4 md:px-8 relative z-10">
-              {/* Left - Logo */}
-              <div className="flex items-center gap-2 border-r border-[#222] pr-4 md:pr-8 flex-1">
-                <div className="w-8 h-8 bg-linear-to-br from-black  to-cyan-600 rounded-2xl flex items-center justify-center shadow-lg transition-all duration-300 hover:shadow-cyan-500/25 hover:scale-110">
+      <div className="flex">
+        {/* Sidebar */}
+        <div className="hidden md:block w-64 border-r border-[#222] bg-[#050505] sticky top-16 h-[calc(100vh-4rem)]">
+          <nav className="p-6 space-y-2 overflow-y-auto">
+            {sections.map((section) => (
+              <button
+                key={section.id}
+                onClick={() => setActiveSection(section.id)}
+                className={`w-full text-left px-4 py-2 rounded transition-colors text-sm font-mono ${
+                  activeSection === section.id
+                    ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                    : 'text-[#888] hover:text-white hover:bg-[#1a1a1a]'
+                }`}
+              >
+                {section.title}
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        {/* Main Content */}
+        <div className="flex-1 p-6 md:p-8 max-w-4xl">
+          {/* Mobile Section Selector */}
+          <div className="md:hidden mb-6">
+            <select
+              value={activeSection}
+              onChange={(e) => setActiveSection(e.target.value)}
+              className="w-full bg-[#1a1a1a] border border-[#333] rounded px-4 py-2 text-white font-mono text-sm"
+            >
+              {sections.map((section) => (
+                <option key={section.id} value={section.id}>
+                  {section.title}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Overview */}
+          {activeSection === 'overview' && (
+            <div className="space-y-8">
+              <div>
+                <h1 className="text-4xl font-bold text-white mb-4">OneRouter API</h1>
+                <p className="text-gray-400 text-lg leading-relaxed mb-6">
+                  A unified API gateway for payments, SMS, and email. Route requests to your own provider accounts with a single, consistent interface.
+                </p>
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-6">
+                  <p className="text-blue-300 font-mono text-sm">
+                    <strong>Base URL:</strong> {apiBaseUrl}
+                  </p>
                 </div>
-                <div className="font-bold text-sm md:text-lg font-mono">
-                  
-                  <span className="text-white font-sans" >One</span>
-                  <span className="text-cyan-400 font-sans">Router</span>
-                </div>
-              </div>
-
-              {/* Middle - Navigation Links */}
-              <nav className="hidden lg:flex flex-1 items-center justify-center gap-4 xl:gap-12 border-r border-[#222] px-4 xl:px-8">
-                 <Link href="/docs" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
-                   docs
-                 </Link>
-                 <a href="/privacy" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
-                   privacy
-                 </a>
-                 <a href="/terms" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
-                   terms
-                 </a>
-                 <Link href="/pricing" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
-                   pricing
-                 </Link>
-                 <a href="/contact" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
-                   contact
-                 </a>
-                 
-               </nav>
-
-              {/* Right - Auth & GitHub */}
-              <div className="flex items-center gap-2 md:gap-4 lg:gap-6 justify-end flex-1 pl-4 md:pl-8">
-                <a href="https://github.com" className="text-[#888] hover:text-white transition-all duration-300 hover:scale-110">
-                  <Github className="w-4 md:w-5 h-4 md:h-5" />
-                </a>
-
-                <SignedOut>
-                  <SignInButton mode="modal">
-                    <Button className="bg-white text-black hover:bg-gray-200 font-mono font-bold text-xs md:text-sm px-3 md:px-6 py-2 rounded transition-all duration-300 transform hover:scale-105 hidden sm:block">
-                      Sign In
-                    </Button>
-                  </SignInButton>
-                </SignedOut>
-                <SignedIn>
-                  <Link href="/dashboard">
-                    <Button className="bg-white text-black hover:bg-gray-200 font-mono font-bold text-xs md:text-sm px-3 md:px-6 py-2 rounded transition-all duration-300 transform hover:scale-105 hidden sm:block">
-                      Dashboard
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Link href={swaggerUrl} target="_blank">
+                    <Button className="w-full bg-cyan-600 hover:bg-cyan-700 font-mono flex items-center justify-center gap-2">
+                      Interactive API Docs <ExternalLink className="w-4 h-4" />
                     </Button>
                   </Link>
-                  <UserButton />
-                </SignedIn>
+                  <Link href="/dashboard">
+                    <Button className="w-full bg-gray-700 hover:bg-gray-600 font-mono">
+                      Go to Dashboard
+                    </Button>
+                  </Link>
+                </div>
+              </div>
 
-                {/* Mobile Menu Button */}
-                <button 
-                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                  className="lg:hidden p-2 text-[#888] hover:text-white transition-colors">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                  </svg>
-                </button>
+              <div className="space-y-4">
+                <h2 className="text-2xl font-bold text-white">Key Features</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[
+                    { title: 'Payments', desc: 'Razorpay, PayPal' },
+                    { title: 'SMS', desc: 'Twilio' },
+                    { title: 'Email', desc: 'Resend' },
+                    { title: 'Multi-Tenant', desc: 'Isolated credentials' },
+                    { title: 'Test & Live', desc: 'Environment switching' },
+                    { title: 'Analytics', desc: 'Usage tracking' },
+                  ].map((feature, idx) => (
+                    <div
+                      key={idx}
+                      className="bg-[#0a0a0a] border border-[#222] rounded-lg p-4"
+                    >
+                      <h3 className="text-cyan-400 font-mono font-bold mb-1">
+                        {feature.title}
+                      </h3>
+                      <p className="text-[#888] text-sm">{feature.desc}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
+          )}
 
-            {/* Mobile Menu - Dropdown */}
-             {mobileMenuOpen && (
-               <div className="lg:hidden absolute top-16 left-0 right-0 bg-black border-b border-[#222] px-4 py-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                 <Link href="/docs" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
-                   docs
-                 </Link>
-                 <Link href="/privacy" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
-                   privacy
-                 </Link>
-                 <Link href="/terms" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
-                   terms
-                 </Link>
-                 <Link href="/pricing" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
-                   pricing
-                 </Link>
-                 <Link href="/contact" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
-                   contact
-                 </Link>
-               </div>
-             )}
-          </div>
-        </header>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex flex-col lg:flex-row gap-8">
-          {/* Sidebar - Hidden on mobile when not expanded */}
-          <aside className="hidden lg:block w-64 shrink-0">
-            <nav className="sticky top-8">
-              <div className="space-y-1">
-                <div className="mb-6">
-                  <h3 className="text-lg font-semibold text-white mb-4">Documentation</h3>
-                  <ul className="space-y-1">
-                    {sections.slice(0, 2).map(section => (
-                      <li key={section.id}>
-                        <button
-                          onClick={() => setActiveSection(section.id)}
-                          className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                            activeSection === section.id
-                              ? 'bg-cyan-500/20 text-cyan-400'
-                              : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                          }`}
-                        >
-                          {section.title}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="mb-6">
-                  <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">SDKs</h3>
-                  <ul className="space-y-1">
-                    {sections.slice(2, 5).map(section => (
-                      <li key={section.id}>
-                        <button
-                          onClick={() => setActiveSection(section.id)}
-                          className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                            activeSection === section.id
-                              ? 'bg-cyan-500/20 text-cyan-400'
-                              : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                          }`}
-                        >
-                          {section.title}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="mb-6">
-                  <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">Reference</h3>
-                  <ul className="space-y-1">
-                    {sections.slice(5, 8).map(section => (
-                      <li key={section.id}>
-                        <button
-                          onClick={() => setActiveSection(section.id)}
-                          className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                            activeSection === section.id
-                              ? 'bg-cyan-500/20 text-cyan-400'
-                              : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                          }`}
-                        >
-                          {section.title}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+          {/* Authentication */}
+          {activeSection === 'authentication' && (
+            <div className="space-y-8">
+              <div>
+                <h1 className="text-4xl font-bold text-white mb-4">Authentication</h1>
+                <p className="text-gray-400 mb-6">
+                  All API requests require authentication using Bearer tokens.
+                </p>
               </div>
-            </nav>
-          </aside>
 
-          {/* Mobile Sidebar Toggle */}
-          <div className="lg:hidden mb-4">
-            <div className="flex overflow-x-auto gap-2 pb-2">
-              {sections.map(section => (
-                <button
-                  key={section.id}
-                  onClick={() => setActiveSection(section.id)}
-                  className={`shrink-0 px-4 py-2 rounded-full text-sm transition-colors ${
-                    activeSection === section.id
-                      ? 'bg-cyan-500 text-white'
-                      : 'bg-gray-800 text-gray-400 hover:text-white'
-                  }`}
-                >
-                  {section.title}
-                </button>
+              <div>
+                <h2 className="text-2xl font-bold text-white mb-4">Authorization Header</h2>
+                <p className="text-gray-400 mb-4">
+                  Include your API key in the Authorization header:
+                </p>
+                <CodeBlock
+                  code="Authorization: Bearer sk_test_xxxxx"
+                  language="text"
+                  id="auth-header"
+                />
+              </div>
+
+              <div>
+                <h2 className="text-2xl font-bold text-white mb-4">Rate Limits</h2>
+                <div className="bg-[#0a0a0a] border border-[#222] rounded-lg p-4 mb-4">
+                  <p className="text-gray-400 mb-3">
+                    Rate limits are applied per API key or IP address:
+                  </p>
+                  <div className="space-y-2 text-sm font-mono">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Unauthenticated:</span>
+                      <span className="text-cyan-400">30 requests/minute</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Authenticated:</span>
+                      <span className="text-cyan-400">100 requests/minute</span>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-gray-400 text-sm">
+                  Rate limit information is included in response headers:
+                </p>
+                <CodeBlock
+                  code={`X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 99
+X-RateLimit-Reset: 1704067200
+Retry-After: 60`}
+                  language="text"
+                  id="rate-limit-headers"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Endpoints */}
+          {activeSection === 'endpoints' && (
+            <div className="space-y-8">
+              <div>
+                <h1 className="text-4xl font-bold text-white mb-4">API Endpoints</h1>
+                <p className="text-gray-400 mb-6">
+                  Complete list of available endpoints organized by category.
+                </p>
+              </div>
+
+              {[
+                {
+                  category: 'Payments',
+                  endpoints: [
+                    { method: 'POST', path: '/v1/payments/orders', desc: 'Create payment order' },
+                    { method: 'GET', path: '/v1/subscriptions', desc: 'List subscriptions' },
+                    { method: 'POST', path: '/v1/subscriptions', desc: 'Create subscription' },
+                    { method: 'POST', path: '/v1/subscriptions/{id}/cancel', desc: 'Cancel subscription' },
+                    { method: 'POST', path: '/v1/subscriptions/{id}/pause', desc: 'Pause subscription' },
+                    { method: 'POST', path: '/v1/subscriptions/{id}/resume', desc: 'Resume subscription' },
+                    { method: 'POST', path: '/v1/payment-links', desc: 'Create payment link' },
+                  ],
+                },
+                {
+                  category: 'Communications',
+                  endpoints: [
+                    { method: 'POST', path: '/v1/sms', desc: 'Send SMS' },
+                    { method: 'GET', path: '/v1/sms/{id}', desc: 'Get SMS status' },
+                    { method: 'POST', path: '/v1/email', desc: 'Send email' },
+                    { method: 'GET', path: '/v1/email/{id}', desc: 'Get email status' },
+                  ],
+                },
+                {
+                  category: 'Services',
+                  endpoints: [
+                    { method: 'GET', path: '/api/services', desc: 'List connected services' },
+                    { method: 'POST', path: '/api/services/{name}/credentials', desc: 'Add credentials' },
+                    { method: 'PUT', path: '/api/services/{name}/credentials', desc: 'Update credentials' },
+                    { method: 'DELETE', path: '/api/services/{name}', desc: 'Disconnect service' },
+                    { method: 'GET', path: '/api/services/{name}/status', desc: 'Get status' },
+                  ],
+                },
+                {
+                  category: 'API Keys',
+                  endpoints: [
+                    { method: 'POST', path: '/api/keys', desc: 'Create API key' },
+                    { method: 'GET', path: '/api/keys', desc: 'List API keys' },
+                    { method: 'PATCH', path: '/api/keys/{id}', desc: 'Update API key' },
+                    { method: 'DELETE', path: '/api/keys/{id}', desc: 'Delete API key' },
+                  ],
+                },
+                {
+                  category: 'Credits',
+                  endpoints: [
+                    { method: 'GET', path: '/api/credits/balance', desc: 'Get balance' },
+                    { method: 'POST', path: '/api/credits/purchase', desc: 'Purchase credits' },
+                    { method: 'GET', path: '/api/credits/plans', desc: 'List plans' },
+                    { method: 'GET', path: '/api/credits/transactions', desc: 'Transaction history' },
+                  ],
+                },
+                {
+                  category: 'Analytics',
+                  endpoints: [
+                    { method: 'GET', path: '/api/analytics/overview', desc: 'Overview stats' },
+                    { method: 'GET', path: '/api/analytics/logs', desc: 'API logs' },
+                    { method: 'GET', path: '/api/analytics/costs', desc: 'Cost breakdown' },
+                    { method: 'GET', path: '/api/analytics/errors', desc: 'Error logs' },
+                    { method: 'GET', path: '/api/analytics/timeseries', desc: 'Time series data' },
+                  ],
+                },
+              ].map((group, idx) => (
+                <div key={idx}>
+                  <h2 className="text-xl font-bold text-cyan-400 mb-4 font-mono">
+                    {group.category}
+                  </h2>
+                  <div className="space-y-2">
+                    {group.endpoints.map((endpoint, endIdx) => (
+                      <div
+                        key={endIdx}
+                        className="bg-[#0a0a0a] border border-[#222] rounded-lg p-4 flex items-start gap-4"
+                      >
+                        <span className="font-mono font-bold text-[#00ff88] text-sm whitespace-nowrap">
+                          {endpoint.method}
+                        </span>
+                        <div className="flex-1">
+                          <p className="font-mono text-sm text-gray-300 mb-1">
+                            {endpoint.path}
+                          </p>
+                          <p className="text-[#888] text-sm">{endpoint.desc}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               ))}
-            </div>
-          </div>
 
-          {/* Main Content */}
-          <main className="flex-1 w-full" style={{minHeight: '600px'}}>
-            <div className="border border-gray-800 rounded-lg p-4 sm:p-6 lg:p-8">
-            {activeSection === 'overview' && <OverviewSection setActiveSection={setActiveSection} />}
-              {activeSection === 'quickstart' && <QuickStartSection setActiveSection={setActiveSection} />}
-              {activeSection === 'integrations' && <IntegrationsSection setActiveSection={setActiveSection} />}
-              {activeSection === 'sdk' && <SDKSection setActiveSection={setActiveSection} />}
-              {activeSection === 'js-sdk' && <JSSDKSection setActiveSection={setActiveSection} />}
-              {activeSection === 'api' && <APISection setActiveSection={setActiveSection} />}
-              {activeSection === 'management' && <ManagementAPISection setActiveSection={setActiveSection} />}
-              {activeSection === 'troubleshooting' && <TroubleshootingSection setActiveSection={setActiveSection} />}
-            </div>
-          </main>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Renders the Overview documentation section describing OneRouter's purpose, key features, supported services, quickstart links, and pricing.
- *
- * @param setActiveSection - Function to set the active documentation section
- * @returns The React element for the Overview section of the docs page.
- */
-function OverviewSection({ setActiveSection }: { setActiveSection: (section: string) => void }) {
-
-  return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-4">Introduction</h1>
-        <p className="text-base sm:text-lg text-gray-300 leading-relaxed">
-          OneRouter is a unified API integration platform that provides a single interface for payments, SMS, email, and more. Route requests to your existing provider accounts (Razorpay, PayPal, Stripe, Twilio, Resend) through one SDK.
-        </p>
-      </div>
-
-      {/* Key Points */}
-      <div className="border border-gray-800 rounded-lg p-4 sm:p-6 bg-gray-900/50">
-        <h2 className="text-lg sm:text-xl font-semibold text-white mb-4">What OneRouter Does</h2>
-        <div className="grid sm:grid-cols-2 gap-4 sm:gap-6">
-          <div>
-            <h3 className="text-base sm:text-lg font-semibold text-cyan-400 mb-2">Secure Credential Management</h3>
-            <p className="text-gray-300 text-sm">Upload your provider credentials once. We encrypt and securely store them. Never manage multiple env variables again.</p>
-          </div>
-          <div>
-            <h3 className="text-base sm:text-lg font-semibold text-cyan-400 mb-2">Unified API Interface</h3>
-            <p className="text-gray-300 text-sm">One SDK for all services. Payments, SMS, and email work the same way regardless of provider.</p>
-          </div>
-          <div>
-            <h3 className="text-base sm:text-lg font-semibold text-cyan-400 mb-2">Credit-Based Pricing</h3>
-            <p className="text-gray-300 text-sm">Pay $0.01 per API call. 1,000 free credits/month. No monthly subscriptions. Pay only for what you use.</p>
-          </div>
-          <div>
-            <h3 className="text-base sm:text-lg font-semibold text-cyan-400 mb-2">Multi-Tenant Architecture</h3>
-            <p className="text-gray-300 text-sm">Complete data isolation. Your credentials and data are never accessible to other users.</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Supported Services */}
-      <div>
-        <h2 className="text-xl sm:text-2xl font-semibold text-white mb-4 sm:mb-6">Supported Services</h2>
-        <div className="grid sm:grid-cols-3 gap-4">
-          <div className="border border-gray-800 rounded-lg p-4">
-            <h3 className="text-base sm:text-lg font-semibold text-white mb-3">Payments</h3>
-            <ul className="text-gray-300 text-sm space-y-2">
-              <li>- Razorpay</li>
-              <li>- PayPal</li>
-            </ul>
-          </div>
-          <div className="border border-gray-800 rounded-lg p-4">
-            <h3 className="text-base sm:text-lg font-semibold text-white mb-3">SMS</h3>
-            <ul className="text-gray-300 text-sm space-y-2">
-              <li>- Twilio</li>
-            </ul>
-          </div>
-          <div className="border border-gray-800 rounded-lg p-4">
-            <h3 className="text-base sm:text-lg font-semibold text-white mb-3">Email</h3>
-            <ul className="text-gray-300 text-sm space-y-2">
-              <li>- Resend</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      {/* Why Use OneRouter */}
-      <div>
-        <h2 className="text-2xl font-semibold text-white mb-6">Why Use OneRouter?</h2>
-        <div className="space-y-4">
-          <div className="flex items-start gap-3">
-            <span className="text-green-500 text-lg">✓</span>
-            <div>
-              <h4 className="text-white font-medium">Single Integration</h4>
-              <p className="text-gray-400 text-sm">Integrate once, use multiple providers. Add new services without code changes.</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <span className="text-green-500 text-lg">✓</span>
-            <div>
-              <h4 className="text-white font-medium">No Credential Management</h4>
-              <p className="text-gray-400 text-sm">Upload credentials once through dashboard. We handle encryption and security.</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <span className="text-green-500 text-lg">✓</span>
-            <div>
-              <h4 className="text-white font-medium">Unified Response Format</h4>
-              <p className="text-gray-400 text-sm">All providers return data in the same structure. No more mapping different response formats.</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <span className="text-green-500 text-lg">✓</span>
-            <div>
-              <h4 className="text-white font-medium">Multi-Provider Fallback</h4>
-              <p className="text-gray-400 text-sm">If one provider fails, automatically retry with another. Built-in reliability.</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <span className="text-green-500 text-lg">✓</span>
-            <div>
-              <h4 className="text-white font-medium">Real-Time Analytics</h4>
-              <p className="text-gray-400 text-sm">See all your transactions in one dashboard. Track costs and usage per service.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Quickstart Cards */}
-      <div>
-        <h2 className="text-xl sm:text-2xl font-semibold text-white mb-4 sm:mb-6">Quickstart</h2>
-        <p className="text-gray-300 mb-6 sm:mb-8">Get OneRouter integrated in 5 minutes.</p>
-
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <button onClick={() => setActiveSection('sdk')} className="border border-gray-800 rounded-lg p-4 sm:p-6 hover:border-cyan-500 transition-colors cursor-pointer text-left">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 border border-gray-700 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold">Python</span>
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                <p className="text-blue-300 text-sm">
+                  💡 For complete endpoint documentation with schemas and try-it-out, visit the{' '}
+                  <Link href={swaggerUrl} target="_blank" className="underline hover:no-underline">
+                    Interactive API Docs
+                  </Link>
+                </p>
               </div>
-              <h3 className="text-base sm:text-lg font-semibold text-white">Python SDK</h3>
             </div>
-            <p className="text-gray-400 text-sm">Install pip package and start integrating</p>
-          </button>
+          )}
 
-          <button onClick={() => setActiveSection('js-sdk')} className="border border-gray-800 rounded-lg p-4 sm:p-6 hover:border-cyan-500 transition-colors cursor-pointer text-left">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 border border-gray-700 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold">JS</span>
+          {/* Examples */}
+          {activeSection === 'examples' && (
+            <div className="space-y-8">
+              <div>
+                <h1 className="text-4xl font-bold text-white mb-4">Examples</h1>
+                <p className="text-gray-400 mb-6">
+                  Real-world examples using the OneRouter API.
+                </p>
               </div>
-              <h3 className="text-base sm:text-lg font-semibold text-white">JavaScript SDK</h3>
-            </div>
-            <p className="text-gray-400 text-sm">Node.js, browser, and edge support</p>
-          </button>
 
-          <button onClick={() => setActiveSection('api')} className="border border-gray-800 rounded-lg p-4 sm:p-6 hover:border-cyan-500 transition-colors cursor-pointer text-left">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 border border-gray-700 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold">API</span>
+              <div>
+                <h2 className="text-2xl font-bold text-white mb-4">Create Payment Order</h2>
+                <CodeBlock
+                  code={`curl -X POST ${apiBaseUrl}/v1/payments/orders \\
+  -H "Authorization: Bearer sk_test_xxxxx" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "provider": "razorpay",
+    "amount": 10000,
+    "currency": "INR",
+    "customer_id": "cust_123",
+    "description": "Product purchase"
+  }'`}
+                  language="bash"
+                  id="example-payment"
+                />
               </div>
-              <h3 className="text-base sm:text-lg font-semibold text-white">REST API</h3>
+
+              <div>
+                <h2 className="text-2xl font-bold text-white mb-4">Create Subscription</h2>
+                <CodeBlock
+                  code={`curl -X POST ${apiBaseUrl}/v1/subscriptions \\
+  -H "Authorization: Bearer sk_test_xxxxx" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "provider": "razorpay",
+    "customer_id": "cust_123",
+    "plan_id": "plan_monthly",
+    "quantity": 1
+  }'`}
+                  language="bash"
+                  id="example-subscription"
+                />
+              </div>
+
+              <div>
+                <h2 className="text-2xl font-bold text-white mb-4">Send SMS</h2>
+                <CodeBlock
+                  code={`curl -X POST ${apiBaseUrl}/v1/sms \\
+  -H "Authorization: Bearer sk_test_xxxxx" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "provider": "twilio",
+    "to": "+919876543210",
+    "message": "Your OTP is 123456"
+  }'`}
+                  language="bash"
+                  id="example-sms"
+                />
+              </div>
+
+              <div>
+                <h2 className="text-2xl font-bold text-white mb-4">Send Email</h2>
+                <CodeBlock
+                  code={`curl -X POST ${apiBaseUrl}/v1/email \\
+  -H "Authorization: Bearer sk_test_xxxxx" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "provider": "resend",
+    "to": "user@example.com",
+    "subject": "Welcome!",
+    "html": "<h1>Welcome to OneRouter</h1>"
+  }'`}
+                  language="bash"
+                  id="example-email"
+                />
+              </div>
+
+              <div>
+                <h2 className="text-2xl font-bold text-white mb-4">Get Credit Balance</h2>
+                <CodeBlock
+                  code={`curl -X GET ${apiBaseUrl}/api/credits/balance \\
+  -H "Authorization: Bearer sk_test_xxxxx"`}
+                  language="bash"
+                  id="example-balance"
+                />
+              </div>
             </div>
-            <p className="text-gray-400 text-sm">Use any HTTP client</p>
-          </button>
-        </div>
-      </div>
+          )}
 
-      {/* Pricing */}
-      <div className="border border-gray-800 rounded-lg p-4 sm:p-6 bg-cyan-900/20">
-        <h2 className="text-lg sm:text-xl font-semibold text-white mb-4">Pricing</h2>
-        <div className="grid sm:grid-cols-3 gap-4 sm:gap-6">
-          <div className="text-center">
-            <div className="text-2xl sm:text-3xl font-bold text-white mb-2">Free</div>
-            <div className="text-gray-400 text-sm mb-4">1,000 credits/month</div>
-            <ul className="text-gray-300 text-sm space-y-1 text-left">
-              <li>- Perfect for testing</li>
-              <li>- All features included</li>
-              <li>- No credit card required</li>
-            </ul>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl sm:text-3xl font-bold text-cyan-400 mb-2">$10</div>
-            <div className="text-gray-400 text-sm mb-4">1,000 credits</div>
-            <ul className="text-gray-300 text-sm space-y-1 text-left">
-              <li>- $0.01 per API call</li>
-              <li>- Pay as you go</li>
-              <li>- No monthly minimums</li>
-            </ul>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl sm:text-3xl font-bold text-green-400 mb-2">Volume</div>
-            <div className="text-gray-400 text-sm mb-4">20-30% off</div>
-            <ul className="text-gray-300 text-sm space-y-1 text-left">
-              <li>- $100+ purchase: 20% off</li>
-              <li>- $500+ purchase: 30% off</li>
-              <li>- Enterprise pricing available</li>
-            </ul>
-          </div>
-        </div>
-        <p className="text-gray-400 text-sm mt-4 text-center">
-          Note: You also pay your provider&apos;s fees (Razorpay, PayPal, etc.) directly to them. OneRouter only charges for API usage.
-        </p>
-      </div>
-    </div>
-  );
-}
+          {/* Errors */}
+          {activeSection === 'errors' && (
+            <div className="space-y-8">
+              <div>
+                <h1 className="text-4xl font-bold text-white mb-4">Error Responses</h1>
+                <p className="text-gray-400 mb-6">
+                  All errors return consistent JSON error responses with status codes and error codes.
+                </p>
+              </div>
 
-/**
- * Renders the Quick Start documentation section with five onboarding steps, provider credential guidance, SDK install commands, and example usage for Python and JavaScript.
- *
- * @returns A React element containing the Quick Start content (steps, notes, code examples, and links) for the docs page.
- */
-function QuickStartSection({ setActiveSection }: { setActiveSection: (section: string) => void }) {
-  return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-4">Quick Start</h1>
-        <p className="text-gray-300 leading-relaxed">
-          Get started with OneRouter in 5 minutes. Follow these steps to integrate payments, SMS, or email.
-        </p>
-      </div>
+              <div>
+                <h2 className="text-2xl font-bold text-white mb-4">Error Format</h2>
+                <CodeBlock
+                  code={`{
+  "error": "error_code",
+  "message": "Human readable error message",
+  "request_id": "req_xxxxx",
+  "timestamp": "2024-01-27T10:00:00Z"
+}`}
+                  language="json"
+                  id="error-format"
+                />
+              </div>
 
-      <div className="space-y-6 sm:space-y-8">
-        {/* Step 1 */}
-        <div className="border border-gray-800 rounded-lg p-4 sm:p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-8 h-8 border border-gray-700 rounded-lg flex items-center justify-center text-white font-bold">1</div>
-            <h3 className="text-lg sm:text-xl font-semibold text-white">Get API Key</h3>
-          </div>
-          <p className="text-gray-300 mb-4">Sign up and generate your API key from the dashboard.</p>
-          <div className="border border-gray-700 rounded p-3 sm:p-4 bg-gray-900">
-            <div className="text-sm text-gray-400 mb-2">Your API Key Format:</div>
-            <code className="text-cyan-400">unf_live_xxxxxxxxxxxxxxxxxxxxxxxx</code>
-            <p className="text-gray-500 text-xs mt-2">Use unf_test_ for development, unf_live_ for production</p>
-          </div>
-        </div>
+              <div>
+                <h2 className="text-2xl font-bold text-white mb-4">Common Status Codes</h2>
+                <div className="space-y-3">
+                  {[
+                    { code: '400', desc: 'Bad Request - Invalid parameters' },
+                    { code: '401', desc: 'Unauthorized - Invalid or missing API key' },
+                    { code: '404', desc: 'Not Found - Resource does not exist' },
+                    { code: '429', desc: 'Too Many Requests - Rate limit exceeded' },
+                    { code: '500', desc: 'Server Error - Internal server error' },
+                  ].map((error, idx) => (
+                    <div
+                      key={idx}
+                      className="bg-[#0a0a0a] border border-[#222] rounded-lg p-4 flex items-start gap-4"
+                    >
+                      <span className="font-mono font-bold text-red-400 text-sm whitespace-nowrap">
+                        {error.code}
+                      </span>
+                      <p className="text-gray-400 text-sm">{error.desc}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
-        {/* Step 2 */}
-        <div className="border border-gray-800 rounded-lg p-4 sm:p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-8 h-8 border border-gray-700 rounded-lg flex items-center justify-center text-white font-bold">2</div>
-            <h3 className="text-lg sm:text-xl font-semibold text-white">Configure Provider Credentials</h3>
-          </div>
-          <p className="text-gray-300 mb-4">Upload your provider credentials through the dashboard. We encrypt and store them securely.</p>
-          <div className="space-y-2">
-            <p className="text-gray-400 text-sm">Supported providers and required credentials:</p>
-            <ul className="text-gray-300 text-sm space-y-1 ml-4">
-              <li>- Razorpay: RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET</li>
-              <li>- PayPal: PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET</li>
-              <li>- Twilio: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN</li>
-              <li>- Resend: RESEND_API_KEY</li>
-            </ul>
-          </div>
-          <div className="mt-4 p-3 sm:p-4 bg-cyan-900/20 border border-cyan-500/30 rounded-lg">
-            <p className="text-cyan-400 text-sm">
-              <strong>Note:</strong> Configure credentials in the dashboard at <code className="text-cyan-300">/onboarding</code> or upload a .env file.
-            </p>
-          </div>
-        </div>
+              <div>
+                <h2 className="text-2xl font-bold text-white mb-4">Rate Limit Error</h2>
+                <CodeBlock
+                  code={`{
+  "error": "rate_limit_exceeded",
+  "message": "Too many requests. Please try again later.",
+  "retry_after": 60,
+  "request_id": "req_xxxxx",
+  "timestamp": "2024-01-27T10:00:00Z"
+}`}
+                  language="json"
+                  id="error-rate-limit"
+                />
+              </div>
+            </div>
+          )}
 
-        {/* Step 3 */}
-        <div className="border border-gray-800 rounded-lg p-4 sm:p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-8 h-8 border border-gray-700 rounded-lg flex items-center justify-center text-white font-bold">3</div>
-            <h3 className="text-lg sm:text-xl font-semibold text-white">Install SDK</h3>
-          </div>
-          <div className="border border-gray-700 rounded p-3 sm:p-4 bg-gray-900 mb-3 sm:mb-4">
-            <code className="text-green-400">pip install onerouter</code>
-          </div>
-          <div className="border border-gray-700 rounded p-3 sm:p-4 bg-gray-900">
-            <code className="text-green-400">npm install onerouter-js</code>
-          </div>
-        </div>
+          {/* SDKs */}
+          {activeSection === 'sdk' && (
+            <div className="space-y-8">
+              <div>
+                <h1 className="text-4xl font-bold text-white mb-4">SDKs</h1>
+                <p className="text-gray-400 mb-6">
+                  Official SDKs available for Python and JavaScript.
+                </p>
+              </div>
 
-        {/* Step 4 */}
-        <div className="border border-gray-800 rounded-lg p-4 sm:p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-8 h-8 border border-gray-700 rounded-lg flex items-center justify-center text-white font-bold">4</div>
-            <h3 className="text-lg sm:text-xl font-semibold text-white">Make Your First API Call</h3>
-          </div>
-          
-          <div className="mb-4 sm:mb-6">
-            <h4 className="text-white font-medium mb-2">Python</h4>
-            <div className="border border-gray-700 rounded p-3 sm:p-4 bg-gray-900">
-              <pre className="text-white text-xs sm:text-sm overflow-x-auto whitespace-pre-wrap sm:whitespace-pre">
-{`from onerouter import OneRouter
+              <div>
+                <h2 className="text-2xl font-bold text-white mb-4">Python SDK</h2>
+                <CodeBlock
+                  code="pip install onerouter"
+                  language="bash"
+                  id="sdk-python-install"
+                />
+                <CodeBlock
+                  code={`from onerouter import OneRouter
 
-client = OneRouter(api_key="unf_test_your_key_here")
+client = OneRouter(api_key="sk_test_xxxxx")
 
-# Send SMS
-sms = client.sms.send(
-    to="+1234567890",
-    body="Hello from OneRouter!"
-)
-print("SMS sent:", sms['message_id'])
-
-# Create Payment
-payment = client.payments.create(
-    amount=1000,
+# Create payment
+response = client.payments.create_order(
+    provider="razorpay",
+    amount=10000,
     currency="INR",
     customer_id="cust_123"
 )
-print("Payment created:", payment['transaction_id'])`}
-              </pre>
-            </div>
-          </div>
 
-          <div>
-            <h4 className="text-white font-medium mb-2">JavaScript</h4>
-            <div className="border border-gray-700 rounded p-3 sm:p-4 bg-gray-900">
-              <pre className="text-white text-xs sm:text-sm overflow-x-auto whitespace-pre-wrap sm:whitespace-pre">
-{`import { OneRouter } from 'onerouter-js';
+# Send SMS
+response = client.sms.send(
+    provider="twilio",
+    to="+919876543210",
+    message="Your OTP is 123456"
+)
 
-const client = new OneRouter({
-  apiKey: 'unf_test_your_key_here'
+# Send Email
+response = client.email.send(
+    provider="resend",
+    to="user@example.com",
+    subject="Welcome!",
+    html="<h1>Welcome</h1>"
+)`}
+                  language="python"
+                  id="sdk-python-example"
+                />
+              </div>
+
+              <div>
+                <h2 className="text-2xl font-bold text-white mb-4">JavaScript SDK</h2>
+                <CodeBlock
+                  code="npm install onerouter-js"
+                  language="bash"
+                  id="sdk-js-install"
+                />
+                <CodeBlock
+                  code={`import { OneRouter } from 'onerouter-js';
+
+const client = new OneRouter({ apiKey: 'sk_test_xxxxx' });
+
+// Create payment
+const payment = await client.payments.createOrder({
+  provider: 'razorpay',
+  amount: 10000,
+  currency: 'INR',
+  customer_id: 'cust_123'
 });
 
 // Send SMS
 const sms = await client.sms.send({
-  to: '+1234567890',
-  body: 'Hello from OneRouter!'
-});
-console.log('SMS sent:', sms.message_id);
-
-// Create Payment
-const payment = await client.payments.create({
-  amount: 1000,
-  currency: 'INR',
-  customerId: 'cust_123'
-});
-console.log('Payment created:', payment.transactionId);`}
-              </pre>
-            </div>
-          </div>
-        </div>
-
-        {/* Step 5 */}
-        <div className="border border-gray-800 rounded-lg p-4 sm:p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-8 h-8 border border-gray-700 rounded-lg flex items-center justify-center text-white font-bold">5</div>
-            <h3 className="text-lg sm:text-xl font-semibold text-white">Go Live</h3>
-          </div>
-          <ol className="text-gray-300 space-y-2 list-decimal list-inside">
-            <li>Switch from test to live credentials in dashboard</li>
-            <li>Change API key from <code className="text-cyan-400">unf_test_</code> to <code className="text-cyan-400">unf_live_</code></li>
-            <li>Test with real transactions (small amounts)</li>
-            <li>Monitor your dashboard for usage and costs</li>
-          </ol>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function IntegrationsSection({ setActiveSection }: { setActiveSection: (section: string) => void }) {
-  return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-4">Integrations</h1>
-        <p className="text-gray-300 leading-relaxed">
-          OneRouter provides unified APIs for Payments, SMS, and Email. Configure your provider credentials once, then use the same interface regardless of which provider you choose.
-        </p>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-4 sm:p-6">
-        <h3 className="text-lg sm:text-xl font-semibold text-white mb-4">Payments</h3>
-        <p className="text-gray-300 mb-4">Supported providers: Razorpay, PayPal</p>
-        <div className="border border-gray-700 rounded p-3 sm:p-4 bg-gray-900">
-          <pre className="text-white text-xs sm:text-sm overflow-x-auto whitespace-pre-wrap sm:whitespace-pre">{'from onerouter import OneRouter\n\nclient = OneRouter(api_key="unf_live_xxx")\n\n# Create a payment\npayment = client.payments.create(\n    amount=1000,\n    currency="INR",\n    receipt="order_123"\n)\n\nprint("Payment ID:", payment["transaction_id"])\nprint("Checkout URL:", payment.get("checkout_url"))'}</pre>
-        </div>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-4 sm:p-6">
-        <h3 className="text-lg sm:text-xl font-semibold text-white mb-4">SMS</h3>
-        <p className="text-gray-300 mb-4">Supported providers: Twilio</p>
-        <div className="border border-gray-700 rounded p-3 sm:p-4 bg-gray-900">
-          <pre className="text-white text-xs sm:text-sm overflow-x-auto whitespace-pre-wrap sm:whitespace-pre">{'from onerouter import OneRouter\n\nclient = OneRouter(api_key="unf_live_xxx")\n\n# Send SMS\nsms = client.sms.send(\n    to="+1234567890",\n    body="Your verification code is 1234"\n)\n\nprint("Message ID:", sms["message_id"])\nprint("Status:", sms["status"])'}</pre>
-        </div>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-4 sm:p-6">
-        <h3 className="text-lg sm:text-xl font-semibold text-white mb-4">Email</h3>
-        <p className="text-gray-300 mb-4">Supported providers: Resend</p>
-        <div className="border border-gray-700 rounded p-3 sm:p-4 bg-gray-900">
-          <pre className="text-white text-xs sm:text-sm overflow-x-auto whitespace-pre-wrap sm:whitespace-pre">{'from onerouter import OneRouter\n\nclient = OneRouter(api_key="unf_live_xxx")\n\n# Send email\nemail = client.email.send(\n    to="user@example.com",\n    subject="Welcome!",\n    html_body="<h1>Welcome to OneRouter</h1>"\n)\n\nprint("Email ID:", email["email_id"])\nprint("Status:", email["status"])'}</pre>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Renders the Python SDK documentation section used on the docs page.
- *
- * Provides installation instructions, base URL guidance, full SDK setup examples,
- * framework integration snippets (Flask, FastAPI, Django), and advanced usage
- * patterns such as idempotency, bulk operations, and error handling.
- *
- * @returns The JSX element representing the Python SDK documentation section.
- */
-function SDKSection({ setActiveSection }: { setActiveSection: (section: string) => void }) {
-  return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-white mb-4">Python SDK</h1>
-        <p className="text-gray-300 leading-relaxed">
-          Complete integration guide for the OneRouter Python SDK. Supports Python 3.8+, async/sync interfaces, and all major frameworks.
-        </p>
-      </div>
-
-      {/* Installation */}
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Installation</h3>
-        <div className="space-y-4">
-          <div>
-            <h4 className="text-white font-medium mb-2">Basic Installation</h4>
-            <div className="border border-gray-700 rounded p-3 bg-gray-900">
-              <code className="text-green-400">pip install onerouter</code>
-            </div>
-          </div>
-          <div>
-            <h4 className="text-white font-medium mb-2">With Async Support</h4>
-            <div className="border border-gray-700 rounded p-3 bg-gray-900">
-              <code className="text-green-400">pip install onerouter[async]</code>
-            </div>
-          </div>
-          <div>
-            <h4 className="text-white font-medium mb-2">Verify Installation</h4>
-            <div className="border border-gray-700 rounded p-3 bg-gray-900">
-              <code className="text-cyan-400">python -c &quot;import onerouter; print(&apos;OneRouter SDK installed!&apos;)&quot;</code>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Base URLs */}
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Base URLs</h3>
-        <div className="space-y-4">
-          <div>
-            <h4 className="text-white font-medium mb-2">Development (Local)</h4>
-            <div className="border border-gray-700 rounded p-3">
-              <code className="text-white">http://localhost:8000</code>
-            </div>
-          </div>
-          <div>
-            <h4 className="text-white font-medium mb-2">Production</h4>
-            <div className="border border-gray-700 rounded p-3">
-              <code className="text-white">https://api.yourdomain.com</code>
-            </div>
-            <p className="text-gray-400 text-sm mt-2">Replace with your actual production API URL</p>
-          </div>
-          <div className="bg-cyan-900/20 border border-cyan-500/30 rounded p-4">
-            <p className="text-cyan-400 text-sm">
-              <strong>Tip:</strong> Always use environment variables for URLs to easily switch between environments.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Complete Setup */}
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Complete SDK Setup</h3>
-        <div className="border border-gray-700 rounded p-4 bg-gray-900">
-          <pre className="text-white text-sm overflow-x-auto">
-{`from onerouter import OneRouter
-
-# Production Setup - Use your actual production URL
-import os
-client = OneRouter(
-    api_key="unf_live_your_production_key_here",
-    base_url=os.getenv("ONEROUTER_BASE_URL", "https://api.yourdomain.com"),
-    timeout=30,
-    max_retries=3
-)
-
-# Development Setup
-client = OneRouter(
-    api_key="unf_test_your_test_key_here",
-    base_url="http://localhost:8000",
-    timeout=60,
-    max_retries=5
-)`}
-          </pre>
-        </div>
-      </div>
-
-      {/* Framework Integration */}
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Framework Integration</h3>
-        
-        <div className="mb-6">
-          <h4 className="text-white font-medium mb-2">Flask</h4>
-          <div className="border border-gray-700 rounded p-4 bg-gray-900">
-            <pre className="text-white text-sm overflow-x-auto">
-{`from flask import Flask, request, jsonify
-from onerouter import OneRouter
-
-app = Flask(__name__)
-client = OneRouter(api_key="unf_live_your_key")
-
-@app.route('/api/payments', methods=['POST'])
-def create_payment():
-    data = request.get_json()
-    payment = client.payments.create(
-        amount=data['amount'],
-        currency=data['currency'],
-        customer_id=data['customer_id']
-    )
-    return jsonify({
-        'payment_id': payment['transaction_id'],
-        'checkout_url': payment.get('checkout_url')
-    })
-
-if __name__ == '__main__':
-    app.run(port=3000)`}
-            </pre>
-          </div>
-        </div>
-
-        <div className="mb-6">
-          <h4 className="text-white font-medium mb-2">FastAPI</h4>
-          <div className="border border-gray-700 rounded p-4 bg-gray-900">
-            <pre className="text-white text-sm overflow-x-auto">
-{`from fastapi import FastAPI, HTTPException
-from pydantic_settings import BaseSettings
-from onerouter import OneRouter
-
-app = FastAPI()
-
-class Settings(BaseSettings):
-    api_key: str
-    base_url: str = "https://one-backend.stack-end.com"
-    model_config = {"env_prefix": "ONEROUTER_"}
-
-settings = Settings()
-client = OneRouter(api_key=settings.api_key, base_url=settings.base_url)
-
-@app.post("/api/sms")
-async def send_sms(to: str, body: str):
-    try:
-        sms = await client.sms.send_async(to=to, body=body)
-        return {"message_id": sms['message_id'], "status": sms['status']}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))`}
-            </pre>
-          </div>
-        </div>
-
-        <div>
-          <h4 className="text-white font-medium mb-2">Django</h4>
-          <div className="border border-gray-700 rounded p-4 bg-gray-900">
-            <pre className="text-white text-sm overflow-x-auto">
-{`# settings.py
-ONEROUTER_CONFIG = {
-    'API_KEY': 'unf_live_your_key_here',
-    'BASE_URL': 'https://one-backend.stack-end.com',
-    'TIMEOUT': 30,
-    'MAX_RETRIES': 3
-}
-
-# views.py
-from django.conf import settings
-from django.http import JsonResponse
-from onerouter import OneRouter
-
-def get_onerouter_client():
-    return OneRouter(
-        api_key=settings.ONEROUTER_CONFIG['API_KEY'],
-        base_url=settings.ONEROUTER_CONFIG['BASE_URL'],
-        timeout=settings.ONEROUTER_CONFIG['TIMEOUT']
-    )`}
-            </pre>
-          </div>
-        </div>
-      </div>
-
-      {/* Advanced Features */}
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Advanced Features</h3>
-        
-        <div className="mb-6">
-          <h4 className="text-white font-medium mb-2">Idempotency (Prevent Duplicate Requests)</h4>
-          <div className="border border-gray-700 rounded p-4 bg-gray-900">
-            <pre className="text-white text-sm overflow-x-auto">
-{`import uuid
-
-# Same idempotency_key = same result (prevents duplicates)
-idempotency_key = str(uuid.uuid4())
-
-payment1 = client.payments.create(
-    amount=1000,
-    currency="USD",
-    idempotency_key=idempotency_key
-)
-
-payment2 = client.payments.create(
-    amount=1000,
-    currency="USD",
-    idempotency_key=idempotency_key
-)
-
-assert payment1['transaction_id'] == payment2['transaction_id']  # Same!`}
-            </pre>
-          </div>
-        </div>
-
-        <div className="mb-6">
-          <h4 className="text-white font-medium mb-2">Bulk Operations</h4>
-          <div className="border border-gray-700 rounded p-4 bg-gray-900">
-            <pre className="text-white text-sm overflow-x-auto">
-{`import asyncio
-
-async def send_bulk_sms(phone_numbers, message):
-    async with OneRouter(api_key="unf_live_xxx") as client:
-        tasks = [
-            client.sms.send_async(to=phone, body=message)
-            for phone in phone_numbers
-        ]
-        results = await asyncio.gather(*tasks)
-        return results
-
-# Send to 100 numbers at once
-phones = ["+1234567890", "+1234567891", ...]  # 100 numbers
-results = asyncio.run(send_bulk_sms(phones, "Bulk message!"))`}
-            </pre>
-          </div>
-        </div>
-
-        <div>
-          <h4 className="text-white font-medium mb-2">Error Handling</h4>
-          <div className="border border-gray-700 rounded p-4 bg-gray-900">
-            <pre className="text-white text-sm overflow-x-auto">
-{`from onerouter import OneRouter, ValidationError, APIError, RateLimitError
-
-client = OneRouter(api_key="unf_live_xxx")
-
-try:
-    payment = client.payments.create(amount=1000, currency="USD")
-except ValidationError as e:
-    print(f"Invalid input: {e}")
-except RateLimitError as e:
-    print(f"Rate limited. Retry after: {e.retry_after}s")
-except APIError as e:
-    print(f"API error: {e.code} - {e.message}")
-except Exception as e:
-    print(f"Unexpected error: {e}")`}
-            </pre>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Renders the JavaScript SDK documentation section for the docs page.
- *
- * Includes installation commands, base URL guidance, a complete SDK setup example,
- * and usage examples for sending SMS, creating payments, and sending email.
- *
- * @returns The JSX element for the JavaScript SDK documentation section.
- */
-function JSSDKSection({ setActiveSection }: { setActiveSection: (section: string) => void }) {
-  return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-white mb-4">JavaScript SDK</h1>
-        <p className="text-gray-300 leading-relaxed">
-          OneRouter JavaScript SDK for Node.js, browsers, and edge environments. Supports async/await and all modern JavaScript runtimes.
-        </p>
-      </div>
-
-      {/* Installation */}
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Installation</h3>
-        <div className="space-y-4">
-          <div>
-            <h4 className="text-white font-medium mb-2">npm</h4>
-            <div className="border border-gray-700 rounded p-3 bg-gray-900">
-              <code className="text-green-400">npm install onerouter-js</code>
-            </div>
-          </div>
-          <div>
-            <h4 className="text-white font-medium mb-2">yarn</h4>
-            <div className="border border-gray-700 rounded p-3 bg-gray-900">
-              <code className="text-green-400">yarn add onerouter-js</code>
-            </div>
-          </div>
-          <div>
-            <h4 className="text-white font-medium mb-2">pnpm</h4>
-            <div className="border border-gray-700 rounded p-3 bg-gray-900">
-              <code className="text-green-400">pnpm add onerouter-js</code>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Base URLs */}
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Base URLs</h3>
-        <div className="space-y-4">
-          <div>
-            <h4 className="text-white font-medium mb-2">Development (Local)</h4>
-            <div className="border border-gray-700 rounded p-3">
-              <code className="text-white">http://localhost:8000</code>
-            </div>
-          </div>
-          <div>
-            <h4 className="text-white font-medium mb-2">Production</h4>
-            <div className="border border-gray-700 rounded p-3">
-              <code className="text-white">https://api.yourdomain.com</code>
-            </div>
-            <p className="text-gray-400 text-sm mt-2">Replace with your actual production API URL</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Complete Setup */}
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Complete SDK Setup</h3>
-        <div className="border border-gray-700 rounded p-4 bg-gray-900">
-          <pre className="text-white text-sm overflow-x-auto">
-{`import { OneRouter } from 'onerouter-js';
-
-// Production - Use environment variable or actual URL
-const client = new OneRouter({
-  apiKey: process.env.ONEROUTER_API_KEY || 'unf_live_your_production_key',
-  baseURL: process.env.ONEROUTER_BASE_URL || 'https://api.yourdomain.com',
-  timeout: 30000,
-  maxRetries: 3
-});`}
-          </pre>
-        </div>
-      </div>
-
-      {/* Usage Examples */}
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Usage Examples</h3>
-        
-        <div className="mb-6">
-          <h4 className="text-white font-medium mb-2">Send SMS</h4>
-          <div className="border border-gray-700 rounded p-4 bg-gray-900">
-            <pre className="text-white text-sm overflow-x-auto">
-{`const client = new OneRouter({ apiKey: 'unf_live_xxx' });
-
-// Basic SMS
-const sms = await client.sms.send({
-  to: '+1234567890',
-  body: 'Hello from OneRouter!'
-});
-console.log('SMS ID:', sms.message_id);
-
-// With idempotency
-const sms2 = await client.sms.send({
-  to: '+1234567890',
-  body: 'Idempotent message',
-  idempotencyKey: crypto.randomUUID()
-});`}
-            </pre>
-          </div>
-        </div>
-
-        <div className="mb-6">
-          <h4 className="text-white font-medium mb-2">Create Payment</h4>
-          <div className="border border-gray-700 rounded p-4 bg-gray-900">
-            <pre className="text-white text-sm overflow-x-auto">
-{`const payment = await client.payments.create({
-  amount: 1000,  // ₹10.00 or $10.00
-  currency: 'INR',
-  customerId: 'cust_123',
-  paymentMethod: {
-    type: 'card',
-    card: {
-      number: '4242424242424242',
-      expiryMonth: '12',
-      expiryYear: '2028',
-      cvv: '123'
-    }
-  }
+  provider: 'twilio',
+  to: '+919876543210',
+  message: 'Your OTP is 123456'
 });
 
-console.log('Payment ID:', payment.transactionId);
-console.log('Checkout URL:', payment.checkoutUrl);`}
-            </pre>
-          </div>        </div>
-
-        <div>
-          <h4 className="text-white font-medium mb-2">Send Email</h4>
-          <div className="border border-gray-700 rounded p-4 bg-gray-900">
-            <pre className="text-white text-sm overflow-x-auto">
-{`const email = await client.email.send({
+// Send Email
+const email = await client.email.send({
+  provider: 'resend',
   to: 'user@example.com',
   subject: 'Welcome!',
-  htmlBody: '<h1>Welcome to OneRouter</h1>',
-  textBody: 'Welcome to OneRouter'
-});
+  html: '<h1>Welcome</h1>'
+});`}
+                  language="javascript"
+                  id="sdk-js-example"
+                />
+              </div>
 
-console.log('Email ID:', email.emailId);`}
-            </pre>
-          </div>
+              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+                <p className="text-green-300 text-sm">
+                  ✓ Both SDKs support async/await and have full type hints for IDE autocomplete.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Renders the SMS Integration documentation section with prerequisites, sample usage for sending SMS,
- * advanced options (custom from number, idempotency), delivery status retrieval, and pricing notes.
- *
- * @returns The JSX element for the SMS documentation section
- */
-function SMSSection({ setActiveSection }: { setActiveSection: (section: string) => void }) {
-  return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-white mb-4">SMS Integration</h1>
-        <p className="text-gray-300 leading-relaxed">
-          Send SMS messages via Twilio with delivery tracking. Configure your Twilio credentials in the dashboard, then use our unified API.
-        </p>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Prerequisites</h3>
-        <ul className="text-gray-300 space-y-2">
-          <li>• Twilio Account with phone number</li>
-          <li>• API credentials configured in dashboard</li>
-          <li>• SMS credits in your Twilio account</li>
-        </ul>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Send SMS</h3>
-        <div className="border border-gray-700 rounded p-4 bg-gray-900">
-          <pre className="text-white text-sm overflow-x-auto">
-{`from onerouter import OneRouter
-
-client = OneRouter(api_key="unf_live_xxx")
-
-# Basic SMS
-sms = client.sms.send(
-    to="+1234567890",
-    body="Your verification code is 1234"
-)
-
-print("SMS sent:", sms['message_id'])
-print("Status:", sms['status'])  # sent, delivered, failed
-print("Cost:", sms['cost'])  # Cost in credits`}
-          </pre>
-        </div>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Advanced Options</h3>
-        <div className="space-y-4">
-          <div>
-            <h4 className="text-white font-medium mb-2">Custom From Number</h4>
-            <div className="border border-gray-700 rounded p-4 bg-gray-900">
-              <pre className="text-white text-sm overflow-x-auto">
-{`sms = client.sms.send(
-    to="+1234567890",
-    body="Custom sender message",
-    from_number="+0987654321"  # Your Twilio number
-)`}
-              </pre>
-            </div>
-          </div>
-          <div>
-            <h4 className="text-white font-medium mb-2">Idempotency</h4>
-            <div className="border border-gray-700 rounded p-4 bg-gray-900">
-              <pre className="text-white text-sm overflow-x-auto">
-{`import uuid
-
-sms = client.sms.send(
-    to="+1234567890",
-    body="Idempotent message",
-    idempotency_key=str(uuid.uuid4())
-)`}
-              </pre>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Get SMS Status</h3>
-        <div className="border border-gray-700 rounded p-4 bg-gray-900">
-          <pre className="text-white text-sm overflow-x-auto">
-{`# Get delivery status
-status = client.sms.get_status("SM1234567890")
-
-print("Status:", status['status'])  # queued, sent, delivered, failed
-print("To:", status['to'])
-print("Delivered at:", status.get('delivered_at'))`}
-          </pre>
-        </div>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Pricing</h3>
-        <p className="text-gray-300 mb-4">Cost: 1 credit per SMS ($0.01 per SMS)</p>
-        <p className="text-gray-400 text-sm">Note: You also pay Twilio&apos;s standard per-SMS fees directly to Twilio.</p>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Renders the Email Integration documentation section for OneRouter.
- *
- * This section presents prerequisites, examples for sending emails (including attachments and reply-to),
- * instructions for retrieving email status, and pricing notes related to Resend integration.
- *
- * @returns A JSX element containing the email integration documentation UI.
- */
-function EmailSection({ setActiveSection }: { setActiveSection: (section: string) => void }) {
-  return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-white mb-4">Email Integration</h1>
-        <p className="text-gray-300 leading-relaxed">
-          Send transactional emails via Resend with delivery tracking. Configure your Resend API key in the dashboard.
-        </p>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Prerequisites</h3>
-        <ul className="text-gray-300 space-y-2">
-          <li>• Resend Account</li>
-          <li>• Verified sending domain or email</li>
-          <li>• API key configured in dashboard</li>
-        </ul>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Send Email</h3>
-        <div className="border border-gray-700 rounded p-4 bg-gray-900">
-          <pre className="text-white text-sm overflow-x-auto">
-{`from onerouter import OneRouter
-
-client = OneRouter(api_key="unf_live_xxx")
-
-# Basic email
-email = client.email.send(
-    to="user@example.com",
-    subject="Welcome to OneRouter",
-    html_body="<h1>Welcome!</h1><p>Thanks for signing up.</p>",
-    text_body="Welcome! Thanks for signing up."
-)
-
-print("Email sent:", email['email_id'])
-print("Status:", email['status'])`}
-          </pre>
-        </div>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Advanced Options</h3>
-        <div className="space-y-4">
-          <div>
-            <h4 className="text-white font-medium mb-2">With Attachments</h4>
-            <div className="border border-gray-700 rounded p-4 bg-gray-900">
-              <pre className="text-white text-sm overflow-x-auto">
-{`email = client.email.send(
-    to="user@example.com",
-    subject="Your Invoice",
-    html_body="<h1>Invoice</h1><p>Please find your invoice attached.</p>",
-    attachments=[
-        {
-            "filename": "invoice.pdf",
-            "content": base64.b64encode(open("invoice.pdf", "rb").read()).decode(),
-            "content_type": "application/pdf"
-        }
-    ]
-)`}
-              </pre>
-            </div>
-          </div>
-          <div>
-            <h4 className="text-white font-medium mb-2">Reply-To</h4>
-            <div className="border border-gray-700 rounded p-4 bg-gray-900">
-              <pre className="text-white text-sm overflow-x-auto">
-{`email = client.email.send(
-    to="user@example.com",
-    subject="Question about order",
-    html_body="<p>Hi, I have a question...</p>",
-    reply_to="support@yourcompany.com"
-)`}
-              </pre>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Get Email Status</h3>
-        <div className="border border-gray-700 rounded p-4 bg-gray-900">
-          <pre className="text-white text-sm overflow-x-auto">
-{`status = client.email.get_status("email_123")
-
-print("Status:", status['status'])  # sent, delivered, opened, bounced
-print("Opened at:", status.get('opened_at'))`}
-          </pre>
-        </div>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Pricing</h3>
-        <p className="text-gray-300 mb-4">Cost: 1 credit per email ($0.01 per email)</p>
-        <p className="text-gray-400 text-sm">Note: You also pay Resend&apos;s fees directly to Resend.</p>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Renders the Payments documentation section for the docs page.
- *
- * Includes supported payment methods (India and international), feature list (subscriptions, refunds, multi-currency),
- * example usage for creating UPI and card payments, payment operations (get status, refund), and pricing notes.
- *
- * @returns A React element containing the payments documentation UI
- */
-function PaymentsSection({ setActiveSection }: { setActiveSection: (section: string) => void }) {
-  return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-white mb-4">Payment Integration</h1>
-        <p className="text-gray-300 leading-relaxed">
-          Process payments with multiple providers (Razorpay, PayPal, Stripe) through one unified API. Use your existing provider accounts.
-        </p>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Supported Payment Methods</h3>
-        <div className="grid md:grid-cols-3 gap-4">
-          <div className="p-4 border border-gray-700 rounded">
-            <h4 className="text-white font-medium mb-2">🇮🇳 India</h4>
-            <ul className="text-gray-300 text-sm space-y-1">
-              <li>• UPI</li>
-              <li>• Credit/Debit Cards</li>
-              <li>• Net Banking</li>
-              <li>• Wallets</li>
-            </ul>
-          </div>
-          <div className="p-4 border border-gray-700 rounded">
-            <h4 className="text-white font-medium mb-2">🌍 International</h4>
-            <ul className="text-gray-300 text-sm space-y-1">
-              <li>• Credit/Debit Cards</li>
-              <li>• PayPal</li>
-              <li>• Apple Pay / Google Pay</li>
-            </ul>
-          </div>
-          <div className="p-4 border border-gray-700 rounded">
-            <h4 className="text-white font-medium mb-2">💰 Features</h4>
-            <ul className="text-gray-300 text-sm space-y-1">
-              <li>• One-time payments</li>
-              <li>• Subscriptions</li>
-              <li>• Refunds</li>
-              <li>• Multi-currency</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Create Payment</h3>
-        <div className="border border-gray-700 rounded p-4 bg-gray-900">
-          <pre className="text-white text-sm overflow-x-auto">
-{`from onerouter import OneRouter
-
-client = OneRouter(api_key="unf_live_xxx")
-
-# UPI Payment (India)
-payment = client.payments.create(
-    amount=1000,  # ₹10.00
-    currency="INR",
-    customer_id="cust_123",
-    payment_method={
-        "type": "upi",
-        "upi": {
-            "vpa": "customer@upi"
-        }
-    }
-)
-
-print("Payment ID:", payment['transaction_id'])
-print("Checkout URL:", payment.get('checkout_url'))`}
-          </pre>
-        </div>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Card Payment</h3>
-        <div className="border border-gray-700 rounded p-4 bg-gray-900">
-          <pre className="text-white text-sm overflow-x-auto">
-{`# Card Payment (International)
-payment = client.payments.create(
-    amount=2500,  # $25.00
-    currency="USD",
-    customer_id="cust_123",
-    payment_method={
-        "type": "card",
-        "card": {
-            "number": "4242424242424242",
-            "expiry_month": "12",
-            "expiry_year": "2028",
-            "cvv": "123"
-        }
-    }
-)`}
-          </pre>
-        </div>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Payment Operations</h3>
-        <div className="grid md:grid-cols-2 gap-4">
-          <div className="border border-gray-700 rounded p-4">
-            <h4 className="text-white font-medium mb-2">Get Payment Status</h4>
-            <pre className="text-white text-xs overflow-x-auto">
-{`status = client.payments.get(payment['transaction_id'])
-print("Status:", status['status'])`}
-            </pre>
-          </div>
-          <div className="border border-gray-700 rounded p-4">
-            <h4 className="text-white font-medium mb-2">Refund Payment</h4>
-            <pre className="text-white text-xs overflow-x-auto">
-{`refund = client.payments.refund(
-    payment_id=payment['transaction_id'],
-    amount=500  # Partial refund
-)`}
-            </pre>
-          </div>
-        </div>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Pricing</h3>
-        <p className="text-gray-300 mb-4">Cost: 1 credit per payment API call ($0.01 per call)</p>
-        <p className="text-gray-400 text-sm">Note: You also pay your provider&apos;s transaction fees (Razorpay: ~2%, PayPal: ~3%) directly to them.</p>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Renders the REST API reference section of the documentation page.
- *
- * Provides base URLs, authentication examples, SMS/Payment/Email endpoint examples,
- * common error response samples, rate limit information, and a link to the interactive Swagger UI.
- *
- * @returns A JSX element containing the API reference content for display in the docs page.
- */
-function APISection({ setActiveSection }: { setActiveSection: (section: string) => void }) {
-  return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-white mb-4">REST API Reference</h1>
-        <p className="text-gray-300 leading-relaxed">
-          Complete REST API documentation. Use any HTTP client to integrate with OneRouter.
-        </p>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Base URLs</h3>
-        <div className="space-y-4">
-          <div>
-            <h4 className="text-white font-medium mb-2">Development</h4>
-            <div className="border border-gray-700 rounded p-3">
-              <code className="text-white">http://localhost:8000/v1</code>
-            </div>
-          </div>
-          <div>
-            <h4 className="text-white font-medium mb-2">Production</h4>
-            <div className="border border-gray-700 rounded p-3">
-              <code className="text-white">https://api.yourdomain.com/v1</code>
-            </div>
-            <p className="text-gray-400 text-sm mt-2">Replace with your actual production API URL</p>
-          </div>
-          <div className="bg-cyan-900/20 border border-cyan-500/30 rounded p-4">
-            <p className="text-cyan-400 text-sm">
-              <strong>Full API Docs:</strong> Visit <code className="text-cyan-300">/docs</code> on your API server for interactive Swagger documentation.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Authentication</h3>
-        <div className="border border-gray-700 rounded p-4 bg-gray-900">
-          <pre className="text-white text-sm overflow-x-auto">
-{`# Bearer Token Authentication
-curl -H "Authorization: Bearer unf_live_your_api_key_here" \
-     http://localhost:8000/v1/sms
-
-# Or API Key in header
-curl -H "X-API-Key: unf_live_your_api_key_here" \
-     http://localhost:8000/v1/sms`}
-          </pre>
-        </div>
-        <p className="text-gray-400 text-sm mt-4">
-          API Key Format: <code className="text-cyan-400">unf_live_xxxxxxxxxxxxxxxxxxxxxxxx</code> or <code className="text-cyan-400">unf_test_xxxxxxxxxxxxxxxxxxxxxxxx</code>
-        </p>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">SMS Endpoints</h3>
-        <div className="space-y-4">
-          <div>
-            <h4 className="text-white font-medium mb-2">Send SMS</h4>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-green-400 font-mono">POST</span>
-              <code className="text-white">/v1/sms</code>
-            </div>
-            <div className="border border-gray-700 rounded p-4 bg-gray-900">
-              <pre className="text-white text-sm overflow-x-auto">
-{`curl -X POST http://localhost:8000/v1/sms \
-  -H "Authorization: Bearer unf_live_xxx" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "to": "+1234567890",
-    "body": "Hello from OneRouter!",
-    "idempotency_key": "unique-key-123"
-  }'
-
-# Response
-{
-  "message_id": "SM1234567890",
-  "status": "sent",
-  "cost": 1
-}`}
-              </pre>
-            </div>
-          </div>
-
-          <div>
-            <h4 className="text-white font-medium mb-2">Get SMS Status</h4>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-blue-400 font-mono">GET</span>
-              <code className="white">{`/v1/sms/{message_id}`}</code>
-            </div>
-            <div className="border border-gray-700 rounded p-4 bg-gray-900">
-              <pre className="text-white text-sm overflow-x-auto">
-{`curl -H "Authorization: Bearer unf_live_xxx" \
-     http://localhost:8000/v1/sms/SM1234567890`}
-              </pre>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Payment Endpoints</h3>
-        <div className="space-y-4">
-          <div>
-            <h4 className="text-white font-medium mb-2">Create Payment Order</h4>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-green-400 font-mono">POST</span>
-              <code className="text-white">/v1/payments/orders</code>
-            </div>
-            <div className="border border-gray-700 rounded p-4 bg-gray-900">
-              <pre className="text-white text-sm overflow-x-auto">
-{`curl -X POST http://localhost:8000/v1/payments/orders \
-  -H "Authorization: Bearer unf_live_xxx" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "amount": 1000,
-    "currency": "INR",
-    "customer_id": "cust_123",
-    "payment_method": {
-      "type": "upi",
-      "upi": {"vpa": "customer@upi"}
-    }
-  }'
-
-# Response
-{
-  "transaction_id": "txn_123",
-  "status": "pending",
-  "checkout_url": "https://checkout...",
-  "provider": "razorpay"
-}`}
-              </pre>
-            </div>
-          </div>
-
-          <div>
-            <h4 className="text-white font-medium mb-2">Get Payment</h4>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-blue-400 font-mono">GET</span>
-              <code className="text-white">{`/v1/payments/orders/{transaction_id}`}</code>
-            </div>
-          </div>
-
-          <div>
-            <h4 className="text-white font-medium mb-2">Capture Payment</h4>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-green-400 font-mono">POST</span>
-              <code className="text-white">{`/v1/payments/capture`}</code>
-            </div>
-          </div>
-
-          <div>
-            <h4 className="text-white font-medium mb-2">Refund Payment</h4>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-green-400 font-mono">POST</span>
-              <code className="text-white">{`/v1/payments/refunds`}</code>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Email Endpoints</h3>
-        <div className="space-y-4">
-          <div>
-            <h4 className="text-white font-medium mb-2">Send Email</h4>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-green-400 font-mono">POST</span>
-              <code className="text-white">/v1/email</code>
-            </div>
-            <div className="border border-gray-700 rounded p-4 bg-gray-900">
-              <pre className="text-white text-sm overflow-x-auto">
-{`curl -X POST http://localhost:8000/v1/email \
-  -H "Authorization: Bearer unf_live_xxx" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "to": "user@example.com",
-    "subject": "Welcome",
-    "html_body": "<h1>Welcome!</h1>"
-  }'`}
-              </pre>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Error Responses</h3>
-        <div className="space-y-4">
-          <div>
-            <h4 className="text-red-400 font-medium mb-2">400 Bad Request</h4>
-            <div className="border border-gray-700 rounded p-4 bg-gray-900">
-              <pre className="text-white text-sm overflow-x-auto">
-{`{
-  "detail": "Validation error",
-  "errors": [{"field": "to", "message": "Invalid phone format"}]
-}`}
-              </pre>
-            </div>
-          </div>
-          <div>
-            <h4 className="text-red-400 font-medium mb-2">401 Unauthorized</h4>
-            <div className="border border-gray-700 rounded p-4 bg-gray-900">
-              <pre className="text-white text-sm">
-{`{"detail": "Invalid API key"}`}
-              </pre>
-            </div>
-          </div>
-          <div>
-            <h4 className="text-yellow-400 font-medium mb-2">429 Rate Limited</h4>
-            <div className="border border-gray-700 rounded p-4 bg-gray-900">
-              <pre className="text-white text-sm">
-{`{"detail": "Rate limit exceeded", "retry_after": 60}`}
-              </pre>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Rate Limits</h3>
-        <div className="text-gray-300 space-y-2">
-          <div className="flex justify-between">
-            <span>All endpoints</span>
-            <span className="text-cyan-400">60 requests/minute</span>
-          </div>
-        </div>
-        <p className="text-gray-400 text-sm mt-4">
-          Rate limits are applied per API key. Contact support for higher limits.
-        </p>
-      </div>
-
-      {/* Link to Interactive API Docs */}
-      <div className="border border-cyan-500/30 rounded-lg p-6 bg-cyan-900/10">
-        <h3 className="text-xl font-semibold text-cyan-400 mb-4">Interactive API Documentation</h3>
-        <p className="text-gray-300 mb-4">
-          For complete, interactive API documentation with try-it-out functionality, visit the Swagger UI:
-        </p>
-        <div className="bg-[#1a1a1a] border border-cyan-500/30 rounded p-4">
-          <code className="text-cyan-400">http://localhost:8000/docs</code>
-        </div>
-        <p className="text-gray-400 text-sm mt-4">
-          The Swagger documentation includes all endpoints, request/response schemas, and allows you to test API calls directly from your browser.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Render the Management API documentation section showing available management endpoints and authentication details.
- *
- * This component displays grouped cards for API Keys Management, Connected Services Management, Environment Management,
- * Onboarding, and an authentication example required to call the management endpoints.
- *
- * @returns A React element containing the Management API documentation UI.
- */
-function ManagementAPISection({ setActiveSection }: { setActiveSection: (section: string) => void }) {
-  return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-white mb-4">Management API</h1>
-        <p className="text-gray-300 leading-relaxed">
-          Manage your OneRouter account, API keys, and connected services programmatically.
-        </p>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">API Keys Management</h3>
-        <div className="space-y-6">
-          <div>
-            <h4 className="text-white font-medium mb-2">List API Keys</h4>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-blue-400 font-mono">GET</span>
-              <code className="text-white">/api/keys</code>
-            </div>
-          </div>
-
-          <div>
-            <h4 className="text-white font-medium mb-2">Create API Key</h4>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-green-400 font-mono">POST</span>
-              <code className="text-white">/api/keys</code>
-            </div>
-          </div>
-
-          <div>
-            <h4 className="text-white font-medium mb-2">Delete API Key</h4>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-red-400 font-mono">DELETE</span>
-              <code className="text-white">{`/api/keys/{key_id}`}</code>
-            </div>
-          </div>
-
-          <div>
-            <h4 className="text-white font-medium mb-2">Disable/Enable API Key</h4>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-green-400 font-mono">POST</span>
-              <code className="text-white">{`/api/keys/{key_id}/disable`}</code>
-              <span className="text-green-400 font-mono">POST</span>
-              <code className="text-white">{`/api/keys/{key_id}/enable`}</code>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Connected Services Management</h3>
-        <div className="space-y-6">
-          <div>
-            <h4 className="text-white font-medium mb-2">List Connected Services</h4>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-blue-400 font-mono">GET</span>
-              <code className="text-white">/api/services</code>
-            </div>
-          </div>
-
-          <div>
-            <h4 className="text-white font-medium mb-2">Get Service Status</h4>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-blue-400 font-mono">GET</span>
-              <code className="text-white">{`/api/services/{service_name}/status`}</code>
-            </div>
-          </div>
-
-          <div>
-            <h4 className="text-white font-medium mb-2">Update Service Credentials</h4>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-yellow-400 font-mono">PUT</span>
-              <code className="text-white">{`/api/services/{service_name}/credentials`}</code>
-            </div>
-          </div>
-
-          <div>
-            <h4 className="text-white font-medium mb-2">Delete/Disconnect Service</h4>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-red-400 font-mono">DELETE</span>
-              <code className="text-white">{`/api/services/{service_name}`}</code>
-            </div>
-          </div>
-
-          <div>
-            <h4 className="text-white font-medium mb-2">Disconnect All Services</h4>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-red-400 font-mono">DELETE</span>
-              <code className="text-white">/api/services</code>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Environment Management</h3>
-        <div className="space-y-6">
-          <div>
-            <h4 className="text-white font-medium mb-2">Get Service Environments</h4>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-blue-400 font-mono">GET</span>
-              <code className="text-white">{`/api/{service_name}/environments`}</code>
-            </div>
-          </div>
-
-          <div>
-            <h4 className="text-white font-medium mb-2">Switch Service Environment</h4>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-green-400 font-mono">POST</span>
-              <code className="text-white">{`/api/{service_name}/switch-environment`}</code>
-            </div>
-          </div>
-
-          <div>
-            <h4 className="text-white font-medium mb-2">Switch All Environments</h4>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-green-400 font-mono">POST</span>
-              <code className="text-white">/api/services/switch-all-environments</code>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Onboarding</h3>
-        <div className="space-y-6">
-          <div>
-            <h4 className="text-white font-medium mb-2">Parse .env File</h4>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-green-400 font-mono">POST</span>
-              <code className="text-white">/api/onboarding/parse</code>
-            </div>
-          </div>
-
-          <div>
-            <h4 className="text-white font-medium mb-2">Configure Services</h4>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-green-400 font-mono">POST</span>
-              <code className="text-white">/api/onboarding/configure</code>
-            </div>
-          </div>
-
-          <div>
-            <h4 className="text-white font-medium mb-2">Get User Services</h4>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-blue-400 font-mono">GET</span>
-              <code className="text-white">/api/onboarding/services</code>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-cyan-900/10 border border-cyan-500/30 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-cyan-400 mb-4">Authentication Required</h3>
-        <p className="text-gray-300 mb-4">
-          All management API endpoints require authentication with a valid API key.
-        </p>
-        <div className="bg-[#1a1a1a] border border-gray-700 rounded p-4">
-          <pre className="text-white text-sm">
-{`curl -H "Authorization: Bearer unf_live_your_api_key" \
-     http://localhost:8000/api/services`}
-          </pre>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Renders the Troubleshooting documentation section with common issues, debugging tips, and support resources.
- *
- * @returns A JSX element containing troubleshooting content: common issues and their checks, debugging tips (including example debug logging and mode guidance), and links to additional help resources.
- */
-function TroubleshootingSection({ setActiveSection }: { setActiveSection: (section: string) => void }) {
-  return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-white mb-4">Troubleshooting</h1>
-        <p className="text-gray-300 leading-relaxed">
-          Common issues and solutions when integrating OneRouter.
-        </p>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Common Issues</h3>
-        <div className="space-y-6">
-          <div>
-            <h4 className="text-white font-medium mb-2"> 401 Invalid API Key</h4>
-            <ul className="text-gray-300 text-sm space-y-2 ml-4 list-disc">
-              <li>Check that you&apos;re using the correct API key (not test key in production)</li>
-              <li>Verify there are no extra spaces in the Authorization header</li>
-              <li>Ensure your API key hasn&apos;t been revoked from the dashboard</li>
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="text-white font-medium mb-2"> Service Not Configured</h4>
-            <ul className="text-gray-300 text-sm space-y-2 ml-4 list-disc">
-              <li>Go to dashboard and configure credentials for the service you&apos;re using</li>
-              <li>For SMS: Configure Twilio credentials</li>
-              <li>For Payments: Configure Razorpay/PayPal/Stripe credentials</li>
-              <li>For Email: Configure Resend credentials</li>
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="text-white font-medium mb-2"> Payment Not Processing</h4>
-            <ul className="text-gray-300 text-sm space-y-2 ml-4 list-disc">
-              <li>Verify your provider account has sufficient balance</li>
-              <li>Check that provider credentials are correct and not expired</li>
-              <li>Ensure you&apos;re using the correct environment (test/live)</li>
-              <li>Check provider dashboard for any account issues</li>
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="text-white font-medium mb-2">❌ SMS Not Delivering</h4>
-            <ul className="text-gray-300 text-sm space-y-2 ml-4 list-disc">
-              <li>Verify phone number is in E.164 format (+1234567890)</li>
-              <li>Check Twilio account has SMS credits</li>
-              <li>Ensure the from number is verified in Twilio</li>
-              <li>Check for carrier blocking or message filtering</li>
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="text-white font-medium mb-2">❌ 429 Rate Limit Exceeded</h4>
-            <ul className="text-gray-300 text-sm space-y-2 ml-4 list-disc">
-              <li>Implement exponential backoff in your code</li>
-              <li>Reduce request frequency</li>
-              <li>Wait the specified retry_after duration</li>
-              <li>Contact support if you need higher limits</li>
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="text-white font-medium mb-2"> Webhooks Not Working</h4>
-            <ul className="text-gray-300 text-sm space-y-2 ml-4 list-disc">
-              <li>Verify your webhook endpoint is publicly accessible</li>
-              <li>Check that your server is returning 200 OK quickly</li>
-              <li>Verify webhook signature if enabled</li>
-              <li>Check your server logs for incoming webhook requests</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Debugging Tips</h3>
-        <div className="space-y-4">
-          <div>
-            <h4 className="text-white font-medium mb-2">Enable Debug Logging</h4>
-            <div className="border border-gray-700 rounded p-4 bg-gray-900">
-              <pre className="text-white text-sm overflow-x-auto">
-{`import logging
-logging.basicConfig(level=logging.DEBUG)
-
-from onerouter import OneRouter
-client = OneRouter(api_key="unf_live_xxx")
-# Now you'll see detailed request/response logs`}
-              </pre>
-            </div>
-          </div>
-
-          <div>
-            <h4 className="text-white font-medium mb-2">Test Mode vs Live Mode</h4>
-            <p className="text-gray-300 text-sm">
-              Use <code className="text-cyan-400">unf_test_</code> keys for development. These hit sandbox/test endpoints where no real charges occur. Switch to <code className="text-cyan-400">unf_live_</code> keys for production.
-            </p>
-          </div>
-
-          <div>
-            <h4 className="text-white font-medium mb-2">Check Dashboard Logs</h4>
-            <p className="text-gray-300 text-sm">
-              Your dashboard shows all API requests, errors, and usage. This is the best place to debug issues.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="border border-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">Need More Help?</h3>
-        <p className="text-gray-300 mb-4">
-          If you&apos;re still having issues, check these resources:
-        </p>
-        <ul className="text-gray-300 space-y-2">
-          <li>• Dashboard: Check your usage logs and error messages</li>
-          <li>• GitHub Issues: Report bugs or request features</li>
-          <li>• Email: Contact support through dashboard</li>
-        </ul>
       </div>
     </div>
   );

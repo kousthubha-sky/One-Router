@@ -36,14 +36,6 @@ const PayPalLogo = () => (
   </svg>
 )
 
-const StripeLogo = () => (
-  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-6 h-6">
-    <rect width="24" height="24" rx="4" fill="#5469D4"/>
-    <path d="M7 9V15C7 17.2091 8.79086 19 11 19H17V17H11C10.4477 17 10 16.5523 10 16V9H7Z" fill="white"/>
-    <path d="M12 7H10V8H12C12.5523 8 13 8.44772 13 9V14H15V9C15 7.89543 14.1046 7 13 7H12Z" fill="white"/>
-  </svg>
-)
-
 const TwilioLogo = () => (
   <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-6 h-6">
     <rect width="24" height="24" rx="4" fill="#F22F46"/>
@@ -112,7 +104,6 @@ function ServiceLogo({ serviceName }: { serviceName: string }) {
   const logoMap: Record<string, React.ReactNode> = {
     razorpay: <RazorpayLogo />,
     paypal: <PayPalLogo />,
-    stripe: <StripeLogo />,
     twilio: <TwilioLogo />,
     resend: <ResendLogo />,
     mailgun: <MailgunLogo />,
@@ -125,7 +116,6 @@ function ServiceLogo({ serviceName }: { serviceName: string }) {
   const serviceColors: Record<string, { bg: string; text: string }> = {
     razorpay: { bg: "bg-blue-500/20", text: "text-blue-400" },
     paypal: { bg: "bg-blue-600/20", text: "text-blue-300" },
-    stripe: { bg: "bg-purple-500/20", text: "text-purple-400" },
     twilio: { bg: "bg-red-500/20", text: "text-red-400" },
     resend: { bg: "bg-pink-500/20", text: "text-pink-400" },
     mailgun: { bg: "bg-orange-500/20", text: "text-orange-400" },

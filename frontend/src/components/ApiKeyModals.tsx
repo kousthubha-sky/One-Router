@@ -36,7 +36,7 @@ export function EditApiKeyModal({
 }: EditApiKeyModalProps) {
   const [formData, setFormData] = useState({
     key_name: apiKey?.key_name || '',
-    rate_limit_per_min: apiKey?.rate_limit_per_min || 60,
+    rate_limit_per_min: apiKey?.rate_limit_per_min || 100,
     rate_limit_per_day: apiKey?.rate_limit_per_day || 10000
   });
 

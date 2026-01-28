@@ -77,6 +77,12 @@ class Settings:
         "ONEROUTER_API_BASE_URL",
         "https://one-router-clyl.onrender.com"
     )
+    
+    # Demo URL for fallback checkout (used in development only)
+    DEMO_CHECKOUT_URL: str = os.getenv(
+        "DEMO_CHECKOUT_URL",
+        "https://demo.onerouter.com"
+    )
 
     def __init__(self):
         """Initialize settings and validate/generate encryption key"""

@@ -97,7 +97,6 @@ export default function CreateSubscriptionPage() {
                     className="w-full px-3 py-2 bg-[#0a0a0a] border border-[#333] rounded-md text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
                   >
                     <option value="">Select a provider</option>
-                    <option value="stripe">Stripe</option>
                     <option value="razorpay">Razorpay</option>
                     <option value="paypal">PayPal</option>
                   </select>
@@ -194,7 +193,7 @@ export default function CreateSubscriptionPage() {
               <ul className="text-sm text-[#888] space-y-2">
                 <li className="flex gap-2">
                   <span className="text-cyan-500">•</span>
-                  <span><strong>Provider:</strong> The payment platform (Stripe, Razorpay, PayPal)</span>
+                  <span><strong>Provider:</strong> The payment platform (Razorpay, PayPal)</span>
                 </li>
                 <li className="flex gap-2">
                   <span className="text-cyan-500">•</span>

@@ -205,7 +205,6 @@ export function GlobalEnvironmentToggle({ services, onGlobalSwitch, apiClient }:
                 const setupRoutes: Record<string, string> = {
                   razorpay: '/razorpay-setup',
                   paypal: '/paypal-setup',
-                  stripe: '/stripe-setup',
                   twilio: '/onboarding',
                 };
                 const setupRoute = setupRoutes[service.toLowerCase()] || '/onboarding';

@@ -52,7 +52,6 @@ export function EditServiceModal({ service, trigger, onDelete }: EditServiceModa
     const fieldMappings: Record<string, string[]> = {
       razorpay: ['RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET'],
       paypal: ['PAYPAL_CLIENT_ID', 'PAYPAL_CLIENT_SECRET'],
-      stripe: ['STRIPE_PUBLISHABLE_KEY', 'STRIPE_SECRET_KEY'],
     };
     return fieldMappings[serviceName] || [];
   };

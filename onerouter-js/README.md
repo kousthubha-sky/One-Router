@@ -91,7 +91,29 @@ console.log('Plan:', subscription.plan_id);
 console.log('Cycle:', subscription.current_cycle);
 ```
 
-### 4. Send Email
+### 4. Create Payment Link
+
+```typescript
+// Create Razorpay payment link
+const razorpayLink = await client.paymentLinks.create({
+    amount: 1000,
+    description: "Product Purchase",
+    provider: "razorpay",
+    environment: "test"
+});
+console.log('Razorpay Checkout:', razorpayLink.checkout_url);
+
+// Create PayPal payment link
+const paypalLink = await client.paymentLinks.create({
+    amount: 10,
+    description: "Credit Purchase",
+    provider: "paypal",
+    environment: "test"
+});
+console.log('PayPal Checkout:', paypalLink.checkout_url);
+```
+
+### 6. Send Email
 
 ```typescript
 const emailResult = await client.email.send({
@@ -105,11 +127,11 @@ console.log('✅ Email sent:', emailResult.email_id);
 console.log('📧 Status:', emailResult.status);
 ```
 
-### 5. Handle Error
+### 7. Handle Error
 
 ```typescript
 try {
-    const order = await client.payments.create(amount: 500.00, currency: 'INR');
+    const order = await client.payments.create({ amount: 500.00, currency: 'INR' });
 } catch (error) {
     if (error.name === 'AuthenticationError') {
         console.error('❌ Invalid API key');

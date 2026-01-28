@@ -294,7 +294,7 @@ export default function Home() {
                     <div className="ml-4">apiKey: process.env.KEY</div>
                     <div className="ml-4">{'}'})</div>
                     <div className="mt-3 pt-3 border-t border-[#222]"><span className="text-[#00ff88]"># Use any service with the same API</span></div>
-                    <div><span className="text-[#00ff88]">await router.call(&apos;stripe.charge&apos;, ...)</span></div>
+                    <div><span className="text-[#00ff88]">await router.call(&apos;razorpay.charge&apos;, ...)</span></div>
                     <div><span className="text-[#00ff88]">await router.call(&apos;paypal.payment&apos;, ...)</span></div>
                   </div>
                 </div>
@@ -350,7 +350,7 @@ export default function Home() {
                 {
                   num: "03",
                   title: "Integrate",
-                  code: "await router.call(&apos;stripe.charge&apos;, { amount: 999, currency: &apos;usd&apos; })",
+                  code: "await router.call(&apos;razorpay.charge&apos;, { amount: 999, currency: &apos;inr&apos; })",
                   desc: "Start making calls to any service immediately"
                 },
               ].map((step, idx) => (

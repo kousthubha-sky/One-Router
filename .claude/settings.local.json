@@ -18,7 +18,8 @@
       "WebFetch(domain:api.render.com)",
       "Bash(ls:*)",
       "Bash(wc:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(npm run build:*)"
     ]
   }
 }

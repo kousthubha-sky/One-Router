@@ -229,18 +229,18 @@ export default function WebhooksPage() {
                     Configure these URLs in your payment provider dashboards:
                   </p>
                   <div className="grid gap-3">
-                    {['razorpay', 'paypal', 'stripe'].map((service) => (
+                    {['razorpay', 'paypal'].map((service) => (
                       <div key={service} className="flex items-center justify-between p-4 bg-[#1a1a1a] border border-[#222] rounded-lg hover:border-cyan-500 transition-colors">
                         <div>
                           <p className="font-medium text-white capitalize">{service}</p>
                           <code className="text-sm text-cyan-500 font-mono">
-                            https://api.onerouter.com/webhooks/{service}
+                            {process.env.NEXT_PUBLIC_API_URL || 'https://api.onerouter.com'}/webhooks/{service}
                           </code>
                         </div>
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => navigator.clipboard.writeText(`https://api.onerouter.com/webhooks/${service}`)}
+                          onClick={() => navigator.clipboard.writeText(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.onerouter.com'}/webhooks/${service}`)}
                           className="bg-transparent border-[#222] text-white hover:border-cyan-500"
                         >
                           Copy

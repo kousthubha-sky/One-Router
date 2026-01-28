@@ -222,7 +222,7 @@ async def purchase_credits(
             )
             link = {
                 "provider_order_id": f"demo_link_{user_id[:8]}",
-                "checkout_url": f"https://demo.onerouter.com/pay/demo_link_{user_id[:8]}"
+                "checkout_url": f"{settings.DEMO_CHECKOUT_URL}/pay/demo_link_{user_id[:8]}"
             }
         else:
             raise HTTPException(
@@ -242,7 +242,7 @@ async def purchase_credits(
             )
             link = {
                 "provider_order_id": f"demo_link_{user_id[:8]}",
-                "checkout_url": f"https://demo.onerouter.com/pay/demo_link_{user_id[:8]}"
+                "checkout_url": f"{settings.DEMO_CHECKOUT_URL}/pay/demo_link_{user_id[:8]}"
             }
         else:
             raise HTTPException(

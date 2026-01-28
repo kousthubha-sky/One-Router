@@ -55,16 +55,6 @@ def detect_credential_environment(service_name: str, credentials: dict) -> str:
         # Default to test if can't determine
         return "test"
 
-    elif service_name_lower == "stripe":
-        # Stripe test keys start with sk_test_ or pk_test_
-        secret_key = credentials.get("STRIPE_SECRET_KEY", "")
-        publishable_key = credentials.get("STRIPE_PUBLISHABLE_KEY", "")
-        if secret_key.startswith("sk_test_") or publishable_key.startswith("pk_test_"):
-            return "test"
-        elif secret_key.startswith("sk_live_") or publishable_key.startswith("pk_live_"):
-            return "live"
-        return "test"
-
     elif service_name_lower == "twilio":
         # Twilio test credentials have specific test account SID format
         account_sid = credentials.get("TWILIO_ACCOUNT_SID", "")

@@ -113,7 +113,7 @@ export default function APIKeysPage() {
         body: JSON.stringify({
           key_name: 'New API Key',
           environment: currentEnvironment,
-          rate_limit_per_min: 60,
+          rate_limit_per_min: 100,
           rate_limit_per_day: 10000
         })
       });

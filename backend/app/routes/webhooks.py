@@ -20,6 +20,7 @@ from ..database import get_db
 from ..models import WebhookEvent, User, ServiceCredential
 from ..services.request_router import RequestRouter
 from ..auth.dependencies import get_current_user
+from ..config import settings
 
 router = APIRouter()
 request_router = RequestRouter()
@@ -488,7 +489,7 @@ async def get_webhook_config(
             "webhook_url": service_config.get("webhook_url"),
             "events": service_config.get("events", []),
             "enabled": service_config.get("enabled", False),
-            "onerouter_webhook_url": f"https://api.onerouter.com/webhooks/{cred.provider_name}",
+            "onerouter_webhook_url": f"{settings.API_BASE_URL}/webhooks/{cred.provider_name}",
             "last_configured": cred.updated_at.isoformat() if cred.updated_at is not None else None
         }
 
@@ -551,7 +552,7 @@ async def update_webhook_config(
         "status": "configured",
         "service": service_name,
         "config": credential.features_config,
-        "onerouter_webhook_url": f"https://api.onerouter.com/webhooks/{service_name}"
+        "onerouter_webhook_url": f"{settings.API_BASE_URL}/webhooks/{service_name}"
     }
 
 
