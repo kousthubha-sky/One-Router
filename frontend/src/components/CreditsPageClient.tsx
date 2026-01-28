@@ -138,17 +138,16 @@ export function CreditsPageClient() {
             <div className="text-lg font-semibold text-white mb-1">Razorpay</div>
             <div className="text-sm text-gray-400">UPI, Cards, Net Banking (INR)</div>
           </button>
-          <button
-            onClick={() => setSelectedProvider("paypal")}
-            className={`flex-1 p-4 rounded-lg border-2 transition-all ${
-              selectedProvider === "paypal"
-                ? "border-cyan-500 bg-cyan-500/10"
-                : "border-gray-700 bg-gray-800/50 hover:border-gray-600"
-            }`}
+          {/* PayPal disabled until business verification is complete */}
+          <div
+            className="flex-1 p-4 rounded-lg border-2 border-gray-700 bg-gray-800/30 opacity-50 cursor-not-allowed relative"
           >
-            <div className="text-lg font-semibold text-white mb-1">PayPal</div>
-            <div className="text-sm text-gray-400">PayPal, Cards (USD)</div>
-          </button>
+            <div className="absolute top-2 right-2">
+              <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded">Coming Soon</span>
+            </div>
+            <div className="text-lg font-semibold text-gray-400 mb-1">PayPal</div>
+            <div className="text-sm text-gray-500">PayPal, Cards (USD)</div>
+          </div>
         </div>
       </div>
 
@@ -249,9 +248,9 @@ export function CreditsPageClient() {
               <div className="w-12 h-12 bg-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
                 <span className="text-cyan-400 font-bold">2</span>
               </div>
-              <h4 className="text-white font-medium mb-2">Choose Provider</h4>
+              <h4 className="text-white font-medium mb-2">Secure Payment</h4>
               <p className="text-gray-400 text-sm">
-                Pay with Razorpay (INR) or PayPal (USD)
+                Pay securely with Razorpay (UPI, Cards, Net Banking)
               </p>
             </div>
             <div className="text-center">
