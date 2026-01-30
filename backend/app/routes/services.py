@@ -18,11 +18,16 @@ class ServiceInfo(BaseModel):
     """Information about a connected service"""
     id: str
     service_name: str
-    environment: str
+    environment: str  # The environment of this credential (test/live)
+    active_environment: str = ""  # The user's selected active environment for this service
     features: dict
     is_active: bool
     created_at: str
     credential_hint: str = ""  # Masked credential prefix for display (e.g., "rzp_test_Rrql***")
+    is_unified: bool = False  # Whether this service uses unified credentials (no test/live split)
+    has_test_credentials: bool = False
+    has_live_credentials: bool = False
+    can_switch: bool = True  # Whether environment can be switched
 
 class ServicesResponse(BaseModel):
     """Response with all user's services"""
@@ -71,6 +76,9 @@ async def get_user_services(
         if environment not in ["test", "live"]:
             environment = "test"
 
+        # Unified services (single API key, no test/live split) - always show regardless of environment
+        UNIFIED_SERVICES = ["resend"]
+
         # Query services - either all environments or filtered
         if check_all:
             # For has_services check: get ALL active services regardless of environment
@@ -81,12 +89,16 @@ async def get_user_services(
                 )
             )
         else:
-            # For display: filter by environment
+            # For display: filter by environment OR include unified services
+            from sqlalchemy import or_
             result = await db.execute(
                 select(ServiceCredential).where(
                     ServiceCredential.user_id == user["id"],
                     ServiceCredential.is_active,
-                    ServiceCredential.environment == environment
+                    or_(
+                        ServiceCredential.environment == environment,
+                        ServiceCredential.provider_name.in_(UNIFIED_SERVICES)
+                    )
                 )
             )
         credentials = result.scalars().all()
@@ -110,12 +122,41 @@ async def get_user_services(
                     if sid and len(sid) > 8:
                         return f"{sid[:12]}***"
                     return sid[:8] + "***" if sid else ""
+                elif provider_name == "resend":
+                    api_key = decrypted_creds.get("RESEND_API_KEY") or decrypted_creds.get("api_key", "")
+                    if api_key and len(api_key) > 8:
+                        return f"{api_key[:10]}***"
+                    return api_key[:6] + "***" if api_key else ""
                 return ""
             except Exception:
                 return ""
 
         # Initialize credential manager for decryption
         credential_manager = CredentialManager()
+
+        # Unified services list
+        unified_services = ["resend"]
+
+        # Get user's per-service environment preferences
+        service_envs = {}
+        if user_obj and user_obj.preferences:
+            service_envs = user_obj.preferences.get("service_environments", {})
+
+        # Get ALL credentials to determine what environments are available per service
+        all_creds_result = await db.execute(
+            select(ServiceCredential).where(
+                ServiceCredential.user_id == user["id"],
+                ServiceCredential.is_active == True
+            )
+        )
+        all_creds = all_creds_result.scalars().all()
+
+        # Build a map of service -> available environments
+        service_creds_map = {}
+        for c in all_creds:
+            if c.provider_name not in service_creds_map:
+                service_creds_map[c.provider_name] = {"test": False, "live": False}
+            service_creds_map[c.provider_name][c.environment] = True
 
         # Convert to response format
         services = []
@@ -130,16 +171,32 @@ async def get_user_services(
                 print(f"Could not decrypt credentials for hint: {e}")
                 credential_hint = "***configured***"
 
+            # Determine active environment for this service
+            is_unified = cred.provider_name.lower() in unified_services
+            if is_unified:
+                active_env = "live"  # Unified services are always "live"
+            else:
+                # Per-service setting > global setting
+                active_env = service_envs.get(cred.provider_name.lower(), preferred_env)
+
+            # Get available credentials info
+            creds_info = service_creds_map.get(cred.provider_name, {"test": False, "live": False})
+
             services.append(ServiceInfo(
                 id=str(cred.id),
                 service_name=cred.provider_name,
                 environment=cred.environment,
+                active_environment=active_env,
                 features=cred.features_config or {},
                 is_active=cred.is_active,
                 created_at=cred.created_at.isoformat() if cred.created_at else "",
-                credential_hint=credential_hint
+                credential_hint=credential_hint,
+                is_unified=is_unified,
+                has_test_credentials=creds_info["test"],
+                has_live_credentials=creds_info["live"],
+                can_switch=not is_unified and (creds_info["test"] and creds_info["live"])
             ))
-        
+
         return ServicesResponse(
             services=services,
             has_services=len(services) > 0,
@@ -683,4 +740,279 @@ async def verify_environment_switch(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to verify environment: {str(e)}"
+        )
+
+
+# ============================================
+# Per-Service Environment Toggle
+# ============================================
+
+class ServiceEnvironmentToggleRequest(BaseModel):
+    """Request to toggle a specific service's environment"""
+    environment: str  # "test" or "live"
+
+
+class ServiceEnvironmentResponse(BaseModel):
+    """Response for per-service environment settings"""
+    service_name: str
+    active_environment: str
+    has_test_credentials: bool
+    has_live_credentials: bool
+
+
+# Unified services that don't have test/live split
+UNIFIED_SERVICES = ["resend"]
+
+
+@router.post("/services/{service_name}/environment")
+async def set_service_environment(
+    service_name: str,
+    request: ServiceEnvironmentToggleRequest,
+    user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Set the active environment for a specific service.
+
+    This allows users to have different services in different environments.
+    For example: Razorpay in live mode, Twilio in test mode.
+
+    The per-service setting takes precedence over the global environment toggle.
+
+    Parameters:
+        service_name: The service to configure (e.g., "razorpay", "twilio")
+        request.environment: "test" or "live"
+
+    Returns:
+        Updated service environment configuration
+    """
+    try:
+        user_id = str(user.get("id"))
+        target_env = request.environment.lower()
+
+        if target_env not in ["test", "live"]:
+            raise HTTPException(
+                status_code=400,
+                detail="Environment must be 'test' or 'live'"
+            )
+
+        # Unified services don't support environment switching
+        if service_name.lower() in UNIFIED_SERVICES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{service_name} uses unified credentials and doesn't support test/live switching"
+            )
+
+        # Check if user has credentials for the target environment
+        result = await db.execute(
+            select(ServiceCredential).where(
+                ServiceCredential.user_id == user_id,
+                ServiceCredential.provider_name == service_name.lower(),
+                ServiceCredential.environment == target_env,
+                ServiceCredential.is_active == True
+            )
+        )
+        target_cred = result.scalar_one_or_none()
+
+        if not target_cred:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No {target_env} credentials configured for {service_name}. Please add {target_env} credentials first."
+            )
+
+        # Get the user record to update preferences
+        user_result = await db.execute(select(User).where(User.id == user_id))
+        user_obj = user_result.scalar_one_or_none()
+
+        if not user_obj:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Update user preferences with per-service environment
+        preferences = user_obj.preferences or {}
+        if "service_environments" not in preferences:
+            preferences["service_environments"] = {}
+
+        preferences["service_environments"][service_name.lower()] = target_env
+
+        # Update user
+        await db.execute(
+            update(User).where(User.id == user_id).values(
+                preferences=preferences,
+                updated_at=datetime.utcnow()
+            )
+        )
+        flag_modified(user_obj, "preferences")
+        await db.commit()
+
+        # Check what credentials exist for this service
+        all_creds_result = await db.execute(
+            select(ServiceCredential).where(
+                ServiceCredential.user_id == user_id,
+                ServiceCredential.provider_name == service_name.lower(),
+                ServiceCredential.is_active == True
+            )
+        )
+        all_creds = all_creds_result.scalars().all()
+
+        has_test = any(c.environment == "test" for c in all_creds)
+        has_live = any(c.environment == "live" for c in all_creds)
+
+        return {
+            "success": True,
+            "service_name": service_name,
+            "active_environment": target_env,
+            "has_test_credentials": has_test,
+            "has_live_credentials": has_live,
+            "message": f"{service_name} switched to {target_env} mode"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        print(f"Error setting service environment: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to set service environment: {str(e)}"
+        )
+
+
+@router.get("/services/{service_name}/environment")
+async def get_service_environment(
+    service_name: str,
+    user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get the current environment setting for a specific service.
+
+    Returns:
+        - active_environment: The environment this service is using
+        - has_test_credentials: Whether test credentials exist
+        - has_live_credentials: Whether live credentials exist
+        - is_unified: Whether this is a unified service (no test/live split)
+    """
+    try:
+        user_id = str(user.get("id"))
+        is_unified = service_name.lower() in UNIFIED_SERVICES
+
+        # Get user preferences
+        user_result = await db.execute(select(User).where(User.id == user_id))
+        user_obj = user_result.scalar_one_or_none()
+
+        preferences = user_obj.preferences if user_obj else {}
+        global_env = preferences.get("current_environment", "test")
+        service_envs = preferences.get("service_environments", {})
+
+        # Per-service setting takes precedence over global
+        active_env = service_envs.get(service_name.lower(), global_env)
+
+        # For unified services, always return "live" (they don't have test/live split)
+        if is_unified:
+            active_env = "live"
+
+        # Check what credentials exist
+        all_creds_result = await db.execute(
+            select(ServiceCredential).where(
+                ServiceCredential.user_id == user_id,
+                ServiceCredential.provider_name == service_name.lower(),
+                ServiceCredential.is_active == True
+            )
+        )
+        all_creds = all_creds_result.scalars().all()
+
+        has_test = any(c.environment == "test" for c in all_creds)
+        has_live = any(c.environment == "live" for c in all_creds)
+
+        return {
+            "service_name": service_name,
+            "active_environment": active_env,
+            "has_test_credentials": has_test,
+            "has_live_credentials": has_live,
+            "is_unified": is_unified,
+            "global_environment": global_env
+        }
+
+    except Exception as e:
+        print(f"Error getting service environment: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get service environment: {str(e)}"
+        )
+
+
+@router.get("/services/environments")
+async def get_all_service_environments(
+    user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get environment settings for all connected services.
+
+    Returns a map of service_name -> environment configuration
+    """
+    try:
+        user_id = str(user.get("id"))
+
+        # Get user preferences
+        user_result = await db.execute(select(User).where(User.id == user_id))
+        user_obj = user_result.scalar_one_or_none()
+
+        preferences = user_obj.preferences if user_obj else {}
+        global_env = preferences.get("current_environment", "test")
+        service_envs = preferences.get("service_environments", {})
+
+        # Get all user's credentials
+        all_creds_result = await db.execute(
+            select(ServiceCredential).where(
+                ServiceCredential.user_id == user_id,
+                ServiceCredential.is_active == True
+            )
+        )
+        all_creds = all_creds_result.scalars().all()
+
+        # Group by service
+        services_map = {}
+        for cred in all_creds:
+            service_name = cred.provider_name
+            if service_name not in services_map:
+                services_map[service_name] = {
+                    "has_test": False,
+                    "has_live": False
+                }
+            if cred.environment == "test":
+                services_map[service_name]["has_test"] = True
+            elif cred.environment == "live":
+                services_map[service_name]["has_live"] = True
+
+        # Build response
+        result = {}
+        for service_name, cred_info in services_map.items():
+            is_unified = service_name in UNIFIED_SERVICES
+
+            # Determine active environment
+            if is_unified:
+                active_env = "live"
+            else:
+                active_env = service_envs.get(service_name, global_env)
+
+            result[service_name] = {
+                "active_environment": active_env,
+                "has_test_credentials": cred_info["has_test"],
+                "has_live_credentials": cred_info["has_live"],
+                "is_unified": is_unified,
+                "can_switch_to_test": cred_info["has_test"] and not is_unified,
+                "can_switch_to_live": cred_info["has_live"] and not is_unified
+            }
+
+        return {
+            "global_environment": global_env,
+            "services": result
+        }
+
+    except Exception as e:
+        print(f"Error getting all service environments: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get service environments: {str(e)}"
         )

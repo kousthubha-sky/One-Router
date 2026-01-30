@@ -20,7 +20,8 @@
       "Bash(wc:*)",
       "Bash(grep:*)",
       "Bash(npm run build:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(docker compose:*)"
     ]
   }
 }

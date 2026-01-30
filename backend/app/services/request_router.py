@@ -138,7 +138,7 @@ class RequestRouter:
                     "step_2": "Or set environment variables (see documentation for required variables)",
                     "step_3": "Required credentials vary by service (e.g., razorpay needs RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET)"
                 },
-                "supported_services": ["razorpay", "paypal", "twilio", "aws_s3"]
+                "supported_services": ["razorpay", "paypal", "twilio", "resend", "aws_s3"]
             }
             raise ProviderNotConfiguredException(provider=service)
 

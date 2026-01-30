@@ -429,6 +429,10 @@ app.include_router(paypal_setup_router, tags=["paypal"])
 from .routes.twilio_setup import router as twilio_setup_router
 app.include_router(twilio_setup_router, tags=["twilio"])
 
+# Import and include Resend setup router
+from .routes.resend_setup import router as resend_setup_router
+app.include_router(resend_setup_router, tags=["resend"])
+
 # Import and include service discovery router
 app.include_router(service_discovery_router, prefix="/v1", tags=["service-discovery"])
 

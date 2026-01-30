@@ -26,7 +26,7 @@ OneRouter is a unified API layer that abstracts multiple service providers (Paym
 
 OneRouter provides a single SDK that works for multiple service categories:
 
-- **Payments**: Razorpay, PayPal, Stripe
+- **Payments**: Razorpay, PayPal
 - **SMS**: Twilio
 - **Email**: Resend
 - **More services coming**: Webhooks, file storage, databases, etc.
@@ -93,7 +93,6 @@ OneRouter provides a single SDK that works for multiple service categories:
 │  PAYMENTS:          SMS:              EMAIL:                    │
 │  • Razorpay         • Twilio          • Resend                  │
 │  • PayPal                                                       │
-│  • Stripe                                                      │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -115,7 +114,6 @@ OneRouter provides a single SDK that works for multiple service categories:
 |----------|--------|----------|
 | Razorpay | ✅ Full | Payments, refunds, subscriptions, webhooks |
 | PayPal | ✅ Full | Orders, captures, refunds, subscriptions, webhooks |
-| Stripe | ✅ Beta | Payments, subscriptions (via adapter) |
 
 ### Communications
 

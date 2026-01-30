@@ -323,12 +323,14 @@ async def send_email(
                     created_at=existing.created_at.isoformat() if existing.created_at else None
                 )
 
-        # Get Resend credentials for user's current environment
+        # Get Resend credentials - Resend uses single API key (always stored as "live")
+        # Unlike Twilio/Stripe, Resend doesn't have test/live key split
+        resend_env = "live"  # Resend single key model
         result = await db.execute(
             select(ServiceCredential).where(
                 ServiceCredential.user_id == user_id,
                 ServiceCredential.provider_name == "resend",
-                ServiceCredential.environment == environment,
+                ServiceCredential.environment == resend_env,
                 ServiceCredential.is_active == True
             )
         )
@@ -337,13 +339,13 @@ async def send_email(
         if not creds_result:
             raise HTTPException(
                 status_code=400,
-                detail=f"Resend {environment} credentials not configured. Please add your credentials in dashboard."
+                detail="Resend credentials not configured. Please add your API key in dashboard."
             )
 
         # Decrypt credentials
         from ..services.credential_manager import CredentialManager
         cred_manager = CredentialManager()
-        decrypted_creds = await cred_manager.get_credentials(db, str(user_id), "resend", environment)
+        decrypted_creds = await cred_manager.get_credentials(db, str(user_id), "resend", resend_env)
 
         # Create adapter
         adapter = AdapterFactory.create_adapter("resend", decrypted_creds)
@@ -380,7 +382,7 @@ async def send_email(
         credit_result = {"success": True, "fee_details": None}
         try:
             credit_result = await CreditsService.consume_for_usage(
-                user_id=str(user.id),
+                user_id=str(user_id),
                 service_type="email",
                 count=1,  # 1 email
                 db=db

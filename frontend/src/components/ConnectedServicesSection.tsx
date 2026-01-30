@@ -109,8 +109,8 @@ export function ConnectedServicesSection({ services }: ConnectedServicesSectionP
                 {service.service_name}
               </h3>
               <div className="flex items-center gap-2 flex-wrap">
-                <Badge 
-                  variant="secondary" 
+                <Badge
+                  variant="secondary"
                   className={`text-xs px-2 py-0.5 ${
                     service.environment === 'live'
                       ? 'bg-green-500/10 text-green-400 border-green-500/20'

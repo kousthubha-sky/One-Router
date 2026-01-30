@@ -66,6 +66,13 @@ def detect_credential_environment(service_name: str, credentials: dict) -> str:
             return "test"
         return "test"
 
+    elif service_name_lower == "resend":
+        # Resend uses ONE API key for all environments (no test/live split)
+        # Store as "live" - the test mode is implicit based on:
+        # - Using onboarding@resend.dev as sender
+        # - Sending to test addresses like delivered@resend.dev
+        return "live"
+
     # Default to test for unknown services (safer default)
     return "test"
 import secrets
@@ -459,6 +466,7 @@ async def configure_services(
                     'razorpay': ['RAZORPAY_'],
                     'paypal': ['PAYPAL_'],
                     'twilio': ['TWILIO_'],
+                    'resend': ['RESEND_'],
                     'aws_s3': ['AWS_']
                 }
                 prefixes = service_prefixes.get(service_name, [service_name.upper() + '_'])
@@ -476,6 +484,12 @@ async def configure_services(
                     )
                     if phone_number:
                         credentials['from_number'] = phone_number
+
+                # Normalize Resend from email key to 'from_email' for consistency
+                if service_name == 'resend':
+                    from_email = credentials.pop('RESEND_FROM_EMAIL', None)
+                    if from_email:
+                        credentials['from_email'] = from_email
 
             # Validate credentials format
             if not credentials:

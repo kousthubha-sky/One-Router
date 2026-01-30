@@ -223,6 +223,13 @@ class CredentialManager:
                 if phone_number:
                     normalized["from_number"] = phone_number
 
+        elif service_name == "resend":
+            # Normalize from email key to 'from_email'
+            if "from_email" not in normalized:
+                from_email = normalized.pop("RESEND_FROM_EMAIL", None)
+                if from_email:
+                    normalized["from_email"] = from_email
+
         return normalized
 
     async def store_service_credentials(
@@ -599,6 +606,29 @@ class CredentialManager:
                 errors["from_number"] = "Required - phone number to send SMS from (use from_number, TWILIO_PHONE_NUMBER, or TWILIO_FROM_NUMBER)"
             elif not from_number.startswith("+"):
                 errors["from_number"] = "Must be in E.164 format (e.g., +15005550006)"
+
+        elif service_name == "resend":
+            # Accept multiple API key formats
+            api_key = (
+                credentials.get("api_key") or
+                credentials.get("RESEND_API_KEY") or
+                ""
+            )
+            if not api_key:
+                errors["api_key"] = "Required - Resend API key (use api_key or RESEND_API_KEY)"
+            elif not api_key.startswith("re_"):
+                errors["api_key"] = "API key must start with 're_'"
+
+            # Accept multiple from email formats
+            from_email = (
+                credentials.get("from_email") or
+                credentials.get("RESEND_FROM_EMAIL") or
+                ""
+            )
+            if not from_email:
+                errors["from_email"] = "Required - sender email address (use from_email or RESEND_FROM_EMAIL)"
+            elif "@" not in from_email:
+                errors["from_email"] = "Must be a valid email address"
 
         elif service_name == "aws_s3":
             if not credentials.get("AWS_ACCESS_KEY_ID"):

@@ -97,6 +97,18 @@ class EnvParserService:
                     }
                 }
             },
+            'resend': {
+                'credential_patterns': [
+                    r'^RESEND_API_KEY$',
+                    r'^RESEND_FROM_EMAIL$'
+                ],
+                'feature_patterns': {
+                    'email': {
+                        'required': [r'^RESEND_API_KEY$'],
+                        'indicator': ['API_KEY']
+                    }
+                }
+            },
             'aws_s3': {
                 'credential_patterns': [
                     r'^AWS_ACCESS_KEY_ID$',
@@ -225,6 +237,7 @@ class EnvParserService:
             'razorpay': ['RAZORPAY_', 'SUBSCRIPTION_PLAN_', 'PAYMENT_LINK_'],
             'paypal': ['PAYPAL_', 'SUBSCRIPTION_PLAN_', 'PAYMENT_LINK_'],
             'twilio': ['TWILIO_'],
+            'resend': ['RESEND_'],
             'aws_s3': ['AWS_']
         }
 

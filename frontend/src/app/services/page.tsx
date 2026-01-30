@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useClientApiCall } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, Settings, Loader2, Pencil, Key, Shield } from 'lucide-react';
+import { CheckCircle2, Settings, Loader2, Pencil, Key, Shield, ToggleLeft, ToggleRight } from 'lucide-react';
 import Link from 'next/link';
 import DashboardLayout from '@/components/DashboardLayout';
 import { GlobalEnvironmentToggle } from '@/components/GlobalEnvironmentToggle';
@@ -11,15 +11,21 @@ import { BentoGrid } from '@/components/ui/bento-grid';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EditServiceModal } from '@/components/EditServiceModal';
+import { ServiceModesOverview } from '@/components/ServiceModesOverview';
 
 interface Service {
   id: string;
   service_name: string;
   environment: string;
+  active_environment: string;  // User's selected environment for this service
   features: Record<string, boolean>;
   is_active: boolean;
   created_at: string;
   credential_hint: string;  // Masked credential prefix (e.g., "rzp_test_Rrql***")
+  is_unified: boolean;  // Whether this service uses unified credentials
+  has_test_credentials: boolean;
+  has_live_credentials: boolean;
+  can_switch: boolean;  // Whether environment can be toggled
 }
 
 
@@ -63,17 +69,26 @@ export default function ServicesPage() {
     loadServices();
   }, [loadServices]);
 
-  // const switchEnvironment = async (serviceName: string, newEnv: 'test' | 'live') => {
-  //   try {
-  //     await apiClient(`/api/services/${serviceName}/switch-environment`, {
-  //       method: 'POST',
-  //       body: JSON.stringify({ environment: newEnv })
-  //     });
-  //     await loadServices();
-  //   } catch (error) {
-  //     console.error('Failed to switch environment:', error);
-  //   }
-  // };
+  // Toggle environment for a specific service
+  const [switchingService, setSwitchingService] = useState<string | null>(null);
+
+  const toggleServiceEnvironment = async (serviceName: string, currentEnv: string) => {
+    const newEnv = currentEnv === 'test' ? 'live' : 'test';
+    setSwitchingService(serviceName);
+    try {
+      await apiClient(`/api/services/${serviceName}/environment`, {
+        method: 'POST',
+        body: JSON.stringify({ environment: newEnv })
+      });
+      // Reload services to get updated data
+      await loadServices();
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to switch environment';
+      alert(errorMessage);
+    } finally {
+      setSwitchingService(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -148,6 +163,13 @@ export default function ServicesPage() {
               },
             ]} />
 
+            {/* Service Modes Overview - Shows categorized view */}
+            {services.length > 0 && (
+              <div className="mt-8">
+                <ServiceModesOverview services={services} />
+              </div>
+            )}
+
             {/* Connected Services Table */}
             <Card className="bg-black border border-black mt-8 hover:border-black transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/10">
               <CardHeader className="pb-6">
@@ -218,13 +240,49 @@ export default function ServicesPage() {
                                 </code>
                               </td>
                               <td className="px-6 py-4">
-                                <Badge className={`${
-                                  service.environment === 'live'
-                                    ? 'bg-green-500/20 text-green-400 border-green-500/30'
-                                    : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                                } border`}>
-                                  {service.environment.toUpperCase()}
-                                </Badge>
+                                {service.is_unified ? (
+                                  <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 border">
+                                    UNIFIED
+                                  </Badge>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => toggleServiceEnvironment(service.service_name, service.active_environment || service.environment)}
+                                      disabled={!service.can_switch || switchingService === service.service_name}
+                                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-200 ${
+                                        service.can_switch
+                                          ? 'hover:bg-[#222] cursor-pointer'
+                                          : 'opacity-50 cursor-not-allowed'
+                                      }`}
+                                      title={
+                                        !service.can_switch
+                                          ? `Add ${service.has_test_credentials ? 'live' : 'test'} credentials to enable switching`
+                                          : `Switch to ${(service.active_environment || service.environment) === 'test' ? 'live' : 'test'} mode`
+                                      }
+                                    >
+                                      {switchingService === service.service_name ? (
+                                        <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                                      ) : (service.active_environment || service.environment) === 'live' ? (
+                                        <ToggleRight className="w-5 h-5 text-green-400" />
+                                      ) : (
+                                        <ToggleLeft className="w-5 h-5 text-blue-400" />
+                                      )}
+                                      <Badge className={`${
+                                        (service.active_environment || service.environment) === 'live'
+                                          ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                                          : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                                      } border`}>
+                                        {(service.active_environment || service.environment).toUpperCase()}
+                                      </Badge>
+                                    </button>
+                                    {!service.can_switch && (
+                                      <span className="text-xs text-gray-600">
+                                        {!service.has_live_credentials && '(no live)'}
+                                        {!service.has_test_credentials && '(no test)'}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
                               </td>
                               <td className="px-6 py-4">
                                 <div className="flex items-center gap-2">
@@ -279,13 +337,32 @@ export default function ServicesPage() {
                                 </code>
                               </div>
                             </div>
-                            <Badge className={`${
-                              service.environment === 'live'
-                                ? 'bg-green-500/20 text-green-400 border-green-500/30'
-                                : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                            } border`}>
-                              {service.environment.toUpperCase()}
-                            </Badge>
+                            {service.is_unified ? (
+                              <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 border">
+                                UNIFIED
+                              </Badge>
+                            ) : (
+                              <button
+                                onClick={() => toggleServiceEnvironment(service.service_name, service.active_environment || service.environment)}
+                                disabled={!service.can_switch || switchingService === service.service_name}
+                                className={`flex items-center gap-1 ${!service.can_switch ? 'opacity-50' : ''}`}
+                              >
+                                {switchingService === service.service_name ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (service.active_environment || service.environment) === 'live' ? (
+                                  <ToggleRight className="w-5 h-5 text-green-400" />
+                                ) : (
+                                  <ToggleLeft className="w-5 h-5 text-blue-400" />
+                                )}
+                                <Badge className={`${
+                                  (service.active_environment || service.environment) === 'live'
+                                    ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                                    : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                                } border`}>
+                                  {(service.active_environment || service.environment).toUpperCase()}
+                                </Badge>
+                              </button>
+                            )}
                           </div>
                           <div className="flex items-center justify-between pt-3 border-t border-[#222]">
                             <div className="flex items-center gap-2">
