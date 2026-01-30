@@ -170,19 +170,17 @@ export default async function DashboardPage() {
 
           {/* Quick Actions */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="bg-[#0a0a0a] border border-[#222] hover:border-cyan-500 transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/10">
+            <Card className="bg-[#0a0a0a] border border-[#222]  transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/10">
               <CardHeader className="pb-4">
                 <CardTitle className="text-white flex items-center gap-3 text-xl">
-                  <div className="w-8 h-8 bg-cyan-500/20 rounded-lg flex items-center justify-center border border-cyan-500/30">
-                    🚀
-                  </div>
+                  
                   Next Steps
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4 mb-8">
-                  <div className="flex items-center gap-4 p-4 bg-[#1a1a1a] border border-[#222] rounded-xl hover:border-cyan-500 transition-all duration-300 hover:bg-[#0f0f0f] group">
-                    <div className="w-10 h-10 bg-cyan-500/10 rounded-full flex items-center justify-center border border-cyan-500 text-cyan-500 font-bold group-hover:bg-cyan-500/20 group-hover:scale-110 transition-all duration-300">
+                  <div className="flex items-center gap-4 p-4 bg-[#1a1a1a] border border-[#222] rounded-xl  transition-all duration-300 hover:bg-[#0f0f0f] group">
+                    <div className="w-10 h-10 bg-cyan-500/10 rounded-full flex items-center justify-center  text-cyan-500 font-bold group-hover:bg-cyan-500/20 group-hover:scale-110 transition-all duration-300">
                       1
                     </div>
                     <div>
@@ -190,8 +188,8 @@ export default async function DashboardPage() {
                       <p className="text-sm text-[#888]">Create keys for your applications</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4 p-4 bg-[#1a1a1a] border border-[#222] rounded-xl hover:border-cyan-500 transition-all duration-300 hover:bg-[#0f0f0f] group">
-                    <div className="w-10 h-10 bg-cyan-500/10 rounded-full flex items-center justify-center border border-cyan-500 text-cyan-500 font-bold group-hover:bg-cyan-500/20 group-hover:scale-110 transition-all duration-300">
+                  <div className="flex items-center gap-4 p-4 bg-[#1a1a1a] border border-[#222] rounded-xl  transition-all duration-300 hover:bg-[#0f0f0f] group">
+                    <div className="w-10 h-10 bg-cyan-500/10 rounded-full flex items-center justify-center  text-cyan-500 font-bold group-hover:bg-cyan-500/20 group-hover:scale-110 transition-all duration-300">
                       2
                     </div>
                     <div>
@@ -199,8 +197,8 @@ export default async function DashboardPage() {
                       <p className="text-sm text-[#888]">Learn how to integrate OneRouter</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4 p-4 bg-[#1a1a1a] border border-[#222] rounded-xl hover:border-cyan-500 transition-all duration-300 hover:bg-[#0f0f0f] group">
-                    <div className="w-10 h-10 bg-cyan-500/10 rounded-full flex items-center justify-center border border-cyan-500 text-cyan-500 font-bold group-hover:bg-cyan-500/20 group-hover:scale-110 transition-all duration-300">
+                  <div className="flex items-center gap-4 p-4 bg-[#1a1a1a] border border-[#222] rounded-xl  transition-all duration-300 hover:bg-[#0f0f0f] group">
+                    <div className="w-10 h-10 bg-cyan-500/10 rounded-full flex items-center justify-center  text-cyan-500 font-bold group-hover:bg-cyan-500/20 group-hover:scale-110 transition-all duration-300">
                       3
                     </div>
                     <div>
@@ -210,19 +208,17 @@ export default async function DashboardPage() {
                   </div>
                 </div>
                 <Link href="/api-keys">
-                  <Button className="w-full bg-cyan-500 text-white hover:bg-cyan-600 py-3 rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/25 hover:scale-105">
+                  <Button className="w-full bg-cyan-500 text-white  py-3 rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/25 hover:scale-105">
                     Generate API Key →
                   </Button>
                 </Link>
               </CardContent>
             </Card>
 
-            <Card className="bg-[#0a0a0a] border border-[#222] hover:border-cyan-500 transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/10">
+            <Card className="bg-[#0a0a0a] border border-[#222]  transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/10">
               <CardHeader className="pb-4">
                 <CardTitle className="text-white flex items-center gap-3 text-xl">
-                  <div className="w-8 h-8 bg-cyan-500/20 rounded-lg flex items-center justify-center border border-cyan-500/30">
-                    📊
-                  </div>
+                  
                   Recent Activity
                 </CardTitle>
               </CardHeader>

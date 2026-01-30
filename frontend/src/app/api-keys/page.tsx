@@ -5,7 +5,7 @@ import { useClientApiCall } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 import { Button } from '@/components/ui/button';
-import { Copy, Key, Plus, Shield, AlertTriangle } from 'lucide-react';
+import { Copy, Key, Plus, Shield, AlertTriangle, ZapIcon, GitGraph, Lock } from 'lucide-react';
 import Link from 'next/link';
 import DashboardLayout from '@/components/DashboardLayout';
 import { GlobalEnvironmentToggle } from '@/components/GlobalEnvironmentToggle';
@@ -353,9 +353,7 @@ export default function APIKeysPage() {
               <Card className="bg-[#0a0a0a] border border-[#222] hover:border-cyan-500 transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/10">
                 <CardHeader className="pb-4">
                   <CardTitle className="text-white flex items-center gap-3 text-lg sm:text-xl">
-                    <div className="w-8 h-8 bg-cyan-500/20 rounded-lg flex items-center justify-center border border-cyan-500/30">
-                      🔒
-                    </div>
+                    <Lock/>
                     AES-256 Encryption
                   </CardTitle>
                 </CardHeader>
@@ -367,9 +365,7 @@ export default function APIKeysPage() {
               <Card className="bg-[#0a0a0a] border border-[#222] hover:border-cyan-500 transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/10">
                 <CardHeader className="pb-4">
                   <CardTitle className="text-white flex items-center gap-3 text-lg sm:text-xl">
-                    <div className="w-8 h-8 bg-cyan-500/20 rounded-lg flex items-center justify-center border border-cyan-500/30">
-                      ⚡
-                    </div>
+                    <ZapIcon/>
                     Rate Limiting
                   </CardTitle>
                 </CardHeader>
@@ -381,9 +377,7 @@ export default function APIKeysPage() {
               <Card className="bg-[#0a0a0a] border border-[#222] hover:border-cyan-500 transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/10">
                 <CardHeader className="pb-4">
                   <CardTitle className="text-white flex items-center gap-3 text-lg sm:text-xl">
-                    <div className="w-8 h-8 bg-cyan-500/20 rounded-lg flex items-center justify-center border border-cyan-500/30">
-                      📊
-                    </div>
+                    <GitGraph/>
                     Audit Logging
                   </CardTitle>
                 </CardHeader>

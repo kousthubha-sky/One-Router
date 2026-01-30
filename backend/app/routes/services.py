@@ -532,6 +532,7 @@ class SwitchAllEnvironmentsRequest(BaseModel):
     """Request to atomically switch all services to a target environment"""
     environment: str
     service_ids: List[str] = []
+    partial_switch: bool = False  # If True, only switch services that have credentials for target env
 
 
 class VerifyEnvironmentRequest(BaseModel):
@@ -584,36 +585,41 @@ async def switch_all_environments_atomic(
                 detail="Invalid environment. Must be 'test' or 'live'"
             )
         
-        # If switching to live, verify user has live credentials for all test services
+        # Get all services with test credentials
+        test_services_result = await db.execute(
+            select(ServiceCredential.provider_name).where(
+                ServiceCredential.user_id == user_id,
+                ServiceCredential.environment == "test",
+                ServiceCredential.is_active == True
+            ).distinct()
+        )
+        test_services = [row[0] for row in test_services_result.fetchall()]
+
+        # Get all services with live credentials
+        live_services_result = await db.execute(
+            select(ServiceCredential.provider_name).where(
+                ServiceCredential.user_id == user_id,
+                ServiceCredential.environment == "live",
+                ServiceCredential.is_active == True
+            ).distinct()
+        )
+        live_services = [row[0] for row in live_services_result.fetchall()]
+
+        # Find services missing credentials for target environment
         if target_env == "live":
-            # Get all services with test credentials
-            test_services_result = await db.execute(
-                select(ServiceCredential.provider_name).where(
-                    ServiceCredential.user_id == user_id,
-                    ServiceCredential.environment == "test",
-                    ServiceCredential.is_active == True
-                ).distinct()
+            missing_creds = [s for s in test_services if s not in live_services]
+            services_with_target = live_services
+        else:
+            missing_creds = [s for s in live_services if s not in test_services]
+            services_with_target = test_services
+
+        # If partial_switch is enabled, we allow switching even if some services don't have target credentials
+        # Only those services with target credentials will be switched
+        if not request.partial_switch and target_env == "live" and missing_creds:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Cannot switch to live mode: Please configure live credentials for: {', '.join(missing_creds)}"
             )
-            test_services = [row[0] for row in test_services_result.fetchall()]
-
-            # Get all services with live credentials
-            live_services_result = await db.execute(
-                select(ServiceCredential.provider_name).where(
-                    ServiceCredential.user_id == user_id,
-                    ServiceCredential.environment == "live",
-                    ServiceCredential.is_active == True
-                ).distinct()
-            )
-            live_services = [row[0] for row in live_services_result.fetchall()]
-
-            # Find services missing live credentials
-            missing_live = [s for s in test_services if s not in live_services]
-
-            if missing_live:
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"Cannot switch to live mode: Please configure live credentials for: {', '.join(missing_live)}"
-                )
         
         # Environment switching should ONLY update user preference
         # NOT change the environment of credentials (they stay as test/live separately)
@@ -624,22 +630,54 @@ async def switch_all_environments_atomic(
             select(User).where(User.id == user_id)
         )
         user_obj = user_record.scalar_one_or_none()
+        
+        switched_services = []
+        skipped_services = []
+        
         if user_obj:
             if not user_obj.preferences:
                 user_obj.preferences = {}
             user_obj.preferences["current_environment"] = target_env
+            
+            # If partial_switch, also update per-service environments for services that have target credentials
+            if request.partial_switch:
+                if "service_environments" not in user_obj.preferences:
+                    user_obj.preferences["service_environments"] = {}
+                
+                # Switch services that have credentials for target environment
+                for service in services_with_target:
+                    user_obj.preferences["service_environments"][service] = target_env
+                    switched_services.append(service)
+                
+                # Keep services without target credentials in their current environment
+                for service in missing_creds:
+                    # Keep their current environment (opposite of target)
+                    current_env = "test" if target_env == "live" else "live"
+                    user_obj.preferences["service_environments"][service] = current_env
+                    skipped_services.append(service)
+            
             # Flag the JSONB column as modified so SQLAlchemy detects the change
             flag_modified(user_obj, "preferences")
 
         # Commit the transaction
         await db.commit()
 
-        return {
+        response = {
             "status": "switched",
             "environment": target_env,
             "message": f"Environment switched to {target_env}",
             "timestamp": datetime.utcnow().isoformat()
         }
+        
+        # Add partial switch info if applicable
+        if request.partial_switch:
+            response["partial_switch"] = True
+            response["switched_services"] = switched_services
+            response["skipped_services"] = skipped_services
+            if skipped_services:
+                response["message"] = f"Switched {len(switched_services)} service(s) to {target_env}. {len(skipped_services)} service(s) kept in current mode (missing {target_env} credentials)."
+        
+        return response
         
     except HTTPException:
         await db.rollback()

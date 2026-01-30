@@ -7,7 +7,7 @@ import { MarqueeDemo } from "@/components/ui/marquee-demo";
 import { Github, Plus } from "lucide-react";
 import { FeaturesSectionWithHoverEffects } from "@/components/feature-section-with-hover-effects";
 import { useState } from "react";
-
+import { BookOpen, Boxes, Users } from "lucide-react";
 export default function Home() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -373,7 +373,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Resources Grid */}
+       {/* Resources Grid */}
         <section className="px-4 sm:px-6 py-12 sm:py-20 bg-[#050505]">
           <div className="max-w-7xl mx-auto">
             <h2 className="text-2xl sm:text-3xl md:text-5xl font-bold text-center mb-8 sm:mb-12 font-mono bg-gradient-to-r from-white via-gray-400 to-gray-600 bg-clip-text text-transparent">
@@ -382,16 +382,41 @@ export default function Home() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
               {[
-                { icon: "📚", title: "Documentation", desc: "Complete API reference, guides, and examples" },
-                { icon: "🔌", title: "Service SDKs", desc: "Official SDKs for Node.js, Python, Go, and more" },
-                { icon: "💬", title: "Community", desc: "Join our Discord and get help from developers" },
-              ].map((resource, idx) => (
-                <div key={idx} className="border border-[#222] rounded-lg p-4 sm:p-6 hover:border-[#666] transition-all duration-300 transform hover:scale-105 hover:shadow-lg hover:shadow-[#666]/20 cursor-pointer group">
-                  <div className="text-3xl sm:text-4xl mb-4">{resource.icon}</div>
-                  <h3 className="text-base sm:text-lg font-bold font-mono mb-2 group-hover:text-[#666] transition-colors duration-300">{resource.title}</h3>
-                  <p className="text-xs sm:text-sm text-[#888] font-mono">{resource.desc}</p>
-                </div>
-              ))}
+                {
+                  icon: BookOpen,
+                  title: "Documentation",
+                  desc: "Complete API reference, guides, and examples",
+                },
+                {
+                  icon: Boxes,
+                  title: "Service SDKs",
+                  desc: "Official SDKs for Node.js, Python, Go, and more",
+                },
+                {
+                  icon: Users,
+                  title: "Community",
+                  desc: "Join our Discord and get help from developers",
+                },
+              ].map((resource, idx) => {
+                const Icon = resource.icon
+
+                return (
+                  <div
+                    key={idx}
+                    className="border border-[#222] rounded-lg p-4 sm:p-6 hover:border-[#666] transition-all duration-300 transform hover:scale-105 hover:shadow-lg hover:shadow-[#666]/20 cursor-pointer group"
+                  >
+                    <Icon className="h-8 w-8 sm:h-10 sm:w-10 mb-4 text-white group-hover:text-[#666] transition-colors duration-300" />
+
+                    <h3 className="text-base sm:text-lg font-bold font-mono mb-2 group-hover:text-[#666] transition-colors duration-300">
+                      {resource.title}
+                    </h3>
+
+                    <p className="text-xs sm:text-sm text-[#888] font-mono">
+                      {resource.desc}
+                    </p>
+                  </div>
+                )
+              })}
             </div>
           </div>
         </section>

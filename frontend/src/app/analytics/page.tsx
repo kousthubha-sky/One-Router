@@ -184,9 +184,7 @@ export default function AnalyticsPage() {
               <Card className="bg-[#0a0a0a] border border-[#222] hover:border-cyan-500 transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/10">
                 <CardHeader className="pb-4">
                   <CardTitle className="text-white flex items-center gap-3 text-xl">
-                    <div className="w-8 h-8 bg-cyan-500/20 rounded-lg flex items-center justify-center border border-cyan-500/30">
-                      📊
-                    </div>
+                    
                     API Call Volume
                   </CardTitle>
                   <CardDescription className="text-[#888]">Daily API calls over time</CardDescription>
@@ -223,9 +221,7 @@ export default function AnalyticsPage() {
               <Card className="bg-[#0a0a0a] border border-[#222] hover:border-cyan-500 transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/10">
                 <CardHeader className="pb-4">
                   <CardTitle className="text-white flex items-center gap-3 text-xl">
-                    <div className="w-8 h-8 bg-cyan-500/20 rounded-lg flex items-center justify-center border border-cyan-500/30">
-                      ⚡
-                    </div>
+                    
                     Service Performance
                   </CardTitle>
                   <CardDescription className="text-[#888]">Performance by service</CardDescription>

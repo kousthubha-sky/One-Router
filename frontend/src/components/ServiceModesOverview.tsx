@@ -93,7 +93,7 @@ export function ServiceModesOverview({ services }: ServiceModesOverviewProps) {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className="w-full max-w-2xl mx-auto"
+      className="max-w-3xl mx-auto"
     >
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Test / Live Mode Services */}

@@ -245,42 +245,54 @@ export default function ServicesPage() {
                                     UNIFIED
                                   </Badge>
                                 ) : (
-                                  <div className="flex items-center gap-2">
-                                    <button
-                                      onClick={() => toggleServiceEnvironment(service.service_name, service.active_environment || service.environment)}
-                                      disabled={!service.can_switch || switchingService === service.service_name}
-                                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-200 ${
-                                        service.can_switch
-                                          ? 'hover:bg-[#222] cursor-pointer'
-                                          : 'opacity-50 cursor-not-allowed'
-                                      }`}
-                                      title={
-                                        !service.can_switch
-                                          ? `Add ${service.has_test_credentials ? 'live' : 'test'} credentials to enable switching`
-                                          : `Switch to ${(service.active_environment || service.environment) === 'test' ? 'live' : 'test'} mode`
-                                      }
-                                    >
-                                      {switchingService === service.service_name ? (
-                                        <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
-                                      ) : (service.active_environment || service.environment) === 'live' ? (
-                                        <ToggleRight className="w-5 h-5 text-green-400" />
-                                      ) : (
-                                        <ToggleLeft className="w-5 h-5 text-blue-400" />
-                                      )}
-                                      <Badge className={`${
-                                        (service.active_environment || service.environment) === 'live'
-                                          ? 'bg-green-500/20 text-green-400 border-green-500/30'
-                                          : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                                      } border`}>
-                                        {(service.active_environment || service.environment).toUpperCase()}
-                                      </Badge>
-                                    </button>
-                                    {!service.can_switch && (
-                                      <span className="text-xs text-gray-600">
-                                        {!service.has_live_credentials && '(no live)'}
-                                        {!service.has_test_credentials && '(no test)'}
+                                  <div className="flex flex-col gap-1">
+                                    {/* Environment Toggle Switch */}
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        onClick={() => toggleServiceEnvironment(service.service_name, service.active_environment || service.environment)}
+                                        disabled={!service.can_switch || switchingService === service.service_name}
+                                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-200 border ${
+                                          service.can_switch
+                                            ? 'hover:bg-[#222] cursor-pointer border-transparent hover:border-[#333]'
+                                            : 'opacity-50 cursor-not-allowed border-transparent'
+                                        } ${
+                                          (service.active_environment || service.environment) === 'live'
+                                            ? 'bg-green-500/10'
+                                            : 'bg-blue-500/10'
+                                        }`}
+                                        title={
+                                          !service.can_switch
+                                            ? `Add ${service.has_test_credentials ? 'live' : 'test'} credentials to enable switching`
+                                            : `Click to switch to ${(service.active_environment || service.environment) === 'test' ? 'live' : 'test'} mode`
+                                        }
+                                      >
+                                        {switchingService === service.service_name ? (
+                                          <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+                                        ) : (service.active_environment || service.environment) === 'live' ? (
+                                          <ToggleRight className="w-6 h-6 text-green-400" />
+                                        ) : (
+                                          <ToggleLeft className="w-6 h-6 text-blue-400" />
+                                        )}
+                                        <Badge className={`${
+                                          (service.active_environment || service.environment) === 'live'
+                                            ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                                            : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                                        } border font-semibold`}>
+                                          {(service.active_environment || service.environment).toUpperCase()}
+                                        </Badge>
+                                      </button>
+                                    </div>
+                                    {/* Credential availability indicators */}
+                                    <div className="flex items-center gap-2 text-xs">
+                                      <span className={`flex items-center gap-1 ${service.has_test_credentials ? 'text-blue-400' : 'text-gray-600'}`}>
+                                        <span className={`w-1.5 h-1.5 rounded-full ${service.has_test_credentials ? 'bg-blue-400' : 'bg-gray-600'}`}></span>
+                                        Test
                                       </span>
-                                    )}
+                                      <span className={`flex items-center gap-1 ${service.has_live_credentials ? 'text-green-400' : 'text-gray-600'}`}>
+                                        <span className={`w-1.5 h-1.5 rounded-full ${service.has_live_credentials ? 'bg-green-400' : 'bg-gray-600'}`}></span>
+                                        Live
+                                      </span>
+                                    </div>
                                   </div>
                                 )}
                               </td>
@@ -342,26 +354,43 @@ export default function ServicesPage() {
                                 UNIFIED
                               </Badge>
                             ) : (
-                              <button
-                                onClick={() => toggleServiceEnvironment(service.service_name, service.active_environment || service.environment)}
-                                disabled={!service.can_switch || switchingService === service.service_name}
-                                className={`flex items-center gap-1 ${!service.can_switch ? 'opacity-50' : ''}`}
-                              >
-                                {switchingService === service.service_name ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (service.active_environment || service.environment) === 'live' ? (
-                                  <ToggleRight className="w-5 h-5 text-green-400" />
-                                ) : (
-                                  <ToggleLeft className="w-5 h-5 text-blue-400" />
-                                )}
-                                <Badge className={`${
-                                  (service.active_environment || service.environment) === 'live'
-                                    ? 'bg-green-500/20 text-green-400 border-green-500/30'
-                                    : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                                } border`}>
-                                  {(service.active_environment || service.environment).toUpperCase()}
-                                </Badge>
-                              </button>
+                              <div className="flex flex-col items-end gap-1">
+                                <button
+                                  onClick={() => toggleServiceEnvironment(service.service_name, service.active_environment || service.environment)}
+                                  disabled={!service.can_switch || switchingService === service.service_name}
+                                  className={`flex items-center gap-1 px-2 py-1 rounded-lg ${
+                                    !service.can_switch ? 'opacity-50' : 'hover:bg-[#222]'
+                                  } ${
+                                    (service.active_environment || service.environment) === 'live'
+                                      ? 'bg-green-500/10'
+                                      : 'bg-blue-500/10'
+                                  }`}
+                                >
+                                  {switchingService === service.service_name ? (
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                  ) : (service.active_environment || service.environment) === 'live' ? (
+                                    <ToggleRight className="w-5 h-5 text-green-400" />
+                                  ) : (
+                                    <ToggleLeft className="w-5 h-5 text-blue-400" />
+                                  )}
+                                  <Badge className={`${
+                                    (service.active_environment || service.environment) === 'live'
+                                      ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                                      : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                                  } border`}>
+                                    {(service.active_environment || service.environment).toUpperCase()}
+                                  </Badge>
+                                </button>
+                                {/* Credential indicators for mobile */}
+                                <div className="flex items-center gap-2 text-[10px]">
+                                  <span className={service.has_test_credentials ? 'text-blue-400' : 'text-gray-600'}>
+                                    Test {service.has_test_credentials ? '✓' : '✗'}
+                                  </span>
+                                  <span className={service.has_live_credentials ? 'text-green-400' : 'text-gray-600'}>
+                                    Live {service.has_live_credentials ? '✓' : '✗'}
+                                  </span>
+                                </div>
+                              </div>
                             )}
                           </div>
                           <div className="flex items-center justify-between pt-3 border-t border-[#222]">
