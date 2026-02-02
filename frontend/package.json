@@ -11,7 +11,7 @@
     "test:watch": "jest --watch"
   },
   "dependencies": {
-    "@clerk/nextjs": "^6.36.2",
+    "@clerk/nextjs": "^6.37.1",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-checkbox": "^1.3.3",
     "@radix-ui/react-dialog": "^1.1.15",
@@ -30,8 +30,8 @@
     "lucide-react": "^0.561.0",
     "next": "^16.0.10",
     "onerouterjs-sdk": "file:../onerouter-js",
-    "react": "19.2.1",
-    "react-dom": "19.2.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
     "react-hook-form": "^7.69.0",
     "tailwind-merge": "^3.4.0"
   },
