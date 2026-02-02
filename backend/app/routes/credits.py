@@ -25,6 +25,7 @@ from ..services.credits_service import CreditsService
 from ..services.razorpay_service import RazorpayService, CreditPricingService
 from ..models import UserCredit, CreditTransaction, OneRouterPayment, TransactionType, PaymentStatus
 from ..config import settings
+from ..responses import success_response, paginated_response
 
 
 logger = logging.getLogger(__name__)
@@ -78,32 +79,59 @@ class CreditConsumeRequest(BaseModel):
     amount: int = Field(default=1, ge=1, le=100)
 
 
-@router.get("/balance", response_model=CreditBalanceResponse)
+@router.get("/balance")
 async def get_credit_balance(
+    request: Request,
+    response_format: str = "legacy",
     user=Depends(get_api_or_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Get current user's credit balance and recent transactions.
+
+    Query params:
+        response_format: "legacy" (default) or "standard" for envelope format
     """
     user_id = str(user.get("id"))
     balance_info = await CreditsService.get_balance(user_id, db)
 
-    return CreditBalanceResponse(**balance_info)
+    data = CreditBalanceResponse(**balance_info)
+
+    if response_format == "standard":
+        return success_response(
+            data=data.model_dump(),
+            request_id=getattr(request.state, "request_id", str(uuid4()))
+        )
+
+    return data
 
 
 @router.get("/transactions")
 async def get_transaction_history(
+    request: Request,
     limit: int = 50,
     offset: int = 0,
+    response_format: str = "legacy",
     user=Depends(get_api_or_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Get user's credit transaction history.
+
+    Query params:
+        response_format: "legacy" (default) or "standard" for paginated envelope format
     """
     user_id = str(user.get("id"))
     history = await CreditsService.get_transaction_history(user_id, db, limit, offset)
+
+    if response_format == "standard":
+        return paginated_response(
+            data=history.get("transactions", []),
+            total=history.get("total", 0),
+            limit=limit,
+            offset=offset,
+            request_id=getattr(request.state, "request_id", str(uuid4()))
+        )
 
     return TransactionHistoryResponse(**history)
 
@@ -280,25 +308,44 @@ async def purchase_credits(
 
 
 @router.get("/plans")
-async def get_credit_plans():
+async def get_credit_plans(
+    request: Request,
+    response_format: str = "legacy"
+):
     """
     Get available credit purchase plans.
+
+    Query params:
+        response_format: "legacy" (default) or "standard" for envelope format
     """
     plans = CreditPricingService.get_plans()
-    return {
+    data = {
         "free_tier": CreditPricingService.FREE_TIER,
         "plans": plans
     }
 
+    if response_format == "standard":
+        return success_response(
+            data=data,
+            request_id=getattr(request.state, "request_id", str(uuid4()))
+        )
+
+    return data
+
 
 @router.post("/consume")
 async def consume_credit(
+    http_request: Request,
     request: CreditConsumeRequest,
+    response_format: str = "legacy",
     user=Depends(get_api_or_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Consume credits from balance (for testing/demonstration).
+
+    Query params:
+        response_format: "legacy" (default) or "standard" for envelope format
     """
     user_id = str(user.get("id"))
 
@@ -318,11 +365,18 @@ async def consume_credit(
     # Get updated balance
     balance_info = await CreditsService.get_balance(user_id, db)
 
-    return {
-        "success": True,
+    data = {
         "consumed": request.amount,
         "remaining_balance": balance_info["balance"]
     }
+
+    if response_format == "standard":
+        return success_response(
+            data=data,
+            request_id=getattr(http_request.state, "request_id", str(uuid4()))
+        )
+
+    return {"success": True, **data}
 
 
 @router.post("/webhook/razorpay")
@@ -462,11 +516,16 @@ async def razorpay_webhook(
 @router.get("/verify-payment/{payment_id}")
 async def verify_payment(
     payment_id: str,
+    request: Request,
+    response_format: str = "legacy",
     user=Depends(get_api_or_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Verify payment status and get details.
+
+    Query params:
+        response_format: "legacy" (default) or "standard" for envelope format
     """
     user_id = str(user.get("id"))
 
@@ -510,7 +569,7 @@ async def verify_payment(
             )
             # Keep pending if verification fails
 
-    return {
+    data = {
         "payment_id": str(payment.id),
         "amount": float(payment.amount),
         "currency": payment.currency,
@@ -520,27 +579,40 @@ async def verify_payment(
         "provider_payment_id": payment.provider_payment_id
     }
 
+    if response_format == "standard":
+        return success_response(
+            data=data,
+            request_id=getattr(request.state, "request_id", str(uuid4()))
+        )
+
+    return data
+
 
 @router.post("/simulate-payment/{payment_id}")
 async def simulate_payment_success(
     payment_id: str,
+    request: Request,
+    response_format: str = "legacy",
     user=Depends(get_api_or_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Simulate a successful payment for testing/development purposes only.
     In production, this endpoint should be disabled.
+
+    Query params:
+        response_format: "legacy" (default) or "standard" for envelope format
     """
     from ..config import settings
-    
+
     if settings.ENVIRONMENT == "production":
         raise HTTPException(
             status_code=403,
             detail="This endpoint is not available in production"
         )
-    
+
     user_id = str(user.get("id"))
-    
+
     result = await db.execute(
         select(OneRouterPayment)
         .where(
@@ -549,23 +621,29 @@ async def simulate_payment_success(
         )
     )
     payment = result.scalar_one_or_none()
-    
+
     if not payment:
         raise HTTPException(
             status_code=404,
             detail="Payment not found"
         )
-    
+
     if payment.status in (PaymentStatus.SUCCESS, PaymentStatus.FAILED, PaymentStatus.REFUNDED):
-        return {
+        data = {
             "status": "already_processed",
             "message": f"Payment already has status: {payment.status.value}"
         }
-    
+        if response_format == "standard":
+            return success_response(
+                data=data,
+                request_id=getattr(request.state, "request_id", str(uuid4()))
+            )
+        return data
+
     # Simulate successful payment
     payment.status = PaymentStatus.SUCCESS
     payment.provider_payment_id = f"simulated_pay_{uuid4().hex[:12]}"
-    
+
     # Add credits to user
     try:
         await CreditsService.add_credits(
@@ -584,18 +662,26 @@ async def simulate_payment_success(
             status_code=500,
             detail="Failed to add credits. Please try again."
         )
-    
+
     logger.info(
         f"Simulated payment success for {payment.id}: "
         f"added {payment.credits_purchased} credits to user {payment.user_id}"
     )
-    
-    return {
+
+    data = {
         "status": "success",
         "payment_id": str(payment.id),
         "credits_added": payment.credits_purchased,
         "message": "Payment simulated successfully. Credits have been added to your account."
     }
+
+    if response_format == "standard":
+        return success_response(
+            data=data,
+            request_id=getattr(request.state, "request_id", str(uuid4()))
+        )
+
+    return data
 
 
 # ==================== Helper Functions ====================

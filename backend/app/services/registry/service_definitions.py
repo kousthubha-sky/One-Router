@@ -67,7 +67,8 @@ SERVICE_REGISTRY = {
                     "from": "from_email",
                     "to": "to",
                     "subject": "subject",
-                    "html": "html_body"
+                    "html": "html_body",
+                    "text": "text_body"
                 },
                 "response_mapping": {
                     "id": "id"

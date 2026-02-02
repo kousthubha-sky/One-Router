@@ -16,6 +16,10 @@ class Settings:
     # SECURITY: DEBUG defaults to False - must be explicitly enabled
     DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
 
+    # Observability
+    SENTRY_DSN: str = os.getenv("SENTRY_DSN", "")  # Optional: Sentry error tracking
+    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")  # Logging level: DEBUG, INFO, WARNING, ERROR
+
     # Database
     DATABASE_URL: str
 

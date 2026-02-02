@@ -13,6 +13,7 @@ class User(Base):
     clerk_user_id = Column(String, unique=True, nullable=False)
     email = Column(String, nullable=False)
     name = Column(String, nullable=True)
+    role = Column(String, nullable=False, server_default='user')  # user, developer, admin, super_admin
     preferences = Column(JSONB, nullable=False, server_default='{}')  # Store user preferences like environment settings
     created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)

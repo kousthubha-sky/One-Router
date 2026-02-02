@@ -203,6 +203,7 @@ async def get_resend_status(
     """
     Get Resend configuration status for current user.
     Resend uses a single API key (no test/live split).
+    Returns structure compatible with frontend's ResendStatus interface.
     """
     try:
         credential_manager = CredentialManager()
@@ -227,12 +228,24 @@ async def get_resend_status(
 
         from_email = creds.get("from_email", "") if creds else None
         is_sandbox = from_email.endswith("@resend.dev") if from_email else False
+        api_key_prefix = get_api_key_prefix(creds)
 
+        # Return structure compatible with frontend ResendStatus interface
+        # Resend is unified, so test/live show the same config
         return {
             "success": True,
-            "configured": creds is not None,
-            "api_key_prefix": get_api_key_prefix(creds),
-            "from_email": from_email,
+            "test": {
+                "configured": creds is not None,
+                "api_key_prefix": api_key_prefix,
+                "from_email": from_email
+            },
+            "live": {
+                "configured": creds is not None,
+                "api_key_prefix": api_key_prefix,
+                "from_email": from_email
+            },
+            "active_environment": "live" if creds else None,
+            "is_unified": True,
             "mode": "sandbox" if is_sandbox else "production" if creds else None,
             "note": "Resend uses one API key. Use onboarding@resend.dev for testing, verify domain for production."
         }

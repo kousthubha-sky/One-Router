@@ -6,7 +6,7 @@ Receives webhooks from payment gateways → forwards to developer's webhook URL
 
 from fastapi import APIRouter, Request, HTTPException, Depends, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select, update, and_
 from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.sql import func
 import httpx
@@ -16,11 +16,13 @@ import json
 import os
 import logging
 from typing import Optional
+from uuid import uuid4
 from ..database import get_db
 from ..models import WebhookEvent, User, ServiceCredential
 from ..services.request_router import RequestRouter
 from ..auth.dependencies import get_current_user
 from ..config import settings
+from ..responses import paginated_response
 
 router = APIRouter()
 request_router = RequestRouter()
@@ -667,9 +669,11 @@ async def test_webhook(
 
 @router.get("/api/webhooks/logs")
 async def get_webhook_logs(
+    request: Request,
     service_name: Optional[str] = None,
     limit: int = 100,
     offset: int = 0,
+    response_format: str = "legacy",
     user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -677,33 +681,56 @@ async def get_webhook_logs(
     Get webhook event history
 
     GET /api/webhooks/logs?service_name=razorpay&limit=50
+
+    Query params:
+        response_format: "legacy" (default) or "standard" for paginated envelope format
     """
     from sqlalchemy import desc
 
-    query = select(WebhookEvent).where(WebhookEvent.user_id == user["id"])
-
+    # Build base filter
+    base_filter = WebhookEvent.user_id == user["id"]
     if service_name:
-        query = query.where(WebhookEvent.service_name == service_name)
+        base_filter = and_(base_filter, WebhookEvent.service_name == service_name)
 
-    query = query.order_by(desc(WebhookEvent.created_at)).limit(limit).offset(offset)
+    # Get total count
+    count_query = select(func.count(WebhookEvent.id)).where(base_filter)
+    count_result = await db.execute(count_query)
+    total_count = count_result.scalar() or 0
+
+    # Get paginated events
+    query = select(WebhookEvent).where(base_filter).order_by(
+        desc(WebhookEvent.created_at)
+    ).limit(limit).offset(offset)
 
     result = await db.execute(query)
     events = result.scalars().all()
 
+    events_data = [
+        {
+            "id": str(event.id),
+            "service_name": event.service_name,
+            "event_type": event.event_type,
+            "processed": event.processed,
+            "processed_at": event.processed_at.isoformat() if event.processed_at is not None else None,
+            "created_at": event.created_at.isoformat(),
+            "payload_size": len(str(event.payload)) if event.payload is not None else 0
+        }
+        for event in events
+    ]
+
+    if response_format == "standard":
+        return paginated_response(
+            data=events_data,
+            total=total_count,
+            limit=limit,
+            offset=offset,
+            request_id=getattr(request.state, "request_id", str(uuid4()))
+        )
+
+    # Legacy format
     return {
-        "events": [
-            {
-                "id": str(event.id),
-                "service_name": event.service_name,
-                "event_type": event.event_type,
-                "processed": event.processed,
-                "processed_at": event.processed_at.isoformat() if event.processed_at is not None else None,
-                "created_at": event.created_at.isoformat(),
-                "payload_size": len(str(event.payload)) if event.payload is not None else 0
-            }
-            for event in events
-        ],
-        "total": len(events),
+        "events": events_data,
+        "total": total_count,
         "limit": limit,
         "offset": offset
     }

@@ -4,15 +4,17 @@ Advanced Analytics Dashboard
 Provides comprehensive usage analytics, performance metrics, and cost analysis
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc, and_, or_, case, text
 from sqlalchemy.orm import joinedload
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
+from uuid import uuid4
 from ..database import get_db
 from ..auth.dependencies import get_current_user
 from ..models import TransactionLog, ApiKey, User, WebhookEvent
+from ..responses import success_response, paginated_response
 
 router = APIRouter()
 
@@ -219,7 +221,9 @@ class AnalyticsService:
 
 @router.get("/api/analytics/overview")
 async def get_analytics_overview(
+    request: Request,
     period: str = "30d",
+    response_format: str = "legacy",
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -233,6 +237,9 @@ async def get_analytics_overview(
     - Top services used
     - Error rate by service
     - Cost breakdown
+
+    Query params:
+        response_format: "legacy" (default) or "standard" for envelope format
     """
     try:
         user_id = str(user.get("id"))
@@ -240,7 +247,7 @@ async def get_analytics_overview(
         api_key_ids = await AnalyticsService.get_user_api_keys(user_id, db)
 
         if not api_key_ids:
-            return {
+            data = {
                 "period": period,
                 "total_calls": 0,
                 "success_rate": 0,
@@ -250,16 +257,30 @@ async def get_analytics_overview(
                 "cost_breakdown": {},
                 "total_cost": 0
             }
+            if response_format == "standard":
+                return success_response(
+                    data=data,
+                    request_id=getattr(request.state, "request_id", str(uuid4()))
+                )
+            return data
 
         overview = await AnalyticsService.calculate_overview_metrics(user_id, api_key_ids, since_date, db)
         costs = await AnalyticsService.calculate_cost_analytics(user_id, api_key_ids, since_date, db)
 
-        return {
+        data = {
             "period": period,
             "since_date": since_date.isoformat(),
             **overview,
             **costs
         }
+
+        if response_format == "standard":
+            return success_response(
+                data=data,
+                request_id=getattr(request.state, "request_id", str(uuid4()))
+            )
+
+        return data
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analytics error: {str(e)}")
@@ -542,43 +563,69 @@ async def get_cost_analytics(
 
 @router.get("/api/analytics/logs")
 async def get_transaction_logs(
+    request: Request,
     limit: int = 100,
     offset: int = 0,
     status: Optional[str] = None,
+    response_format: str = "legacy",
     user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get paginated transaction logs for the frontend logs page"""
+    """
+    Get paginated transaction logs for the frontend logs page.
+
+    Query params:
+        response_format: "legacy" (default) or "standard" for paginated envelope format
+    """
     try:
         from ..models import TransactionLog
-        from sqlalchemy import select, desc
 
-        query = select(TransactionLog).where(
-            TransactionLog.user_id == user["id"]
-        ).order_by(desc(TransactionLog.created_at)).limit(limit).offset(offset)
-
+        # Build base query for filtering
+        base_filter = TransactionLog.user_id == user["id"]
         if status:
-            query = query.where(TransactionLog.status == status)
+            base_filter = and_(base_filter, TransactionLog.status == status)
+
+        # Get total count
+        count_query = select(func.count(TransactionLog.id)).where(base_filter)
+        count_result = await db.execute(count_query)
+        total_count = count_result.scalar() or 0
+
+        # Get paginated logs
+        query = select(TransactionLog).where(base_filter).order_by(
+            desc(TransactionLog.created_at)
+        ).limit(limit).offset(offset)
 
         result = await db.execute(query)
         logs = result.scalars().all()
 
+        logs_data = [
+            {
+                "id": str(log.id),
+                "transaction_id": log.transaction_id,
+                "service_name": log.service_name,
+                "endpoint": log.endpoint,
+                "http_method": log.http_method,
+                "status": log.status,
+                "response_status": log.response_status,
+                "response_time_ms": log.response_time_ms,
+                "created_at": log.created_at.isoformat()
+            }
+            for log in logs
+        ]
+
+        if response_format == "standard":
+            return paginated_response(
+                data=logs_data,
+                total=total_count,
+                limit=limit,
+                offset=offset,
+                request_id=getattr(request.state, "request_id", str(uuid4()))
+            )
+
+        # Legacy format
         return {
-            "logs": [
-                {
-                    "id": str(log.id),
-                    "transaction_id": log.transaction_id,
-                    "service_name": log.service_name,
-                    "endpoint": log.endpoint,
-                    "http_method": log.http_method,
-                    "status": log.status,
-                    "response_status": log.response_status,
-                    "response_time_ms": log.response_time_ms,
-                    "created_at": log.created_at.isoformat()
-                }
-                for log in logs
-            ],
-            "total": len(logs),
+            "logs": logs_data,
+            "total": total_count,
             "limit": limit,
             "offset": offset
         }

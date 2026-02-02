@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from typing import List, Dict, Any, Optional
@@ -10,6 +10,7 @@ from ..auth.dependencies import get_current_user
 from ..models import ApiKey
 from ..models.user import User
 from ..services.credential_manager import CredentialManager
+from ..responses import success_response
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/keys", tags=["api-keys"])
@@ -41,11 +42,18 @@ class ApiKeyResponse(BaseModel):
 
 @router.get("")
 async def list_api_keys(
+    request: Request,
     environment: Optional[str] = Query(None, description="Filter by environment (test/live)"),
+    response_format: str = Query("legacy", description="Response format: legacy or standard"),
     user: Dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
-    """List API keys for current user, optionally filtered by environment"""
+    """
+    List API keys for current user, optionally filtered by environment.
+
+    Query params:
+        response_format: "legacy" (default) or "standard" for envelope format
+    """
     try:
         # Get user's preferred environment if not specified
         if environment is None:
@@ -58,23 +66,37 @@ async def list_api_keys(
 
         credential_manager = CredentialManager()
         api_keys = await credential_manager.get_user_api_keys(db, user["id"], environment)
-        
-        return {
-            "success": True,
+
+        data = {
             "api_keys": api_keys,
             "count": len(api_keys),
             "environment": environment or "all"
         }
+
+        if response_format == "standard":
+            return success_response(
+                data=data,
+                request_id=getattr(request.state, "request_id", str(uuid.uuid4()))
+            )
+
+        return {"success": True, **data}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("")
 async def create_api_key(
+    http_request: Request,
     request: CreateApiKeyRequest,
+    response_format: str = Query("legacy", description="Response format: legacy or standard"),
     user: Dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
-    """Create a new API key for the current user"""
+    """
+    Create a new API key for the current user.
+
+    Query params:
+        response_format: "legacy" (default) or "standard" for envelope format
+    """
     try:
         # Set environment to user's preference if not specified
         if request.environment is None:
@@ -94,25 +116,39 @@ async def create_api_key(
             rate_limit_per_min=request.rate_limit_per_min,
             rate_limit_per_day=request.rate_limit_per_day
         )
-        
-        return {
-            "success": True,
+
+        data = {
             "api_key": result["api_key"],
             "key_id": result["key_id"],
             "key_name": result["key_name"],
             "environment": result["environment"],
             "created_at": result["created_at"]
         }
+
+        if response_format == "standard":
+            return success_response(
+                data=data,
+                request_id=getattr(http_request.state, "request_id", str(uuid.uuid4()))
+            )
+
+        return {"success": True, **data}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/{key_id}")
 async def get_api_key_details(
     key_id: str,
+    request: Request,
+    response_format: str = Query("legacy", description="Response format: legacy or standard"),
     user: Dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
-    """Get detailed information about a specific API key"""
+    """
+    Get detailed information about a specific API key.
+
+    Query params:
+        response_format: "legacy" (default) or "standard" for envelope format
+    """
     try:
         result = await db.execute(
             select(ApiKey).where(
@@ -121,15 +157,14 @@ async def get_api_key_details(
             )
         )
         api_key = result.scalar_one_or_none()
-        
+
         if not api_key:
             raise HTTPException(status_code=404, detail="API key not found")
-        
+
         credential_manager = CredentialManager()
         usage = await credential_manager.get_api_key_usage(db, key_id)
-        
-        return {
-            "success": True,
+
+        data = {
             "id": str(api_key.id),
             "key_name": api_key.key_name,
             "key_prefix": api_key.key_prefix,
@@ -142,6 +177,14 @@ async def get_api_key_details(
             "created_at": api_key.created_at.isoformat() if api_key.created_at else None,
             "usage": usage
         }
+
+        if response_format == "standard":
+            return success_response(
+                data=data,
+                request_id=getattr(request.state, "request_id", str(uuid.uuid4()))
+            )
+
+        return {"success": True, **data}
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid key_id format")
     except HTTPException:

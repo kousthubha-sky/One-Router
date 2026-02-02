@@ -19,7 +19,12 @@ class RequestRouter:
     async def _get_user_preferred_environment(self, user_id: str, service: str, db: AsyncSession) -> str:
         """
         Return the user's preferred environment for a given service, defaulting to "test" if none is set.
-        
+
+        Environment hierarchy (highest to lowest priority):
+        1. Per-service setting: preferences["service_environments"][service]
+        2. Global setting: preferences["current_environment"]
+        3. Default: "test"
+
         Returns:
             environment (str): The preferred environment name for the service (for example, "test" or "live").
         """
@@ -28,8 +33,15 @@ class RequestRouter:
         )
         preferences = result.scalar_one_or_none()
 
-        if preferences and "environments" in preferences and service in preferences["environments"]:
-            return preferences["environments"][service]
+        if preferences:
+            # Check per-service environment first (highest priority)
+            service_envs = preferences.get("service_environments", {})
+            if service.lower() in service_envs:
+                return service_envs[service.lower()]
+
+            # Fall back to global environment setting
+            if "current_environment" in preferences:
+                return preferences["current_environment"]
 
         # Default to "test" if no preference set
         return "test"

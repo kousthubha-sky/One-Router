@@ -1,16 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from sqlalchemy.orm.attributes import flag_modified
 from typing import List, Dict, Any
 from pydantic import BaseModel
 from datetime import datetime
+from uuid import uuid4
 
 from ..database import get_db
 from ..auth.dependencies import get_current_user
 from ..models import ServiceCredential
 from ..models.user import User
 from ..services.credential_manager import CredentialManager
+from ..responses import success_response
 
 router = APIRouter()
 
@@ -40,12 +42,14 @@ class UpdateCredentialsRequest(BaseModel):
     credentials: Dict[str, str]
     environment: str = "test"
 
-@router.get("/services", response_model=ServicesResponse)
+@router.get("/services")
 async def get_user_services(
+    request: Request,
     user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     environment: str = "test",
-    check_all: bool = False  # If true, check all environments (for has_services check)
+    check_all: bool = False,  # If true, check all environments (for has_services check)
+    response_format: str = "legacy"
 ):
     """
     Get all services connected by the user, filtered by environment
@@ -53,6 +57,7 @@ async def get_user_services(
     Query Parameters:
     - environment: 'test' or 'live' (default: 'test')
     - check_all: If true, returns services from ALL environments (for dashboard redirect check)
+    - response_format: 'legacy' (default) or 'standard' for envelope format
 
     This endpoint is called by the dashboard to check:
     1. Does user have ANY services? (show onboarding vs dashboard) - use check_all=true
@@ -79,29 +84,15 @@ async def get_user_services(
         # Unified services (single API key, no test/live split) - always show regardless of environment
         UNIFIED_SERVICES = ["resend"]
 
-        # Query services - either all environments or filtered
-        if check_all:
-            # For has_services check: get ALL active services regardless of environment
-            result = await db.execute(
-                select(ServiceCredential).where(
-                    ServiceCredential.user_id == user["id"],
-                    ServiceCredential.is_active
-                )
+        # Query ALL active services - we need all credentials to properly handle per-service environments
+        # The filtering logic happens after we determine each service's active environment
+        result = await db.execute(
+            select(ServiceCredential).where(
+                ServiceCredential.user_id == user["id"],
+                ServiceCredential.is_active == True
             )
-        else:
-            # For display: filter by environment OR include unified services
-            from sqlalchemy import or_
-            result = await db.execute(
-                select(ServiceCredential).where(
-                    ServiceCredential.user_id == user["id"],
-                    ServiceCredential.is_active,
-                    or_(
-                        ServiceCredential.environment == environment,
-                        ServiceCredential.provider_name.in_(UNIFIED_SERVICES)
-                    )
-                )
-            )
-        credentials = result.scalars().all()
+        )
+        all_credentials = result.scalars().all()
         
         # Helper to create masked credential hint
         def get_credential_hint(provider_name: str, decrypted_creds: dict) -> str:
@@ -142,25 +133,38 @@ async def get_user_services(
         if user_obj and user_obj.preferences:
             service_envs = user_obj.preferences.get("service_environments", {})
 
-        # Get ALL credentials to determine what environments are available per service
-        all_creds_result = await db.execute(
-            select(ServiceCredential).where(
-                ServiceCredential.user_id == user["id"],
-                ServiceCredential.is_active == True
-            )
-        )
-        all_creds = all_creds_result.scalars().all()
-
-        # Build a map of service -> available environments
+        # Build a map of service -> available environments and credentials
         service_creds_map = {}
-        for c in all_creds:
+        for c in all_credentials:
             if c.provider_name not in service_creds_map:
-                service_creds_map[c.provider_name] = {"test": False, "live": False}
-            service_creds_map[c.provider_name][c.environment] = True
+                service_creds_map[c.provider_name] = {"test": None, "live": None, "has_test": False, "has_live": False}
+            service_creds_map[c.provider_name][c.environment] = c
+            if c.environment == "test":
+                service_creds_map[c.provider_name]["has_test"] = True
+            elif c.environment == "live":
+                service_creds_map[c.provider_name]["has_live"] = True
+
+        # For each unique service, pick the credential that matches its active environment
+        # This ensures we show the right credential based on per-service settings
+        credentials_to_display = []
+        for service_name, creds_info in service_creds_map.items():
+            is_unified = service_name.lower() in unified_services
+
+            if is_unified:
+                # Unified services use whatever credential exists (no test/live distinction)
+                cred = creds_info.get("live") or creds_info.get("test")
+            else:
+                # Per-service setting takes precedence over global
+                active_env = service_envs.get(service_name.lower(), preferred_env)
+                # Try to get credential for active environment, fall back to any available
+                cred = creds_info.get(active_env) or creds_info.get("test") or creds_info.get("live")
+
+            if cred:
+                credentials_to_display.append((cred, creds_info))
 
         # Convert to response format
         services = []
-        for cred in credentials:
+        for cred, creds_info in credentials_to_display:
             # Decrypt credentials to get hint (key ID only, not secrets)
             credential_hint = ""
             try:
@@ -179,9 +183,6 @@ async def get_user_services(
                 # Per-service setting > global setting
                 active_env = service_envs.get(cred.provider_name.lower(), preferred_env)
 
-            # Get available credentials info
-            creds_info = service_creds_map.get(cred.provider_name, {"test": False, "live": False})
-
             services.append(ServiceInfo(
                 id=str(cred.id),
                 service_name=cred.provider_name,
@@ -192,17 +193,25 @@ async def get_user_services(
                 created_at=cred.created_at.isoformat() if cred.created_at else "",
                 credential_hint=credential_hint,
                 is_unified=is_unified,
-                has_test_credentials=creds_info["test"],
-                has_live_credentials=creds_info["live"],
-                can_switch=not is_unified and (creds_info["test"] and creds_info["live"])
+                has_test_credentials=creds_info["has_test"],
+                has_live_credentials=creds_info["has_live"],
+                can_switch=not is_unified and (creds_info["has_test"] and creds_info["has_live"])
             ))
 
-        return ServicesResponse(
+        result_data = ServicesResponse(
             services=services,
             has_services=len(services) > 0,
             total_count=len(services)
         )
-        
+
+        if response_format == "standard":
+            return success_response(
+                data=result_data.model_dump(),
+                request_id=getattr(request.state, "request_id", str(uuid4()))
+            )
+
+        return result_data
+
     except Exception as e:
         print(f"Error fetching user services: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch services: {str(e)}")
@@ -211,12 +220,17 @@ async def get_user_services(
 @router.get("/services/{service_name}/status")
 async def get_service_status(
     service_name: str,
+    request: Request,
+    response_format: str = "legacy",
     user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Check if a specific service is connected
-    
+
+    Query params:
+        response_format: "legacy" (default) or "standard" for envelope format
+
     Returns:
         {
             "connected": true/false,
@@ -233,21 +247,35 @@ async def get_service_status(
             )
         )
         credential = result.scalar_one_or_none()
-        
+
         if not credential:
-            return {
+            data = {
                 "connected": False,
                 "service_name": service_name
             }
-        
-        return {
+            if response_format == "standard":
+                return success_response(
+                    data=data,
+                    request_id=getattr(request.state, "request_id", str(uuid4()))
+                )
+            return data
+
+        data = {
             "connected": True,
             "service_name": service_name,
             "environment": credential.environment,
             "features": credential.features_config or {},
             "created_at": credential.created_at.isoformat() if credential.created_at else ""
         }
-        
+
+        if response_format == "standard":
+            return success_response(
+                data=data,
+                request_id=getattr(request.state, "request_id", str(uuid4()))
+            )
+
+        return data
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

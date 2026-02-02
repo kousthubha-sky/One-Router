@@ -283,8 +283,7 @@ async def get_sms_status(
 @router.post("/email", response_model=EmailResponse, status_code=status.HTTP_201_CREATED)
 async def send_email(
     request: EmailRequest,
-    user = Depends(get_current_user),
-    api_key_obj = Depends(get_api_user),
+    auth_data = Depends(get_api_user),
     db: AsyncSession = Depends(get_db)
 ) -> EmailResponse:
     """
@@ -297,8 +296,8 @@ async def send_email(
     import time
 
     try:
-        # Get user ID (handle both dict and object formats)
-        user_id = user.get("id") if isinstance(user, dict) else user.id
+        user_id = auth_data["id"]
+        api_key_obj = auth_data["api_key"]
 
         # Get user's environment preference
         environment = await get_user_environment(db, str(user_id))

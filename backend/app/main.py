@@ -1,14 +1,61 @@
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 from datetime import datetime
 import uuid
+import time
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+from sentry_sdk.integrations.redis import RedisIntegration
+from sentry_sdk.integrations.httpx import HttpxIntegration
 
 from .config import settings
+
+# Initialize Sentry for error tracking and performance monitoring
+if settings.SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        environment=settings.ENVIRONMENT,
+        release=f"onerouter-backend@{settings.VERSION if hasattr(settings, 'VERSION') else '1.0.0'}",
+        integrations=[
+            FastApiIntegration(transaction_style="endpoint"),
+            SqlalchemyIntegration(),
+            RedisIntegration(),
+            HttpxIntegration(),
+        ],
+        traces_sample_rate=0.1,  # 10% of requests for performance monitoring
+        profiles_sample_rate=0.1,  # 10% for profiling
+        send_default_pii=False,  # Don't send personally identifiable info
+        attach_stacktrace=True,
+    )
+
+# Initialize structured logging and OpenTelemetry
+from .observability import (
+    setup_structured_logging,
+    setup_opentelemetry,
+    get_metrics,
+    get_metrics_content_type,
+    record_request_metrics,
+    record_error,
+    get_logger,
+    REQUESTS_IN_PROGRESS,
+)
+
+# Setup structured JSON logging
+logger = setup_structured_logging()
+
+# Setup OpenTelemetry distributed tracing (if not in test mode)
+if settings.ENVIRONMENT != "test":
+    try:
+        setup_opentelemetry()
+        logger.info("OpenTelemetry tracing initialized")
+    except Exception as e:
+        logger.warning(f"Failed to initialize OpenTelemetry: {e}")
 from .database import get_db, engine
 from .auth.dependencies import get_current_user, get_api_user, api_key_auth
 from .models import User
@@ -16,6 +63,7 @@ from .routes.onboarding import router as onboarding_router
 from .routes.unified_api import router as unified_api_router
 from .routes.services import router as services_router
 from .routes.service_discovery import router as service_discovery_router
+from .routes.admin import router as admin_router
 from .cache import init_redis, close_redis, cache_service
 from .exceptions import OneRouterException, ErrorResponse, ErrorDetail, ErrorCode
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -79,6 +127,44 @@ async def add_request_id(request, call_next):
     response.headers["X-Request-ID"] = request.state.request_id
     return response
 
+
+# Metrics collection middleware
+@app.middleware("http")
+async def metrics_middleware(request: Request, call_next):
+    """Record request metrics for Prometheus."""
+    path = request.url.path
+
+    # Skip metrics for metrics endpoint itself to avoid recursion
+    if path == "/metrics":
+        return await call_next(request)
+
+    # Normalize path for metrics (replace IDs with placeholders)
+    normalized_path = path
+    for segment in path.split('/'):
+        # Replace UUIDs and numeric IDs with placeholder
+        if len(segment) == 36 and '-' in segment:  # UUID
+            normalized_path = normalized_path.replace(segment, '{id}')
+        elif segment.isdigit():
+            normalized_path = normalized_path.replace(f'/{segment}', '/{id}')
+
+    method = request.method
+    REQUESTS_IN_PROGRESS.labels(method=method, endpoint=normalized_path).inc()
+
+    start_time = time.perf_counter()
+    try:
+        response = await call_next(request)
+        duration = time.perf_counter() - start_time
+        record_request_metrics(method, normalized_path, response.status_code, duration)
+        return response
+    except Exception as e:
+        duration = time.perf_counter() - start_time
+        record_request_metrics(method, normalized_path, 500, duration)
+        record_error(type(e).__name__, "http")
+        raise
+    finally:
+        REQUESTS_IN_PROGRESS.labels(method=method, endpoint=normalized_path).dec()
+
+
 # Add security headers (skip for OPTIONS requests)
 @app.middleware("http")
 async def add_security_headers(request, call_next):
@@ -140,6 +226,8 @@ async def rate_limit_middleware(request, call_next):
         )
 
         if not is_allowed:
+            from datetime import datetime
+            reset_at_iso = datetime.utcfromtimestamp(reset_at).isoformat() + "Z"
             return JSONResponse(
                 status_code=429,
                 content={
@@ -151,6 +239,7 @@ async def rate_limit_middleware(request, call_next):
                     "X-RateLimit-Limit": str(limit_per_minute),
                     "X-RateLimit-Remaining": "0",
                     "X-RateLimit-Reset": str(reset_at),
+                    "X-RateLimit-Reset-At": reset_at_iso,
                     "Retry-After": str(max(1, reset_at - int(__import__('time').time())))
                 }
             )
@@ -159,9 +248,12 @@ async def rate_limit_middleware(request, call_next):
         response = await call_next(request)
 
         # Add rate limit headers
+        from datetime import datetime
+        reset_at_iso = datetime.utcfromtimestamp(reset_at).isoformat() + "Z"
         response.headers["X-RateLimit-Limit"] = str(limit_per_minute)
         response.headers["X-RateLimit-Remaining"] = str(remaining)
         response.headers["X-RateLimit-Reset"] = str(reset_at)
+        response.headers["X-RateLimit-Reset-At"] = reset_at_iso
 
         return response
 
@@ -445,6 +537,9 @@ from .routes.credits import router as credits_router, callback_router as credits
 app.include_router(credits_router, tags=["credits"])
 app.include_router(credits_callback_router, tags=["credits-callback"])
 
+# Admin routes (RBAC, audit, GDPR)
+app.include_router(admin_router, tags=["admin"])
+
 # Health check endpoint
 @app.get("/")
 async def root():
@@ -464,6 +559,18 @@ async def simple_health_check():
         "message": "API is running",
         "timestamp": datetime.utcnow().isoformat()
     }
+
+
+@app.get("/metrics")
+async def prometheus_metrics():
+    """
+    Prometheus metrics endpoint.
+    Returns metrics in Prometheus text format for scraping.
+    """
+    return Response(
+        content=get_metrics(),
+        media_type=get_metrics_content_type()
+    )
 
 @app.get("/api/health")
 async def health_check(db: AsyncSession = Depends(get_db)):
@@ -546,6 +653,30 @@ async def check_db_connection(db: AsyncSession) -> Dict[str, Any]:
             return {"status": "error", "message": "Database query failed"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+@app.get("/api/debug/sentry-test")
+async def test_sentry():
+    """
+    Test endpoint to verify Sentry is capturing errors.
+    Only available in non-production environments.
+    """
+    if settings.ENVIRONMENT == "production":
+        raise HTTPException(status_code=403, detail="Not available in production")
+
+    if not settings.SENTRY_DSN:
+        return {"status": "skipped", "message": "SENTRY_DSN not configured"}
+
+    # This will be captured by Sentry
+    try:
+        raise ValueError("Sentry test error - ignore this!")
+    except Exception as e:
+        sentry_sdk.capture_exception(e)
+        return {
+            "status": "sent",
+            "message": "Test error sent to Sentry. Check your Sentry dashboard."
+        }
+
 
 # Admin authorization dependency
 async def get_admin_user(user = Depends(get_current_user)):
