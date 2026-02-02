@@ -165,12 +165,14 @@ export default function Home() {
                       </Button>
                     </Link>
                   </SignedIn>
-                  
+                <Link href="/docs">
                   <Button className="px-4 sm:px-8 py-2 sm:py-3 text-xs sm:text-sm bg-transparent border border-white/30 text-white font-bold rounded-lg hover:border-white/60 transition-all duration-300 transform hover:scale-105 font-mono flex items-center gap-2 hover:bg-white/5">
                     <Plus className="w-3 sm:w-4 h-3 sm:h-4" />
                     <span className="hidden sm:inline">View Documentation</span>
                     <span className="sm:hidden">Docs</span>
                   </Button>
+                </Link>  
+                  
                 </div>
 
                 {/* Trust Badge */}
@@ -469,9 +471,9 @@ export default function Home() {
               <div>
                 <h4 className="font-bold font-mono mb-4 text-white text-xs sm:text-sm">Product</h4>
                 <ul className="space-y-2 text-[#888] text-xs sm:text-sm font-mono">
-                  <li><a href="#" className="hover:text-white transition-colors duration-300 hover:underline decoration-[#666]">Features</a></li>
-                  <li><a href="#" className="hover:text-white transition-colors duration-300 hover:underline decoration-[#666]">Pricing</a></li>
-                  <li><a href="#" className="hover:text-white transition-colors duration-300 hover:underline decoration-[#666]">Docs</a></li>
+                  <li><a href="" className="hover:text-white transition-colors duration-300 hover:underline decoration-[#666]">Features</a></li>
+                  <li><a href="/pricing" className="hover:text-white transition-colors duration-300 hover:underline decoration-[#666]">Pricing</a></li>
+                  <li><a href="/docs" className="hover:text-white transition-colors duration-300 hover:underline decoration-[#666]">Docs</a></li>
                 </ul>
               </div>
               <div>
@@ -485,9 +487,9 @@ export default function Home() {
               <div>
                 <h4 className="font-bold font-mono mb-4 text-white text-xs sm:text-sm">Legal</h4>
                 <ul className="space-y-2 text-[#888] text-xs sm:text-sm font-mono">
-                  <li><a href="#" className="hover:text-white transition-colors duration-300 hover:underline decoration-[#666]">Privacy</a></li>
-                  <li><a href="#" className="hover:text-white transition-colors duration-300 hover:underline decoration-[#666]">Terms</a></li>
-                  <li><a href="#" className="hover:text-white transition-colors duration-300 hover:underline decoration-[#666]">License</a></li>
+                  <li><a href="/privacy" className="hover:text-white transition-colors duration-300 hover:underline decoration-[#666]">Privacy</a></li>
+                  <li><a href="/terms" className="hover:text-white transition-colors duration-300 hover:underline decoration-[#666]">Terms</a></li>
+                  <li><a href="" className="hover:text-white transition-colors duration-300 hover:underline decoration-[#666]">License</a></li>
                 </ul>
               </div>
             </div>
