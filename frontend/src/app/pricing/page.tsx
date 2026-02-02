@@ -2,8 +2,13 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Check, Zap, Shield, TrendingUp, Star, CreditCard } from "lucide-react";
+import { Check, Zap, Shield, TrendingUp, Star, CreditCard, Github } from "lucide-react";
 import Link from "next/link";
+import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs";
+import { useState } from "react";
+
+
+
 
 const PricingCard = ({
   title,
@@ -103,25 +108,113 @@ const FeatureItem = ({
 );
 
 export default function PricingPage() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   return (
     <div className="min-h-screen bg-black text-white font-sans">
-      <header className="border-b border-[#222]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Zap className="w-8 h-8 text-cyan-500" />
-              <h1 className="text-2xl font-bold">Pricing</h1>
+      {/* Modern Navbar */}
+        <header className="sticky top-0 z-50 bg-black border-b border-[#222]">
+          <div className="w-full h-16 flex items-center border-l border-r border-[#222] relative">
+            {/* Vertical gridlines - hidden on mobile */}
+            <div className="absolute inset-0 flex pointer-events-none hidden md:flex">
+              <div className="flex-1 border-r border-[#222]"></div>
+              <div className="flex-1 border-r border-[#222]"></div>
+              <div className="flex-1 border-r border-[#222]"></div>
             </div>
-            <Link href="/onboarding">
-              <Button className="bg-cyan-500 hover:bg-cyan-600 text-black font-medium">
-                Get Started
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </header>
 
+            <div className="w-full h-full flex justify-between items-center px-4 md:px-8 relative z-10">
+              {/* Left - Logo */}
+              <div className="flex items-center gap-2 border-r border-[#222] pr-4 md:pr-8 flex-1">
+                <div className="w-8 h-8 bg-gradient-to-br from-black  to-cyan-600 rounded-2xl flex items-center justify-center shadow-lg transition-all duration-300 hover:shadow-cyan-500/25 hover:scale-110">
+                  </div>
+                <div className="font-bold text-sm md:text-lg font-mono">
+                  
+                  <span className="text-white">One</span>
+                  <span className="text-cyan-400">Router</span>
+                </div>
+              </div>
+
+              {/* Middle - Navigation Links */}
+              <nav className="hidden lg:flex flex-1 items-center justify-center gap-4 xl:gap-12 border-r border-[#222] px-4 xl:px-8">
+                 <Link href="/docs" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
+                   docs
+                 </Link>
+                 <a href="/privacy" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
+                   privacy
+                 </a>
+                 <a href="/terms" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
+                   terms
+                 </a>
+                 <Link href="/pricing" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
+                   pricing
+                 </Link>
+                 <a href="/contact" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
+                   contact
+                 </a>
+                 
+               </nav>
+
+              {/* Right - Auth & GitHub */}
+              <div className="flex items-center gap-2 md:gap-4 lg:gap-6 justify-end flex-1 pl-4 md:pl-8">
+                <a href="https://github.com" className="text-[#888] hover:text-white transition-all duration-300 hover:scale-110">
+                  <Github className="w-4 md:w-5 h-4 md:h-5" />
+                </a>
+
+                <SignedOut>
+                  <SignInButton mode="modal">
+                    <Button className="bg-white text-black hover:bg-gray-200 font-mono font-bold text-xs md:text-sm px-3 md:px-6 py-2 rounded transition-all duration-300 transform hover:scale-105 hidden sm:block">
+                      Sign In
+                    </Button>
+                  </SignInButton>
+                </SignedOut>
+                <SignedIn>
+                  <Link href="/dashboard">
+                    <Button className="bg-white text-black hover:bg-gray-200 font-mono font-bold text-xs md:text-sm px-3 md:px-6 py-2 rounded transition-all duration-300 transform hover:scale-105 hidden sm:block">
+                      Dashboard
+                    </Button>
+                  </Link>
+                  <UserButton />
+                </SignedIn>
+
+                {/* Mobile Menu Button */}
+                <button 
+                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                  className="lg:hidden p-2 text-[#888] hover:text-white transition-colors">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Mobile Menu - Dropdown */}
+             {mobileMenuOpen && (
+               <div className="lg:hidden absolute top-16 left-0 right-0 bg-black border-b border-[#222] px-4 py-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                 <Link href="/docs" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
+                   docs
+                 </Link>
+                 <Link href="/privacy" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
+                   privacy
+                 </Link>
+                 <Link href="/terms" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
+                   terms
+                 </Link>
+                 <Link href="/pricing" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
+                   pricing
+                 </Link>
+                 <Link href="/contact" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
+                   contact
+                 </Link>
+               </div>
+             )}
+          </div>
+        </header>
+{/* Grid Background */}
+          <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff1a_1px,transparent_3px),linear-gradient(to_bottom,#ffffff1a_1px,transparent_3px)] bg-[size:40px_40px] pointer-events-none"></div>
+          
+          {/* Radial Diffusion Overlay - Fades gridlines at edges */}
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(0,0,0,0.8)_70%,rgba(0,0,0,0.8)_100%)] pointer-events-none"></div>
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        
         <div className="text-center mb-16">
           <h2 className="text-5xl font-bold mb-4">Simple, Transparent Pricing</h2>
           <p className="text-xl text-[#888] max-w-2xl mx-auto mb-8">

@@ -19,34 +19,84 @@ interface Service {
   credential_hint?: string;  // Masked credential prefix (e.g., "rzp_test_Rrql***")
 }
 
+interface RecentActivity {
+  id: string;
+  service_name: string;
+  status: string;
+  created_at: string;
+  endpoint?: string;
+}
+
+const API_BASE_URL = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 // Server-side API call to check user services
 async function getUserServices(token: string) {
-  const API_BASE_URL = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
   try {
-    // Use check_all=true to check if user has ANY services (regardless of environment)
-    // This prevents redirect to onboarding if user only has live credentials but is in test mode
     const response = await fetch(`${API_BASE_URL}/api/services?check_all=true`, {
       headers: {
         'Authorization': `Bearer ${token}`,
       },
       cache: 'no-store',
-      signal: AbortSignal.timeout(5000), // 5 second timeout
+      signal: AbortSignal.timeout(5000),
     });
 
     if (!response.ok) {
-      // If unauthorized, don't redirect - let the client handle it
-      if (response.status === 401) {
-        return { services: [], has_services: false, total_count: 0 };
-      }
       return { services: [], has_services: false, total_count: 0 };
     }
 
-    const data = await response.json();
-    return data;
+    return await response.json();
   } catch (error) {
-    // Don't fail completely on network errors - return empty state
     return { services: [], has_services: false, total_count: 0 };
+  }
+}
+
+// Fetch API keys count
+async function getApiKeysCount(token: string): Promise<number> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/api-keys`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(5000),
+    });
+
+    if (!response.ok) return 0;
+    const data = await response.json();
+    return data.api_keys?.length || 0;
+  } catch {
+    return 0;
+  }
+}
+
+// Fetch analytics overview for transaction count
+async function getAnalyticsOverview(token: string): Promise<{ total_calls: number }> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/analytics/overview?period=30d`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(5000),
+    });
+
+    if (!response.ok) return { total_calls: 0 };
+    return await response.json();
+  } catch {
+    return { total_calls: 0 };
+  }
+}
+
+// Fetch recent activity (last 5 transactions)
+async function getRecentActivity(token: string): Promise<RecentActivity[]> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/analytics/logs?limit=5`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(5000),
+    });
+
+    if (!response.ok) return [];
+    const data = await response.json();
+    return data.logs || [];
+  } catch {
+    return [];
   }
 }
 
@@ -64,19 +114,22 @@ export default async function DashboardPage() {
     redirect("/sign-in");
   }
 
-  // Check if user has any services configured
-  const servicesData = await getUserServices(token);
+  // Fetch all data in parallel
+  const [servicesData, apiKeysCount, analyticsData, recentActivity] = await Promise.all([
+    getUserServices(token),
+    getApiKeysCount(token),
+    getAnalyticsOverview(token),
+    getRecentActivity(token),
+  ]);
+
   const hasServices = servicesData.has_services;
   const services = servicesData.services || [];
+  const transactionsCount = analyticsData.total_calls || 0;
 
   // Redirect to onboarding if no services are configured
   if (!hasServices || services.length === 0) {
     redirect("/onboarding");
   }
-
-  // API Keys count (placeholder - you can fetch real data)
-  const apiKeysCount = 0;
-  const transactionsCount = 0;
 
    return (
     <DashboardLayout>
@@ -218,25 +271,56 @@ export default async function DashboardPage() {
             <Card className="bg-[#0a0a0a] border border-[#222]  transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/10">
               <CardHeader className="pb-4">
                 <CardTitle className="text-white flex items-center gap-3 text-xl">
-                  
                   Recent Activity
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center gap-4 p-4 bg-[#1a1a1a] border border-[#222] rounded-xl transition-all duration-300 hover:border-cyan-500 hover:bg-[#0f0f0f]">
-                    <div className="w-3 h-3 bg-cyan-500 rounded-full animate-pulse"></div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-white">Services connected</p>
-                      <p className="text-xs text-[#888]">Just now</p>
+                <div className="space-y-3">
+                  {recentActivity.length > 0 ? (
+                    <>
+                      {recentActivity.map((activity) => (
+                        <div key={activity.id} className="flex items-center gap-4 p-3 bg-[#1a1a1a] border border-[#222] rounded-xl transition-all duration-300 hover:border-cyan-500/50 hover:bg-[#0f0f0f]">
+                          <div className={`w-2.5 h-2.5 rounded-full ${
+                            activity.status === 'success' ? 'bg-green-500' :
+                            activity.status === 'error' ? 'bg-red-500' : 'bg-yellow-500'
+                          }`}></div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-white truncate capitalize">
+                              {activity.service_name}
+                            </p>
+                            <p className="text-xs text-[#888] truncate">
+                              {activity.endpoint || 'API Call'}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <Badge className={`text-xs ${
+                              activity.status === 'success'
+                                ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                                : 'bg-red-500/20 text-red-400 border-red-500/30'
+                            }`}>
+                              {activity.status}
+                            </Badge>
+                            <p className="text-xs text-[#666] mt-1">
+                              {new Date(activity.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                      <Link href="/analytics" className="block">
+                        <Button variant="ghost" className="w-full text-cyan-500 hover:text-cyan-400 hover:bg-cyan-500/10">
+                          View All Activity →
+                        </Button>
+                      </Link>
+                    </>
+                  ) : (
+                    <div className="text-center py-10 text-[#666] border border-dashed border-[#333] rounded-xl bg-[#1a1a1a]">
+                      <div className="w-12 h-12 bg-cyan-500/10 rounded-full flex items-center justify-center mb-3 mx-auto border border-cyan-500/20">
+                        <BarChart3 className="w-5 h-5 text-cyan-500/50" />
+                      </div>
+                      <p className="text-sm mb-1">No API transactions yet</p>
+                      <p className="text-xs text-[#555]">Make your first API call to see activity here</p>
                     </div>
-                  </div>
-                  <div className="text-center py-12 text-[#666] border border-dashed border-[#333] rounded-xl bg-[#1a1a1a] transition-all duration-300 hover:border-cyan-500 hover:bg-[#0f0f0f]">
-                    <div className="w-12 h-12 bg-cyan-500/10 rounded-full flex items-center justify-center mb-4 mx-auto border border-cyan-500/20">
-                      📈
-                    </div>
-                    No API transactions yet
-                  </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

@@ -143,12 +143,12 @@ async def purchase_credits(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Initiate credit purchase using OneRouter SDK (dogfooding).
+    Initiate credit purchase.
 
-    Instead of directly calling Razorpay, this endpoint uses OneRouter's own
-    SDK to process payments - eating our own dogfood.
+    Supports two modes:
+    1. SDK dogfooding (if ONEROUTER_API_KEY is set)
+    2. Direct Razorpay/PayPal (if provider credentials are configured)
     """
-    from onerouter import OneRouter, APIError, AuthenticationError
     from sqlalchemy import select
     from ..models import User
 
@@ -156,10 +156,8 @@ async def purchase_credits(
     user_email = user.get("email", "")
 
     # Get user's preferred environment for payment processing
-    # Check API key environment first, then user preferences, default to "test"
     user_environment = user.get("environment")  # From API key auth
     if not user_environment:
-        # Get from user preferences in database
         result = await db.execute(select(User.preferences).where(User.id == user_id))
         preferences = result.scalar_one_or_none()
         if preferences:
@@ -168,7 +166,7 @@ async def purchase_credits(
             user_environment = "test"
 
     logger.debug(
-        "Purchase credits initiated (via SDK dogfooding)",
+        "Purchase credits initiated",
         extra={"user_id_prefix": user_id[:8], "auth_type": user.get("auth_type", "unknown"), "environment": user_environment}
     )
 
@@ -186,91 +184,111 @@ async def purchase_credits(
         credits_to_buy = request.credits
         price_inr = CreditPricingService.calculate_amount(credits_to_buy, request.currency)
 
-    # Use OneRouter SDK to create payment link (dogfooding)
     link = None
-    try:
-        async with OneRouter(
-            api_key=settings.ONEROUTER_API_KEY,
-            base_url=settings.ONEROUTER_API_BASE_URL
-        ) as client:
-            # Get selected provider (default: razorpay)
-            selected_provider = request.provider or "razorpay"
+    selected_provider = request.provider or "razorpay"
 
-            # Adjust currency for PayPal (default to USD)
-            payment_currency = request.currency
-            payment_amount = price_inr
-            if selected_provider == "paypal" and request.currency == "INR":
-                # PayPal doesn't support INR well, convert to USD
-                payment_currency = "USD"
-                payment_amount = round(price_inr / 83, 2)  # Approximate INR to USD
+    # Try SDK dogfooding first if API key is configured
+    if settings.ONEROUTER_API_KEY:
+        try:
+            from onerouter import OneRouter, APIError, AuthenticationError
 
-            # Build kwargs for SDK call
-            create_kwargs = {
-                "amount": payment_amount,
-                "description": f"Purchase {credits_to_buy} OneRouter credits",
-                "customer_email": user_email if user_email else None,
-                "callback_url": f"{settings.FRONTEND_URL}/credits/payment-callback",
-                "notes": {
-                    "onerouter_user_id": user_id,
-                    "credits": str(credits_to_buy),
-                    "type": "credit_purchase"
-                },
-                "environment": user_environment,
-                "provider": selected_provider
-            }
+            async with OneRouter(
+                api_key=settings.ONEROUTER_API_KEY,
+                base_url=settings.ONEROUTER_API_BASE_URL
+            ) as client:
+                payment_currency = request.currency
+                payment_amount = price_inr
+                if selected_provider == "paypal" and request.currency == "INR":
+                    payment_currency = "USD"
+                    payment_amount = round(price_inr / 83, 2)
 
-            # Create payment link via SDK
-            link = await client.payment_links.create(**create_kwargs)
+                create_kwargs = {
+                    "amount": payment_amount,
+                    "description": f"Purchase {credits_to_buy} OneRouter credits",
+                    "customer_email": user_email if user_email else None,
+                    "callback_url": f"{settings.FRONTEND_URL}/credits/payment-callback",
+                    "notes": {
+                        "onerouter_user_id": user_id,
+                        "credits": str(credits_to_buy),
+                        "type": "credit_purchase"
+                    },
+                    "environment": user_environment,
+                    "provider": selected_provider
+                }
 
-            logger.info(
-                "Payment link created via SDK dogfooding",
-                extra={"credits_purchased": credits_to_buy, "amount_inr": price_inr}
-            )
+                link = await client.payment_links.create(**create_kwargs)
+                logger.info(
+                    "Payment link created via SDK dogfooding",
+                    extra={"credits_purchased": credits_to_buy, "amount_inr": price_inr}
+                )
 
-    except AuthenticationError as e:
-        logger.error(
-            "SDK authentication failed - check ONEROUTER_API_KEY",
-            extra={"error": str(e), "user_id_prefix": user_id[:8]},
-            exc_info=True
-        )
-        raise HTTPException(
-            status_code=503,
-            detail="Payment service configuration error. Please contact support."
-        )
-    except APIError as e:
-        logger.error(
-            "SDK API error during payment link creation",
-            extra={"error": str(e), "user_id_prefix": user_id[:8]},
-            exc_info=True
-        )
-
-        if settings.ENVIRONMENT == "development" or settings.DEBUG:
+        except Exception as e:
             logger.warning(
-                f"Falling back to demo order for user {user_id} due to SDK error: {str(e)}"
+                f"SDK dogfooding failed, falling back to direct payment: {str(e)}",
+                extra={"user_id_prefix": user_id[:8]}
             )
-            link = {
-                "provider_order_id": f"demo_link_{user_id[:8]}",
-                "checkout_url": f"{settings.DEMO_CHECKOUT_URL}/pay/demo_link_{user_id[:8]}"
-            }
-        else:
-            raise HTTPException(
-                status_code=503,
-                detail="Payment service temporarily unavailable. Please try again later."
-            )
-    except Exception as e:
-        logger.error(
-            "Unexpected error during SDK payment link creation",
-            extra={"error_type": type(e).__name__, "user_id_prefix": user_id[:8]},
-            exc_info=True
-        )
+            link = None
 
+    # Fallback to direct Razorpay if SDK failed or not configured
+    if link is None and selected_provider == "razorpay":
+        razorpay = RazorpayService()
+        if razorpay.is_configured():
+            try:
+                # Create Razorpay payment link directly
+                async with httpx.AsyncClient() as client:
+                    amount_paise = CreditPricingService.credits_to_paise(price_inr)
+                    callback_url = f"{settings.API_BASE_URL}/credits/payment-callback"
+
+                    payload = {
+                        "amount": amount_paise,
+                        "currency": request.currency,
+                        "accept_partial": False,
+                        "description": f"Purchase {credits_to_buy} OneRouter credits",
+                        "customer": {
+                            "email": user_email or "customer@example.com"
+                        },
+                        "notify": {
+                            "email": True
+                        },
+                        "callback_url": callback_url,
+                        "callback_method": "get",
+                        "notes": {
+                            "onerouter_user_id": user_id,
+                            "credits": str(credits_to_buy),
+                            "type": "credit_purchase"
+                        }
+                    }
+
+                    response = await client.post(
+                        "https://api.razorpay.com/v1/payment_links",
+                        json=payload,
+                        auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET),
+                        timeout=30.0
+                    )
+
+                    if response.status_code == 200:
+                        rz_link = response.json()
+                        link = {
+                            "provider_order_id": rz_link.get("id"),
+                            "checkout_url": rz_link.get("short_url")
+                        }
+                        logger.info(
+                            "Payment link created via direct Razorpay",
+                            extra={"credits_purchased": credits_to_buy, "amount_inr": price_inr}
+                        )
+                    else:
+                        logger.error(f"Razorpay payment link creation failed: {response.text}")
+
+            except Exception as e:
+                logger.error(f"Direct Razorpay payment failed: {str(e)}", exc_info=True)
+
+    # Demo fallback for development
+    if link is None:
         if settings.ENVIRONMENT == "development" or settings.DEBUG:
-            logger.warning(
-                f"Falling back to demo order for user {user_id} due to: {str(e)}"
-            )
+            logger.warning(f"Using demo checkout for user {user_id}")
             link = {
-                "provider_order_id": f"demo_link_{user_id[:8]}",
-                "checkout_url": f"{settings.DEMO_CHECKOUT_URL}/pay/demo_link_{user_id[:8]}"
+                "provider_order_id": f"demo_link_{user_id[:8]}_{uuid4().hex[:8]}",
+                "checkout_url": f"{settings.DEMO_CHECKOUT_URL}/pay/demo"
             }
         else:
             raise HTTPException(

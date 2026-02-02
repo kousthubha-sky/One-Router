@@ -9,6 +9,7 @@ interface Service {
   id: string
   service_name: string
   environment: string
+  active_environment?: string  // Per-service environment setting
   features: Record<string, boolean>
   credential_hint?: string
 }
@@ -65,11 +66,11 @@ function ServiceMiniCard({ service }: { service: Service }) {
         </Badge>
       ) : (
         <Badge className={`ml-auto text-[10px] px-1.5 py-0 ${
-          service.environment === 'live'
+          (service.active_environment || service.environment) === 'live'
             ? 'bg-green-500/20 text-green-400 border-green-500/30'
             : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
         }`}>
-          {service.environment.toUpperCase()}
+          {(service.active_environment || service.environment).toUpperCase()}
         </Badge>
       )}
     </div>

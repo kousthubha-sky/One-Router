@@ -7,20 +7,71 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Suspense } from "react";
 
+interface PaymentResult {
+  status: string;
+  message: string;
+  credits: number;
+  balance: number;
+  payment_id?: string;
+}
+
 function PaymentResultContent() {
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
+  const [result, setResult] = useState<PaymentResult>({
+    status: "unknown",
+    message: "Payment processing...",
+    credits: 0,
+    balance: 0,
+  });
 
   useEffect(() => {
-    // Give time for the page to load
-    const timer = setTimeout(() => setLoading(false), 500);
-    return () => clearTimeout(timer);
-  }, []);
+    async function verifyPayment() {
+      const token = searchParams.get("token");
 
-  const status = searchParams.get("status") || "unknown";
-  const message = searchParams.get("message") || "Payment processing...";
-  const creditsAdded = searchParams.get("credits") || "0";
-  const newBalance = searchParams.get("balance") || "0";
+      if (token) {
+        // Verify the signed token from backend
+        try {
+          const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+          const response = await fetch(
+            `${apiUrl}/v1/credits/payment-result/verify?token=${encodeURIComponent(token)}`
+          );
+          const data = await response.json();
+          setResult({
+            status: data.status || "error",
+            message: data.message || "Unable to verify payment",
+            credits: data.credits || 0,
+            balance: data.balance || 0,
+            payment_id: data.payment_id,
+          });
+        } catch (error) {
+          console.error("Failed to verify payment:", error);
+          setResult({
+            status: "error",
+            message: "Failed to verify payment status",
+            credits: 0,
+            balance: 0,
+          });
+        }
+      } else {
+        // Fallback to query params (for direct redirects)
+        setResult({
+          status: searchParams.get("status") || "unknown",
+          message: searchParams.get("message") || "Payment processing...",
+          credits: parseInt(searchParams.get("credits") || "0", 10),
+          balance: parseInt(searchParams.get("balance") || "0", 10),
+        });
+      }
+      setLoading(false);
+    }
+
+    verifyPayment();
+  }, [searchParams]);
+
+  const status = result.status;
+  const message = result.message;
+  const creditsAdded = result.credits.toString();
+  const newBalance = result.balance.toString();
 
   const isSuccess = status === "success";
   const isFailed = status === "failed" || status === "error";

@@ -1,13 +1,37 @@
 "use client";
 
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { useState, useEffect } from "react";
 import { useClientApiCall } from "@/lib/api-client";
-import { CreditBalance } from "./CreditBalance";
+import {
+  RefreshCw,
+  Info,
+  ExternalLink,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  ArrowUpRight,
+  ArrowDownRight,
+  Gift,
+  Clock,
+} from "lucide-react";
 
-interface PricingPlan {
+interface Transaction {
+  id: string;
+  amount: number;
+  type: string;
+  description: string;
+  created_at: string;
+}
+
+interface BalanceData {
+  balance: number;
+  total_purchased: number;
+  total_consumed: number;
+  free_tier_estimated_remaining: number;
+  recent_transactions: Transaction[];
+}
+
+interface CreditPlan {
   id: string;
   name: string;
   credits: number;
@@ -17,263 +41,371 @@ interface PricingPlan {
   description: string;
 }
 
-const PRICING_PLANS: PricingPlan[] = [
-  {
-    id: "starter",
-    name: "Starter",
-    credits: 1000,
-    price_inr: 100,
-    price_usd: 1.20,
-    per_credit: 0.10,
-    description: "Perfect for testing and small projects",
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    credits: 10000,
-    price_inr: 800,
-    price_usd: 9.60,
-    per_credit: 0.08,
-    description: "Best for growing applications",
-  },
-  {
-    id: "enterprise",
-    name: "Enterprise",
-    credits: 100000,
-    price_usd: 84.0,
-    per_credit: 0.07,
-    price_inr: 7000,
-    description: "High-volume usage",
-  },
-];
-
 export function CreditsPageClient() {
+  const [balance, setBalance] = useState<BalanceData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [purchasing, setPurchasing] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
-  const [selectedProvider, setSelectedProvider] = useState<"razorpay" | "paypal">("razorpay");
+  const [plans, setPlans] = useState<CreditPlan[]>([]);
   const apiClient = useClientApiCall();
 
-  async function purchaseCredits(plan: PricingPlan) {
-    setPurchasing(plan.id);
+  const ITEMS_PER_PAGE = 5;
+
+  // Convert credits to dollars (adjust rate as needed)
+  const toUSD = (credits: number) => (credits * 0.01).toFixed(2);
+
+  useEffect(() => {
+    loadBalance();
+    loadPlans();
+  }, []);
+
+  async function loadPlans() {
+    try {
+      const response = (await apiClient("/v1/credits/plans")) as unknown as {
+        plans: CreditPlan[];
+      };
+      setPlans(response.plans || []);
+    } catch (err) {
+      console.error("Failed to load plans:", err);
+    }
+  }
+
+  async function loadBalance() {
+    try {
+      setLoading(true);
+      const response = (await apiClient("/v1/credits/balance")) as unknown as BalanceData;
+      setBalance(response);
+    } catch (err) {
+      console.error("Failed to load balance:", err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    await loadBalance();
+    setRefreshing(false);
+  }
+
+  async function handlePurchase(planId: string) {
+    setPurchasing(planId);
     setError(null);
 
     try {
-      const response = await apiClient("/v1/credits/purchase", {
+      const plan = plans.find((p) => p.id === planId);
+      const response = (await apiClient("/v1/credits/purchase", {
         method: "POST",
         body: JSON.stringify({
-          credits: plan.credits,
-          plan_id: plan.id,
-          provider: selectedProvider,
+          plan_id: planId,
+          credits: plan?.credits || 1000,
+          provider: "razorpay",
         }),
-      }) as { checkout_url?: string; error?: string; [key: string]: unknown };
+      })) as unknown as { checkout_url?: string; error?: string };
 
-      // If backend returned an error object, surface it to the user and log
       if (response?.error) {
-        const msg = String(response.error);
-        console.error("Purchase API returned error:", response);
-        setError(msg || "Failed to initiate purchase");
+        setError(String(response.error));
         return;
       }
 
-      // Demo flow: show informational alert instead of redirecting
       if (response?.checkout_url?.includes("demo")) {
-        const priceDisplay = selectedProvider === "razorpay"
-          ? `₹${plan.price_inr}`
-          : `$${plan.price_usd.toFixed(2)}`;
+        // Demo mode - simulate success
         alert(
-          `Demo Mode: Would purchase ${plan.credits} credits for ${priceDisplay}\n\nIn production, this would redirect to ${selectedProvider === "razorpay" ? "Razorpay" : "PayPal"} checkout.`
+          `Demo Mode: Would purchase ${plan?.credits || 1000} credits for ₹${plan?.price_inr || 100}`
         );
+        await loadBalance();
         return;
       }
 
-      // Normal flow: redirect to checkout URL if provided
       if (response?.checkout_url) {
         window.location.href = response.checkout_url;
-        return;
       }
-
-      // Fallback: no checkout URL and no explicit error
-      setError("Failed to initiate purchase");
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : (err ? String(err) : "Failed to process purchase");
-      console.error("Error while initiating purchase:", err);
-      setError(msg);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Purchase failed");
     } finally {
       setPurchasing(null);
     }
   }
 
+  function formatDate(dateStr: string) {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
+    return `${Math.floor(diffDays / 365)} years ago`;
+  }
+
+  function getTransactionIcon(type: string) {
+    switch (type) {
+      case "purchase":
+        return <ArrowUpRight className="w-4 h-4 text-green-400" />;
+      case "consumption":
+        return <ArrowDownRight className="w-4 h-4 text-orange-400" />;
+      case "bonus":
+        return <Gift className="w-4 h-4 text-indigo-400" />;
+      default:
+        return <Clock className="w-4 h-4 text-gray-400" />;
+    }
+  }
+
+  // Pagination logic
+  const transactions = balance?.recent_transactions || [];
+  const totalPages = Math.ceil(transactions.length / ITEMS_PER_PAGE);
+  const paginatedTransactions = transactions.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+      </div>
+    );
+  }
+
+  const balanceUSD = balance ? toUSD(balance.balance) : "0.00";
+
   return (
-    <div className="space-y-8">
-      {/* Current Balance */}
-      <div className="grid md:grid-cols-3 gap-6">
-        <div className="md:col-span-2">
-          <CreditBalance showDetails />
-        </div>
-        <Card className="bg-gradient-to-br from-cyan-900/20 to-blue-900/20 border-cyan-500/30">
-          <CardContent className="pt-6">
-            <h3 className="text-lg font-semibold text-white mb-2">
-              Free Tier Always Available
-            </h3>
-            <p className="text-gray-400 text-sm">
-              Every account gets 1,000 free credits every month. No credit card
-              required.
-            </p>
-          </CardContent>
-        </Card>
+    <div className="w-full max-w-4xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-6">
+        <h1 className="text-2xl font-semibold text-white">Credits</h1>
+        <button
+          onClick={handleRefresh}
+          className="text-gray-400 hover:text-white transition-colors"
+          disabled={refreshing}
+        >
+          <RefreshCw
+            className={`w-5 h-5 ${refreshing ? "animate-spin" : ""}`}
+          />
+        </button>
       </div>
 
-      {/* Provider Selection */}
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold text-white mb-4">Choose Payment Method</h2>
-        <div className="flex gap-4">
-          <button
-            onClick={() => setSelectedProvider("razorpay")}
-            className={`flex-1 p-4 rounded-lg border-2 transition-all ${
-              selectedProvider === "razorpay"
-                ? "border-cyan-500 bg-cyan-500/10"
-                : "border-gray-700 bg-gray-800/50 hover:border-gray-600"
-            }`}
-          >
-            <div className="text-lg font-semibold text-white mb-1">Razorpay</div>
-            <div className="text-sm text-gray-400">UPI, Cards, Net Banking (INR)</div>
-          </button>
-          {/* PayPal disabled until business verification is complete */}
-          <div
-            className="flex-1 p-4 rounded-lg border-2 border-gray-700 bg-gray-800/30 opacity-50 cursor-not-allowed relative"
-          >
-            <div className="absolute top-2 right-2">
-              <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded">Coming Soon</span>
+      {/* Divider */}
+      <div className="h-px bg-gray-800 mb-8" />
+
+      {/* Balance Card */}
+      <div className="bg-[#0a0a0a] rounded-xl p-6 mb-6 relative">
+        <div className="flex items-baseline">
+          <span className="text-gray-400 text-4xl font-light mr-2">$</span>
+          <span className="text-white text-5xl font-light">{balanceUSD}</span>
+        </div>
+        <button className="absolute top-4 right-4 text-gray-500 hover:text-gray-300 transition-colors group">
+          <Info className="w-5 h-5" />
+          {/* Tooltip */}
+          <div className="absolute right-0 top-8 w-64 p-3 bg-gray-800 rounded-lg text-sm text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+            <div className="space-y-1">
+              <div className="flex justify-between">
+                <span>Total Added:</span>
+                <span className="text-white">
+                  ${toUSD(balance?.total_purchased || 0)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Total Used:</span>
+                <span className="text-white">
+                  ${toUSD(balance?.total_consumed || 0)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Free Balance:</span>
+                <span className="text-indigo-400">
+                  ${toUSD(balance?.free_tier_estimated_remaining || 0)}
+                </span>
+              </div>
             </div>
-            <div className="text-lg font-semibold text-gray-400 mb-1">PayPal</div>
-            <div className="text-sm text-gray-500">PayPal, Cards (USD)</div>
           </div>
-        </div>
+        </button>
       </div>
 
-      {/* Pricing Plans */}
-      <div>
-        <h2 className="text-2xl font-bold text-white mb-6">Purchase Credits</h2>
-        <div className="grid md:grid-cols-3 gap-6">
-          {PRICING_PLANS.map((plan) => (
-            <Card
+      {/* Buy Credits Section */}
+      <div className="mb-8">
+        <h2 className="text-white font-semibold text-lg mb-4">Buy Credits</h2>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+            {error}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {plans.map((plan) => (
+            <div
               key={plan.id}
-              className={`bg-black/50 border-gray-800 hover:border-cyan-500/50 transition-colors ${
-                plan.id === "pro" ? "ring-2 ring-cyan-500" : ""
+              className={`bg-[#0a0a0a] rounded-xl p-6 border transition-all ${
+                plan.id === "pro"
+                  ? "border-indigo-500/50 ring-1 ring-indigo-500/20"
+                  : "border-gray-800 hover:border-gray-700"
               }`}
             >
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span>{plan.name}</span>
-                  {plan.id === "pro" && (
-                    <Badge className="bg-cyan-500">Most Popular</Badge>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="mb-4">
-                  <div className="text-4xl font-bold text-white">
-                    {plan.credits.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-                  </div>
-                  <div className="text-gray-400">credits</div>
+              {plan.id === "pro" && (
+                <div className="text-xs font-medium text-indigo-400 mb-2">
+                  MOST POPULAR
                 </div>
-
-                <div className="mb-4">
-                  {selectedProvider === "razorpay" ? (
-                    <>
-                      <div className="text-2xl font-bold text-cyan-400">
-                        ₹{plan.price_inr}
-                      </div>
-                      <div className="text-gray-400 text-sm">
-                        ${plan.price_usd.toFixed(2)} USD
-                      </div>
-                      <div className="text-green-400 text-sm mt-1">
-                        ₹{plan.per_credit}/credit
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="text-2xl font-bold text-cyan-400">
-                        ${plan.price_usd.toFixed(2)}
-                      </div>
-                      <div className="text-gray-400 text-sm">
-                        ₹{plan.price_inr} INR
-                      </div>
-                      <div className="text-green-400 text-sm mt-1">
-                        ${(plan.price_usd / plan.credits).toFixed(4)}/credit
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                <p className="text-gray-400 text-sm mb-4">{plan.description}</p>
-
-                <Button
-                  className="w-full"
-                  variant={plan.id === "pro" ? "default" : "outline"}
-                  onClick={() => purchaseCredits(plan)}
-                  disabled={purchasing !== null}
-                >
-                  {purchasing === plan.id ? "Processing..." : "Buy Now"}
-                </Button>
-              </CardContent>
-            </Card>
+              )}
+              <h3 className="text-white font-semibold text-lg">{plan.name}</h3>
+              <div className="mt-2 mb-4">
+                <span className="text-3xl font-bold text-white">
+                  ₹{plan.price_inr}
+                </span>
+                <span className="text-gray-400 text-sm ml-2">
+                  ({plan.credits.toLocaleString()} credits)
+                </span>
+              </div>
+              <p className="text-gray-400 text-sm mb-4">{plan.description}</p>
+              <div className="text-xs text-gray-500 mb-4">
+                ₹{plan.per_credit.toFixed(2)} per credit
+                {plan.id !== "starter" && (
+                  <span className="text-green-400 ml-2">
+                    Save{" "}
+                    {Math.round(
+                      ((0.1 - plan.per_credit) / 0.1) * 100
+                    )}
+                    %
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => handlePurchase(plan.id)}
+                disabled={purchasing !== null}
+                className={`w-full font-medium py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 ${
+                  plan.id === "pro"
+                    ? "bg-indigo-500 hover:bg-indigo-600 text-white"
+                    : "bg-gray-700 hover:bg-gray-600 text-white"
+                } disabled:opacity-50`}
+              >
+                {purchasing === plan.id ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  "Buy Now"
+                )}
+              </button>
+            </div>
           ))}
+        </div>
+
+        <div className="mt-4 flex items-center justify-between text-sm">
+          <a
+            href="/analytics"
+            className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
+          >
+            View Usage Analytics
+            <ExternalLink className="w-4 h-4" />
+          </a>
+          <p className="text-gray-500">
+            Need custom pricing?{" "}
+            <a
+              href="mailto:sales@onerouter.dev"
+              className="text-indigo-400 hover:text-indigo-300 transition-colors"
+            >
+              Contact Sales
+            </a>
+          </p>
         </div>
       </div>
 
-      {error && (
-        <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400">
-          {error}
+      {/* Divider */}
+      <div className="h-px bg-gray-800 mb-6" />
+
+      {/* Recent Transactions */}
+      <div className="bg-[#0a0a0a] rounded-xl p-6 border border-[#0a0a0a]">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-white font-semibold text-lg">
+            Recent Transactions
+          </h2>
+          <a
+            href="/dashboard/payment-history"
+            className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors text-sm underline"
+          >
+            Payment History
+            <ExternalLink className="w-4 h-4" />
+          </a>
+        </div>
+
+        {/* Transactions List */}
+        <div className="space-y-1">
+          {paginatedTransactions.length === 0 ? (
+            <p className="text-gray-500 text-center py-8">
+              No transactions yet
+            </p>
+          ) : (
+            paginatedTransactions.map((transaction, index) => (
+              <div
+                key={transaction.id}
+                className={`flex items-center justify-between py-4 ${
+                  index !== 0 ? "border-t border-[#0a0a0a]" : ""
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-gray-800 rounded-lg">
+                    {getTransactionIcon(transaction.type)}
+                  </div>
+                  <div>
+                    <span className="text-gray-400 text-sm">
+                      {formatDate(transaction.created_at)}
+                    </span>
+                    <p className="text-gray-500 text-xs">
+                      {transaction.description}
+                    </p>
+                  </div>
+                </div>
+                <span
+                  className={`font-medium ${
+                    transaction.amount > 0 ? "text-green-400" : "text-white"
+                  }`}
+                >
+                  {transaction.amount > 0 ? "+" : ""}$
+                  {Math.abs(transaction.amount * 0.01).toFixed(2)}
+                </span>
+                <a
+                  href={`/dashboard/invoice/${transaction.id}`}
+                  className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors text-sm"
+                >
+                  View Invoice
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Pagination */}
+      {transactions.length > 0 && (
+        <div className="flex items-center justify-center gap-1 mt-6">
+          <button
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            className="p-2 rounded-lg bg-[#2a2a2a] text-gray-400 hover:text-white hover:bg-[#3a3a3a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={currentPage === 1}
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <span className="px-4 py-2 rounded-lg bg-[#2a2a2a] text-white min-w-[40px] text-center">
+            {currentPage}
+          </span>
+          <button
+            onClick={() =>
+              setCurrentPage((p) => Math.min(totalPages || 1, p + 1))
+            }
+            className="p-2 rounded-lg bg-[#2a2a2a] text-gray-400 hover:text-white hover:bg-[#3a3a3a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={currentPage >= totalPages}
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
         </div>
       )}
-
-      {/* How it works */}
-      <Card className="bg-black/30 border-gray-800">
-        <CardHeader>
-          <CardTitle>How Credit Purchases Work</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid md:grid-cols-4 gap-6">
-            <div className="text-center">
-              <div className="w-12 h-12 bg-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                <span className="text-cyan-400 font-bold">1</span>
-              </div>
-              <h4 className="text-white font-medium mb-2">Select Package</h4>
-              <p className="text-gray-400 text-sm">
-                Choose the credit package that fits your needs
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="w-12 h-12 bg-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                <span className="text-cyan-400 font-bold">2</span>
-              </div>
-              <h4 className="text-white font-medium mb-2">Secure Payment</h4>
-              <p className="text-gray-400 text-sm">
-                Pay securely with Razorpay (UPI, Cards, Net Banking)
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="w-12 h-12 bg-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                <span className="text-cyan-400 font-bold">3</span>
-              </div>
-              <h4 className="text-white font-medium mb-2">Instant Credit</h4>
-              <p className="text-gray-400 text-sm">
-                Credits are added to your account immediately
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="w-12 h-12 bg-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                <span className="text-cyan-400 font-bold">4</span>
-              </div>
-              <h4 className="text-white font-medium mb-2">Use API</h4>
-              <p className="text-gray-400 text-sm">
-                Each API call deducts 1 credit automatically
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

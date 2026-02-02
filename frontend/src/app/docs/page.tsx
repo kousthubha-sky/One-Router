@@ -9,7 +9,8 @@ import { Github, ExternalLink, Copy, Check } from 'lucide-react';
 export default function DocsPage() {
   const [activeSection, setActiveSection] = useState('overview');
   const [copied, setCopied] = useState<string | null>(null);
-  
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   const sections = [
     { id: 'overview', title: 'Overview' },
     { id: 'authentication', title: 'Authentication' },
@@ -19,7 +20,7 @@ export default function DocsPage() {
     { id: 'sdk', title: 'SDKs' },
   ];
 
-  const apiBaseUrl = 'https://one-router-clyl.onrender.com';
+  const apiBaseUrl = 'https://one-backend.stack-end.com';
   const swaggerUrl = `${apiBaseUrl}/docs`;
 
   const copyToClipboard = (text: string, id: string) => {
@@ -49,41 +50,103 @@ export default function DocsPage() {
   return (
     <div className="min-h-screen bg-black text-white">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-black border-b border-[#222]">
-        <div className="w-full h-16 flex items-center px-4 md:px-8">
-          <div className="flex items-center gap-3 flex-1">
-            <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">OR</span>
+      {/* Modern Navbar */}
+        <header className="sticky top-0 z-50 bg-black border-b border-[#222]">
+          <div className="w-full h-16 flex items-center border-l border-r border-[#222] relative">
+            {/* Vertical gridlines - hidden on mobile */}
+            <div className="absolute inset-0 flex pointer-events-none hidden md:flex">
+              <div className="flex-1 border-r border-[#222]"></div>
+              <div className="flex-1 border-r border-[#222]"></div>
+              <div className="flex-1 border-r border-[#222]"></div>
             </div>
-            <span className="font-bold font-mono text-lg hidden sm:inline">
-              One<span className="text-cyan-400">Router</span> Docs
-            </span>
+
+            <div className="w-full h-full flex justify-between items-center px-4 md:px-8 relative z-10">
+              {/* Left - Logo */}
+              <div className="flex items-center gap-2 border-r border-[#222] pr-4 md:pr-8 flex-1">
+                <div className="w-8 h-8 bg-gradient-to-br from-black  to-cyan-600 rounded-2xl flex items-center justify-center shadow-lg transition-all duration-300 hover:shadow-cyan-500/25 hover:scale-110">
+                  </div>
+                <div className="font-bold text-sm md:text-lg font-mono">
+                  
+                  <span className="text-white">ONE</span>
+                  <span className="text-cyan-400">ROUTER</span>
+                </div>
+              </div>
+
+              {/* Middle - Navigation Links */}
+              <nav className="hidden lg:flex flex-1 items-center justify-center gap-4 xl:gap-12 border-r border-[#222] px-4 xl:px-8">
+                 <Link href="/docs" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
+                   docs
+                 </Link>
+                 <a href="/privacy" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
+                   privacy
+                 </a>
+                 <a href="/terms" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
+                   terms
+                 </a>
+                 <Link href="/pricing" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
+                   pricing
+                 </Link>
+                 <a href="/contact" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
+                   contact
+                 </a>
+                 
+               </nav>
+
+              {/* Right - Auth & GitHub */}
+              <div className="flex items-center gap-2 md:gap-4 lg:gap-6 justify-end flex-1 pl-4 md:pl-8">
+                <a href="https://github.com" className="text-[#888] hover:text-white transition-all duration-300 hover:scale-110">
+                  <Github className="w-4 md:w-5 h-4 md:h-5" />
+                </a>
+
+                <SignedOut>
+                  <SignInButton mode="modal">
+                    <Button className="bg-white text-black hover:bg-gray-200 font-mono font-bold text-xs md:text-sm px-3 md:px-6 py-2 rounded transition-all duration-300 transform hover:scale-105 hidden sm:block">
+                      Sign In
+                    </Button>
+                  </SignInButton>
+                </SignedOut>
+                <SignedIn>
+                  <Link href="/dashboard">
+                    <Button className="bg-white text-black hover:bg-gray-200 font-mono font-bold text-xs md:text-sm px-3 md:px-6 py-2 rounded transition-all duration-300 transform hover:scale-105 hidden sm:block">
+                      Dashboard
+                    </Button>
+                  </Link>
+                  <UserButton />
+                </SignedIn>
+
+                {/* Mobile Menu Button */}
+                <button 
+                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                  className="lg:hidden p-2 text-[#888] hover:text-white transition-colors">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Mobile Menu - Dropdown */}
+             {mobileMenuOpen && (
+               <div className="lg:hidden absolute top-16 left-0 right-0 bg-black border-b border-[#222] px-4 py-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                 <Link href="/docs" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
+                   docs
+                 </Link>
+                 <Link href="/privacy" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
+                   privacy
+                 </Link>
+                 <Link href="/terms" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
+                   terms
+                 </Link>
+                 <Link href="/pricing" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
+                   pricing
+                 </Link>
+                 <Link href="/contact" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
+                   contact
+                 </Link>
+               </div>
+             )}
           </div>
-          <div className="flex items-center gap-4">
-            <a
-              href="https://github.com"
-              className="text-[#888] hover:text-white transition-colors"
-            >
-              <Github className="w-5 h-5" />
-            </a>
-            <SignedOut>
-              <SignInButton mode="modal">
-                <Button className="bg-white text-black hover:bg-gray-200 font-mono text-sm px-4 py-2">
-                  Sign In
-                </Button>
-              </SignInButton>
-            </SignedOut>
-            <SignedIn>
-              <Link href="/dashboard">
-                <Button className="bg-white text-black hover:bg-gray-200 font-mono text-sm px-4 py-2">
-                  Dashboard
-                </Button>
-              </Link>
-              <UserButton />
-            </SignedIn>
-          </div>
-        </div>
-      </header>
+        </header>
 
       <div className="flex">
         {/* Sidebar */}

@@ -35,7 +35,7 @@ async def forward_webhook_to_developer(
     original_signature: str,
     service_name: str
 ):
-    """Forward webhook to developer's URL in background"""
+    """Forward webhook to developer's URL in background (legacy - immediate delivery)"""
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
@@ -56,6 +56,88 @@ async def forward_webhook_to_developer(
             return response.status_code
     except Exception as e:
         logger.error(f"Failed to forward webhook", extra={"error": str(e)})
+        return None
+
+
+async def queue_webhook_for_delivery(
+    db: AsyncSession,
+    user_id: str,
+    webhook_url: str,
+    event_data: dict,
+    event_type: str,
+    service_name: str,
+    original_signature: str
+):
+    """
+    Queue webhook for reliable delivery with retries.
+
+    Uses WebhookRetryService for exponential backoff on failures.
+    """
+    from ..services.webhook_retry_service import WebhookRetryService
+
+    payload = {
+        "service": service_name,
+        "event": event_data,
+        "event_type": event_type,
+        "original_signature": original_signature,
+        "forwarded_by": "onerouter",
+        "timestamp": event_data.get("created_at") or event_data.get("create_time")
+    }
+
+    idempotency_key = f"{service_name}:{event_type}:{event_data.get('id', uuid4().hex)}"
+
+    try:
+        webhook_id = await WebhookRetryService.queue_webhook(
+            db=db,
+            user_id=user_id,
+            webhook_url=webhook_url,
+            payload=payload,
+            event_type=event_type,
+            service_name=service_name,
+            idempotency_key=idempotency_key
+        )
+
+        # Attempt immediate delivery
+        success, status_code, error = await WebhookRetryService.deliver_webhook(
+            webhook_url=webhook_url,
+            payload=payload,
+            headers={
+                "X-OneRouter-Signature": original_signature,
+                "X-OneRouter-Service": service_name,
+                "X-Webhook-ID": webhook_id
+            }
+        )
+
+        # Update webhook status based on result
+        from ..models import WebhookQueue
+        from ..services.webhook_retry_service import WebhookStatus
+
+        result = await db.execute(
+            select(WebhookQueue).where(WebhookQueue.id == webhook_id)
+        )
+        webhook = result.scalar_one_or_none()
+
+        if webhook:
+            webhook.attempt_count = 1
+            webhook.last_attempt_at = func.now()
+            webhook.last_status_code = status_code
+
+            if success:
+                webhook.status = WebhookStatus.DELIVERED.value
+                webhook.delivered_at = func.now()
+                logger.info("Webhook delivered immediately", extra={"webhook_id": webhook_id})
+            else:
+                webhook.status = WebhookStatus.RETRYING.value
+                webhook.last_error = error
+                webhook.next_attempt_at = WebhookRetryService.calculate_next_retry(1)
+                logger.info("Webhook queued for retry", extra={"webhook_id": webhook_id, "error": error})
+
+            await db.commit()
+
+        return webhook_id
+
+    except Exception as e:
+        logger.error(f"Failed to queue webhook", extra={"error": str(e)})
         return None
 
 
@@ -179,19 +261,19 @@ async def razorpay_webhook(
     await db.commit()
 
     # Get user's webhook URL from their settings
-    # For now, we'll assume it's stored in user's metadata or config
-    # You'll need to add a webhook_url field to User table or ServiceCredential
-    
-    # Example: Forward to user's webhook URL
     user_webhook_url = credential.features_config.get("webhook_url")
-    
-    if user_webhook_url:
-        background_tasks.add_task(
-            forward_webhook_to_developer,
-            user_webhook_url,
-            event,
-            signature,
-            "razorpay"
+    webhook_enabled = credential.features_config.get("enabled", False)
+
+    if user_webhook_url and webhook_enabled:
+        # Use reliable delivery with retries
+        await queue_webhook_for_delivery(
+            db=db,
+            user_id=user_id,
+            webhook_url=user_webhook_url,
+            event_data=event,
+            event_type=event.get("event", "unknown"),
+            service_name="razorpay",
+            original_signature=signature
         )
     
     # Handle payment success - add credits to user
@@ -356,16 +438,19 @@ async def paypal_webhook(
     db.add(webhook_event)
     await db.commit()
 
-    # Forward to user's webhook URL
+    # Forward to user's webhook URL with reliable delivery
     user_webhook_url = credential.features_config.get("webhook_url")
+    webhook_enabled = credential.features_config.get("enabled", False)
 
-    if user_webhook_url:
-        background_tasks.add_task(
-            forward_webhook_to_developer,
-            user_webhook_url,
-            event,
-            transmission_sig or "",
-            "paypal"
+    if user_webhook_url and webhook_enabled:
+        await queue_webhook_for_delivery(
+            db=db,
+            user_id=user_id,
+            webhook_url=user_webhook_url,
+            event_data=event,
+            event_type=event.get("event_type", "unknown"),
+            service_name="paypal",
+            original_signature=transmission_sig or ""
         )
 
     # Mark as processed
@@ -375,7 +460,7 @@ async def paypal_webhook(
         .values(processed=True, processed_at=func.now())
     )
     await db.commit()
-    
+
     return {"status": "received", "event_id": str(webhook_event.id)}
 
 
@@ -472,14 +557,17 @@ async def twilio_webhook(
     )
     credential = credential_result.scalar_one_or_none()
     user_webhook_url = credential.features_config.get("webhook_url") if credential else None
+    webhook_enabled = credential.features_config.get("enabled", False) if credential else False
 
-    if user_webhook_url:
-        background_tasks.add_task(
-            forward_webhook_to_developer,
-            user_webhook_url,
-            event,
-            signature,
-            "twilio"
+    if user_webhook_url and webhook_enabled:
+        await queue_webhook_for_delivery(
+            db=db,
+            user_id=user_id,
+            webhook_url=user_webhook_url,
+            event_data=event,
+            event_type=event.get("EventType", "unknown"),
+            service_name="twilio",
+            original_signature=signature
         )
 
     # Mark as processed
@@ -733,4 +821,148 @@ async def get_webhook_logs(
         "total": total_count,
         "limit": limit,
         "offset": offset
+    }
+
+
+# ============================================
+# WEBHOOK QUEUE MANAGEMENT
+# ============================================
+
+@router.get("/api/webhooks/queue")
+async def get_webhook_queue(
+    status: Optional[str] = None,
+    limit: int = 50,
+    user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get webhook delivery queue status.
+
+    Shows pending, retrying, and recently delivered webhooks.
+
+    GET /api/webhooks/queue?status=retrying&limit=20
+    """
+    from ..models import WebhookQueue
+    from sqlalchemy import desc
+
+    query = select(WebhookQueue).where(
+        WebhookQueue.user_id == user["id"]
+    )
+
+    if status:
+        query = query.where(WebhookQueue.status == status)
+
+    query = query.order_by(desc(WebhookQueue.created_at)).limit(limit)
+
+    result = await db.execute(query)
+    webhooks = result.scalars().all()
+
+    return {
+        "webhooks": [
+            {
+                "id": str(wh.id),
+                "event_type": wh.event_type,
+                "service_name": wh.service_name,
+                "status": wh.status,
+                "attempt_count": wh.attempt_count,
+                "next_attempt_at": wh.next_attempt_at.isoformat() if wh.next_attempt_at else None,
+                "last_attempt_at": wh.last_attempt_at.isoformat() if wh.last_attempt_at else None,
+                "last_status_code": wh.last_status_code,
+                "last_error": wh.last_error,
+                "delivered_at": wh.delivered_at.isoformat() if wh.delivered_at else None,
+                "created_at": wh.created_at.isoformat()
+            }
+            for wh in webhooks
+        ],
+        "count": len(webhooks)
+    }
+
+
+@router.post("/api/webhooks/queue/{webhook_id}/retry")
+async def retry_webhook(
+    webhook_id: str,
+    user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Manually retry a failed or exhausted webhook.
+
+    POST /api/webhooks/queue/{webhook_id}/retry
+    """
+    from ..models import WebhookQueue
+    from ..services.webhook_retry_service import WebhookRetryService
+
+    # Verify ownership
+    result = await db.execute(
+        select(WebhookQueue).where(
+            WebhookQueue.id == webhook_id,
+            WebhookQueue.user_id == user["id"]
+        )
+    )
+    webhook = result.scalar_one_or_none()
+
+    if not webhook:
+        raise HTTPException(status_code=404, detail="Webhook not found")
+
+    success = await WebhookRetryService.retry_webhook(webhook_id, db)
+
+    if success:
+        return {"status": "queued", "message": "Webhook queued for retry"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to queue webhook for retry")
+
+
+@router.get("/api/webhooks/queue/stats")
+async def get_webhook_queue_stats(
+    user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get webhook queue statistics.
+
+    Returns counts by status for monitoring.
+    """
+    from ..models import WebhookQueue
+
+    # Count by status
+    result = await db.execute(
+        select(
+            WebhookQueue.status,
+            func.count(WebhookQueue.id).label('count')
+        ).where(
+            WebhookQueue.user_id == user["id"]
+        ).group_by(WebhookQueue.status)
+    )
+
+    stats = {row.status: row.count for row in result}
+
+    # Get recent delivery rate
+    from datetime import datetime, timedelta
+    one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+
+    delivered_result = await db.execute(
+        select(func.count(WebhookQueue.id)).where(
+            WebhookQueue.user_id == user["id"],
+            WebhookQueue.status == "delivered",
+            WebhookQueue.delivered_at >= one_hour_ago
+        )
+    )
+    delivered_last_hour = delivered_result.scalar() or 0
+
+    failed_result = await db.execute(
+        select(func.count(WebhookQueue.id)).where(
+            WebhookQueue.user_id == user["id"],
+            WebhookQueue.status.in_(["failed", "exhausted"]),
+            WebhookQueue.last_attempt_at >= one_hour_ago
+        )
+    )
+    failed_last_hour = failed_result.scalar() or 0
+
+    return {
+        "by_status": stats,
+        "last_hour": {
+            "delivered": delivered_last_hour,
+            "failed": failed_last_hour
+        },
+        "total_pending": stats.get("pending", 0) + stats.get("retrying", 0)
     }

@@ -184,33 +184,55 @@ export default function AnalyticsPage() {
               <Card className="bg-[#0a0a0a] border border-[#222] hover:border-cyan-500 transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/10">
                 <CardHeader className="pb-4">
                   <CardTitle className="text-white flex items-center gap-3 text-xl">
-                    
                     API Call Volume
                   </CardTitle>
                   <CardDescription className="text-[#888]">Daily API calls over time</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {timeSeries?.daily_volume && timeSeries.daily_volume.length > 0 ? (
-                    <div className="space-y-3">
-                      {timeSeries.daily_volume.slice(-7).map((day) => (
-                        <div key={day.date} className="flex items-center justify-between p-3 bg-[#1a1a1a] border border-[#222] rounded-lg">
-                          <span className="text-sm text-white">{new Date(day.date).toLocaleDateString()}</span>
-                          <div className="flex items-center gap-4">
-                            <span className="text-sm font-medium text-cyan-500">{day.calls} calls</span>
-                            {day.errors > 0 && (
-                              <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-xs">
-                                {day.errors} errors
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      ))}
+                    <div className="space-y-4">
+                      {/* Bar Chart Visualization */}
+                      <div className="flex items-end gap-1 h-32 px-2">
+                        {(() => {
+                          const data = timeSeries.daily_volume.slice(-14);
+                          const maxCalls = Math.max(...data.map(d => d.calls), 1);
+                          return data.map((day, idx) => (
+                            <div key={day.date} className="flex-1 flex flex-col items-center gap-1">
+                              <div
+                                className="w-full bg-cyan-500/80 rounded-t hover:bg-cyan-400 transition-colors relative group"
+                                style={{ height: `${(day.calls / maxCalls) * 100}%`, minHeight: day.calls > 0 ? '4px' : '0' }}
+                              >
+                                {day.errors > 0 && (
+                                  <div
+                                    className="absolute bottom-0 w-full bg-red-500/80 rounded-t"
+                                    style={{ height: `${(day.errors / day.calls) * 100}%` }}
+                                  />
+                                )}
+                                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                                  {day.calls} calls{day.errors > 0 && `, ${day.errors} errors`}
+                                </div>
+                              </div>
+                              {idx % 2 === 0 && (
+                                <span className="text-[10px] text-gray-500">
+                                  {new Date(day.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                </span>
+                              )}
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                      {/* Legend */}
+                      <div className="flex items-center gap-4 text-xs text-gray-400 justify-center">
+                        <span className="flex items-center gap-1"><span className="w-3 h-3 bg-cyan-500 rounded" /> Successful</span>
+                        <span className="flex items-center gap-1"><span className="w-3 h-3 bg-red-500 rounded" /> Errors</span>
+                      </div>
                     </div>
                   ) : (
                     <div className="flex items-center justify-center h-32 text-[#666] border border-dashed border-[#333] rounded-xl bg-[#1a1a1a]">
                       <div className="text-center">
                         <BarChart3 className="w-8 h-8 text-[#666] mx-auto mb-2" />
-                        No data available for selected period
+                        <p className="mb-2">No data available for selected period</p>
+                        <p className="text-xs">Make some API calls to see analytics</p>
                       </div>
                     </div>
                   )}
@@ -221,7 +243,6 @@ export default function AnalyticsPage() {
               <Card className="bg-[#0a0a0a] border border-[#222] hover:border-cyan-500 transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/10">
                 <CardHeader className="pb-4">
                   <CardTitle className="text-white flex items-center gap-3 text-xl">
-                    
                     Service Performance
                   </CardTitle>
                   <CardDescription className="text-[#888]">Performance by service</CardDescription>
@@ -229,23 +250,43 @@ export default function AnalyticsPage() {
                 <CardContent>
                   {overview?.top_services && overview.top_services.length > 0 ? (
                     <div className="space-y-3">
-                      {overview.top_services.slice(0, 5).map((service, index) => (
-                        <div key={service.service} className="flex items-center justify-between p-3 bg-[#1a1a1a] border border-[#222] rounded-lg">
-                          <div className="flex items-center gap-3">
-                            <div className="w-6 h-6 bg-cyan-500/20 rounded-full flex items-center justify-center border border-cyan-500/30 text-xs font-bold text-cyan-500">
-                              {index + 1}
+                      {(() => {
+                        const maxCalls = Math.max(...overview.top_services.map(s => s.calls), 1);
+                        return overview.top_services.slice(0, 5).map((service, index) => {
+                          const errorRate = overview.error_rate_by_service?.[service.service] || 0;
+                          return (
+                            <div key={service.service} className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-bold text-cyan-500 w-4">{index + 1}</span>
+                                  <span className="text-sm font-medium text-white capitalize">{service.service}</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <span className="text-sm text-cyan-500 font-medium">{service.calls.toLocaleString()}</span>
+                                  {errorRate > 0 && (
+                                    <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-xs">
+                                      {errorRate.toFixed(1)}% err
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="h-2 bg-[#1a1a1a] rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 rounded-full transition-all"
+                                  style={{ width: `${(service.calls / maxCalls) * 100}%` }}
+                                />
+                              </div>
                             </div>
-                            <span className="text-sm font-medium text-white capitalize">{service.service}</span>
-                          </div>
-                          <span className="text-sm text-cyan-500 font-medium">{service.calls} calls</span>
-                        </div>
-                      ))}
+                          );
+                        });
+                      })()}
                     </div>
                   ) : (
                     <div className="flex items-center justify-center h-32 text-[#666] border border-dashed border-[#333] rounded-xl bg-[#1a1a1a]">
                       <div className="text-center">
                         <TrendingUp className="w-8 h-8 text-[#666] mx-auto mb-2" />
-                        No service data available
+                        <p className="mb-2">No service data available</p>
+                        <p className="text-xs">Connect services to see performance</p>
                       </div>
                     </div>
                   )}

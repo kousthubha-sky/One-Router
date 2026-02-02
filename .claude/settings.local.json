@@ -21,7 +21,8 @@
       "Bash(grep:*)",
       "Bash(npm run build:*)",
       "WebSearch",
-      "Bash(docker compose:*)"
+      "Bash(docker compose:*)",
+      "WebFetch(domain:resend.com)"
     ]
   }
 }

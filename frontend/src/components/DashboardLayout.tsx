@@ -324,13 +324,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
                 {/* Pricing */}
                 <NavigationMenuItem>
-                  <Link href="/pricing" className={cn(
+                  <Link href="/credits" className={cn(
                     navigationMenuTriggerStyle(),
                     "px-3 py-2",
                     pathname === '/pricing' && 'bg-white/10'
                   )}>
                     <DollarSign className="w-4 h-4 mr-2" />
-                    Pricing
+                    Credits
                   </Link>
                 </NavigationMenuItem>
               </NavigationMenuList>

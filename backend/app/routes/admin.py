@@ -340,3 +340,41 @@ async def retry_webhook(
     )
 
     return {"status": "queued", "webhook_id": webhook_id}
+
+
+@router.post("/webhooks/process-pending")
+async def process_pending_webhooks(
+    request: Request,
+    batch_size: int = 50,
+    user=Depends(require_permission(Permission.ADMIN_SETTINGS_WRITE)),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Process pending webhooks (admin/cron job).
+
+    This endpoint should be called periodically by a cron job or background worker
+    to process webhooks that failed initial delivery and are due for retry.
+
+    POST /api/admin/webhooks/process-pending?batch_size=50
+    """
+    from ..services.webhook_retry_service import WebhookRetryService
+
+    results = await WebhookRetryService.process_pending_webhooks(
+        db=db,
+        batch_size=batch_size
+    )
+
+    await AuditService.log(
+        db=db,
+        user_id=user["id"],
+        action=AuditAction.ADMIN_SETTINGS_CHANGED,
+        resource_type="webhook_processor",
+        request=request,
+        details={"results": results}
+    )
+
+    return {
+        "status": "processed",
+        "results": results,
+        "message": f"Processed {sum(results.values())} webhooks"
+    }
