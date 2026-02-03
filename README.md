@@ -29,7 +29,7 @@ OneRouter provides a single SDK that works for multiple service categories:
 - **Payments**: Razorpay, PayPal
 - **SMS**: Twilio
 - **Email**: Resend
-- **More services coming**: Webhooks, file storage, databases, etc.
+- **More services coming**: File storage, databases, and more
 
 ### What We Are
 
@@ -198,7 +198,7 @@ Frontend will start on `http://localhost:3000`
 
 ### Frontend
 
-**Tech Stack**: Next.js 19, TypeScript, Tailwind CSS, Clerk Authentication
+**Tech Stack**: Next.js 16, TypeScript, Tailwind CSS, Clerk Authentication
 
 **Features**:
 - Dashboard for managing service provider credentials
@@ -468,8 +468,8 @@ DEBUG=false
 ## Documentation
 
 - **API Documentation**: http://localhost:8000/docs (or /docs endpoint on your backend)
-- **SDK Reference**: [onerouter-sdk/README.md](onerouter-sdk/README.md)
-- **Complete System Guide**: [docsi/complete_system_guide.md](docsi/complete_system_guide.md)
+- **Python SDK**: [onerouter-sdk/README.md](onerouter-sdk/README.md)
+- **JavaScript SDK**: [onerouter-js/README.md](onerouter-js/README.md)
 - **Backend API**: [Backend README](backend/README.md)
 - **Frontend Guide**: [Frontend README](frontend/README.md)
 
@@ -495,9 +495,9 @@ pytest tests/ -v --cov=onerouter --cov-report=html
 
 ## Support
 
-- **Documentation**: https://docs.onerouter.com
+- **Documentation**: https://docs.onerouter.dev
 - **GitHub Issues**: https://github.com/onerouter/onerouter/issues
-- **Email**: support@onerouter.com
+- **Email**: support@onerouter.dev
 
 ---
 
