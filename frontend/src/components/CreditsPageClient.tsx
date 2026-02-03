@@ -49,6 +49,7 @@ export function CreditsPageClient() {
   const [currentPage, setCurrentPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [plans, setPlans] = useState<CreditPlan[]>([]);
+  const [paymentCurrency, setPaymentCurrency] = useState<"INR" | "USD">("INR");
   const apiClient = useClientApiCall();
 
   const ITEMS_PER_PAGE = 5;
@@ -96,12 +97,16 @@ export function CreditsPageClient() {
 
     try {
       const plan = plans.find((p) => p.id === planId);
+      // Use Dodo for USD, Razorpay for INR
+      const provider = paymentCurrency === "USD" ? "dodo" : "razorpay";
+
       const response = (await apiClient("/v1/credits/purchase", {
         method: "POST",
         body: JSON.stringify({
           plan_id: planId,
           credits: plan?.credits || 1000,
-          provider: "razorpay",
+          currency: paymentCurrency,
+          provider: provider,
         }),
       })) as unknown as { checkout_url?: string; error?: string };
 
@@ -112,8 +117,11 @@ export function CreditsPageClient() {
 
       if (response?.checkout_url?.includes("demo")) {
         // Demo mode - simulate success
+        const displayAmount = paymentCurrency === "USD"
+          ? `$${plan?.price_usd || 1.20}`
+          : `₹${plan?.price_inr || 100}`;
         alert(
-          `Demo Mode: Would purchase ${plan?.credits || 1000} credits for ₹${plan?.price_inr || 100}`
+          `Demo Mode: Would purchase ${plan?.credits || 1000} credits for ${displayAmount}`
         );
         await loadBalance();
         return;
@@ -229,7 +237,39 @@ export function CreditsPageClient() {
 
       {/* Buy Credits Section */}
       <div className="mb-8">
-        <h2 className="text-white font-semibold text-lg mb-4">Buy Credits</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-white font-semibold text-lg">Buy Credits</h2>
+
+          {/* Currency Toggle */}
+          <div className="flex items-center gap-2 bg-[#0a0a0a] rounded-lg p-1">
+            <button
+              onClick={() => setPaymentCurrency("INR")}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                paymentCurrency === "INR"
+                  ? "bg-indigo-500 text-white"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              INR
+            </button>
+            <button
+              onClick={() => setPaymentCurrency("USD")}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                paymentCurrency === "USD"
+                  ? "bg-green-500 text-white"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              USD
+            </button>
+          </div>
+        </div>
+
+        {paymentCurrency === "USD" && (
+          <div className="mb-2 text-green-400 text-sm">
+            Paying in USD via Dodo Payments - available worldwide
+          </div>
+        )}
 
         {error && (
           <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
@@ -238,62 +278,71 @@ export function CreditsPageClient() {
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {plans.map((plan) => (
-            <div
-              key={plan.id}
-              className={`bg-[#0a0a0a] rounded-xl p-6 border transition-all ${
-                plan.id === "pro"
-                  ? "border-indigo-500/50 ring-1 ring-indigo-500/20"
-                  : "border-gray-800 hover:border-gray-700"
-              }`}
-            >
-              {plan.id === "pro" && (
-                <div className="text-xs font-medium text-indigo-400 mb-2">
-                  MOST POPULAR
-                </div>
-              )}
-              <h3 className="text-white font-semibold text-lg">{plan.name}</h3>
-              <div className="mt-2 mb-4">
-                <span className="text-3xl font-bold text-white">
-                  ₹{plan.price_inr}
-                </span>
-                <span className="text-gray-400 text-sm ml-2">
-                  ({plan.credits.toLocaleString()} credits)
-                </span>
-              </div>
-              <p className="text-gray-400 text-sm mb-4">{plan.description}</p>
-              <div className="text-xs text-gray-500 mb-4">
-                ₹{plan.per_credit.toFixed(2)} per credit
-                {plan.id !== "starter" && (
-                  <span className="text-green-400 ml-2">
-                    Save{" "}
-                    {Math.round(
-                      ((0.1 - plan.per_credit) / 0.1) * 100
-                    )}
-                    %
-                  </span>
-                )}
-              </div>
-              <button
-                onClick={() => handlePurchase(plan.id)}
-                disabled={purchasing !== null}
-                className={`w-full font-medium py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 ${
+          {plans.map((plan) => {
+            const displayPrice = paymentCurrency === "USD"
+              ? `$${plan.price_usd}`
+              : `₹${plan.price_inr}`;
+            const perCreditPrice = paymentCurrency === "USD"
+              ? `$${(plan.price_usd / plan.credits).toFixed(4)}`
+              : `₹${plan.per_credit.toFixed(2)}`;
+
+            return (
+              <div
+                key={plan.id}
+                className={`bg-[#0a0a0a] rounded-xl p-6 border transition-all ${
                   plan.id === "pro"
-                    ? "bg-indigo-500 hover:bg-indigo-600 text-white"
-                    : "bg-gray-700 hover:bg-gray-600 text-white"
-                } disabled:opacity-50`}
+                    ? "border-indigo-500/50 ring-1 ring-indigo-500/20"
+                    : "border-gray-800 hover:border-gray-700"
+                }`}
               >
-                {purchasing === plan.id ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  "Buy Now"
+                {plan.id === "pro" && (
+                  <div className="text-xs font-medium text-indigo-400 mb-2">
+                    MOST POPULAR
+                  </div>
                 )}
-              </button>
-            </div>
-          ))}
+                <h3 className="text-white font-semibold text-lg">{plan.name}</h3>
+                <div className="mt-2 mb-4">
+                  <span className="text-3xl font-bold text-white">
+                    {displayPrice}
+                  </span>
+                  <span className="text-gray-400 text-sm ml-2">
+                    ({plan.credits.toLocaleString()} credits)
+                  </span>
+                </div>
+                <p className="text-gray-400 text-sm mb-4">{plan.description}</p>
+                <div className="text-xs text-gray-500 mb-4">
+                  {perCreditPrice} per credit
+                  {plan.id !== "starter" && (
+                    <span className="text-green-400 ml-2">
+                      Save{" "}
+                      {Math.round(
+                        ((0.1 - plan.per_credit) / 0.1) * 100
+                      )}
+                      %
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => handlePurchase(plan.id)}
+                  disabled={purchasing !== null}
+                  className={`w-full font-medium py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 ${
+                    plan.id === "pro"
+                      ? "bg-indigo-500 hover:bg-indigo-600 text-white"
+                      : "bg-gray-700 hover:bg-gray-600 text-white"
+                  } disabled:opacity-50`}
+                >
+                  {purchasing === plan.id ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    `Pay with ${paymentCurrency === "USD" ? "Dodo" : "Razorpay"}`
+                  )}
+                </button>
+              </div>
+            );
+          })}
         </div>
 
         <div className="mt-4 flex items-center justify-between text-sm">

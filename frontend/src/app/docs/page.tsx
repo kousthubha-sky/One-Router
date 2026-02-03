@@ -6,6 +6,38 @@ import { SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
 import { Github, ExternalLink, Copy, Check } from 'lucide-react';
 
+function CodeBlock({
+  code,
+  language = 'bash',
+  id,
+  copied,
+  onCopy
+}: {
+  code: string;
+  language?: string;
+  id: string;
+  copied: string | null;
+  onCopy: (text: string, id: string) => void;
+}) {
+  return (
+    <div className="bg-[#0a0a0a] border border-[#222] rounded-lg p-4 mb-4">
+      <div className="flex justify-between items-center mb-3">
+        <span className="text-[#666] text-xs uppercase tracking-widest">{language}</span>
+        <button
+          onClick={() => onCopy(code, id)}
+          className="text-[#666] hover:text-white transition-colors flex items-center gap-1 text-xs"
+        >
+          {copied === id ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+          {copied === id ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+      <pre className="text-[#00ff88] text-xs overflow-x-auto font-mono">
+        <code>{code}</code>
+      </pre>
+    </div>
+  );
+}
+
 export default function DocsPage() {
   const [activeSection, setActiveSection] = useState('overview');
   const [copied, setCopied] = useState<string | null>(null);
@@ -28,24 +60,6 @@ export default function DocsPage() {
     setCopied(id);
     setTimeout(() => setCopied(null), 2000);
   };
-
-  const CodeBlock = ({ code, language = 'bash', id }: { code: string; language?: string; id: string }) => (
-    <div className="bg-[#0a0a0a] border border-[#222] rounded-lg p-4 mb-4">
-      <div className="flex justify-between items-center mb-3">
-        <span className="text-[#666] text-xs uppercase tracking-widest">{language}</span>
-        <button
-          onClick={() => copyToClipboard(code, id)}
-          className="text-[#666] hover:text-white transition-colors flex items-center gap-1 text-xs"
-        >
-          {copied === id ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-          {copied === id ? 'Copied' : 'Copy'}
-        </button>
-      </div>
-      <pre className="text-[#00ff88] text-xs overflow-x-auto font-mono">
-        <code>{code}</code>
-      </pre>
-    </div>
-  );
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -257,6 +271,8 @@ export default function DocsPage() {
                   code="Authorization: Bearer sk_test_xxxxx"
                   language="text"
                   id="auth-header"
+                  copied={copied}
+                  onCopy={copyToClipboard}
                 />
               </div>
 
@@ -287,6 +303,8 @@ X-RateLimit-Reset: 1704067200
 Retry-After: 60`}
                   language="text"
                   id="rate-limit-headers"
+                  copied={copied}
+                  onCopy={copyToClipboard}
                 />
               </div>
             </div>
@@ -424,6 +442,8 @@ Retry-After: 60`}
   }'`}
                   language="bash"
                   id="example-payment"
+                  copied={copied}
+                  onCopy={copyToClipboard}
                 />
               </div>
 
@@ -441,6 +461,8 @@ Retry-After: 60`}
   }'`}
                   language="bash"
                   id="example-subscription"
+                  copied={copied}
+                  onCopy={copyToClipboard}
                 />
               </div>
 
@@ -457,6 +479,8 @@ Retry-After: 60`}
   }'`}
                   language="bash"
                   id="example-sms"
+                  copied={copied}
+                  onCopy={copyToClipboard}
                 />
               </div>
 
@@ -474,6 +498,8 @@ Retry-After: 60`}
   }'`}
                   language="bash"
                   id="example-email"
+                  copied={copied}
+                  onCopy={copyToClipboard}
                 />
               </div>
 
@@ -484,6 +510,8 @@ Retry-After: 60`}
   -H "Authorization: Bearer sk_test_xxxxx"`}
                   language="bash"
                   id="example-balance"
+                  copied={copied}
+                  onCopy={copyToClipboard}
                 />
               </div>
             </div>
@@ -510,6 +538,8 @@ Retry-After: 60`}
 }`}
                   language="json"
                   id="error-format"
+                  copied={copied}
+                  onCopy={copyToClipboard}
                 />
               </div>
 
@@ -548,6 +578,8 @@ Retry-After: 60`}
 }`}
                   language="json"
                   id="error-rate-limit"
+                  copied={copied}
+                  onCopy={copyToClipboard}
                 />
               </div>
             </div>
@@ -569,6 +601,8 @@ Retry-After: 60`}
                   code="pip install onerouter"
                   language="bash"
                   id="sdk-python-install"
+                  copied={copied}
+                  onCopy={copyToClipboard}
                 />
                 <CodeBlock
                   code={`from onerouter import OneRouter
@@ -599,6 +633,8 @@ response = client.email.send(
 )`}
                   language="python"
                   id="sdk-python-example"
+                  copied={copied}
+                  onCopy={copyToClipboard}
                 />
               </div>
 
@@ -608,6 +644,8 @@ response = client.email.send(
                   code="npm install onerouter-js"
                   language="bash"
                   id="sdk-js-install"
+                  copied={copied}
+                  onCopy={copyToClipboard}
                 />
                 <CodeBlock
                   code={`import { OneRouter } from 'onerouter-js';
@@ -638,6 +676,8 @@ const email = await client.email.send({
 });`}
                   language="javascript"
                   id="sdk-js-example"
+                  copied={copied}
+                  onCopy={copyToClipboard}
                 />
               </div>
 

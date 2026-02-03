@@ -16,51 +16,35 @@ export function Marquee({
   className,
   ...props
 }: MarqueeProps) {
+  const animationStyle: React.CSSProperties = {
+    animation: `${direction === "right" ? "marquee-reverse" : "marquee"} ${speed}s linear infinite`,
+  }
+
   return (
-    <div 
+    <div
       className={cn(
-        "w-full overflow-hidden sm:mt-24 mt-10 z-10",
+        "w-full overflow-hidden z-10",
         className
-      )} 
+      )}
       {...props}
     >
       <style>{`
         @keyframes marquee {
-          0% {
-            transform: translateX(0);
-          }
-          100% {
-            transform: translateX(-50%);
-          }
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
         }
-        
         @keyframes marquee-reverse {
-          0% {
-            transform: translateX(-50%);
-          }
-          100% {
-            transform: translateX(0);
-          }
-        }
-        
-        .marquee-animate {
-          animation: marquee ${speed}s linear infinite;
-        }
-        
-        .marquee-animate.reverse {
-          animation: marquee-reverse ${speed}s linear infinite;
-        }
-        
-        .marquee-animate.pause:hover {
-          animation-play-state: paused;
+          0% { transform: translateX(-50%); }
+          100% { transform: translateX(0); }
         }
       `}</style>
-      <div className="relative flex max-w-[90vw] overflow-hidden py-5">
-        <div 
+      <div className="relative flex h-24 overflow-hidden">
+        <div
           className={cn(
-            "flex w-max",
-            `marquee-animate ${direction === "right" ? "reverse" : ""} ${pauseOnHover ? "pause" : ""}`
+            "flex w-max shrink-0",
+            pauseOnHover && "hover:[animation-play-state:paused]"
           )}
+          style={animationStyle}
         >
           {children}
           {children}

@@ -93,6 +93,11 @@ class Settings:
         "https://demo.onerouter.com"
     )
 
+    # Dodo Payments Configuration (for USD credit purchases)
+    DODO_API_KEY: str = os.getenv("DODO_API_KEY", "")
+    DODO_WEBHOOK_SECRET: str = os.getenv("DODO_WEBHOOK_SECRET", "")
+    DODO_MODE: str = os.getenv("DODO_MODE", "test")  # "test" or "live"
+
     def __init__(self):
         """Initialize settings and validate/generate encryption key"""
         # Load admin user IDs from environment variable (comma-separated)

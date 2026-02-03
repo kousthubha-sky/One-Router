@@ -38,7 +38,7 @@ class CreditPurchaseRequest(BaseModel):
     credits: int = Field(..., ge=100, le=100000, description="Number of credits to purchase")
     currency: str = Field(default="INR", description="Currency for payment")
     plan_id: Optional[str] = Field(None, description="Predefined plan ID")
-    provider: Optional[str] = Field(default="razorpay", description="Payment provider: razorpay or paypal")
+    provider: Optional[str] = Field(default="razorpay", description="Payment provider: razorpay, paypal, or dodo")
 
 
 class CreditPurchaseResponse(BaseModel):
@@ -281,6 +281,48 @@ async def purchase_credits(
 
             except Exception as e:
                 logger.error(f"Direct Razorpay payment failed: {str(e)}", exc_info=True)
+
+    # Direct Dodo Payments for USD credit purchases
+    if link is None and selected_provider == "dodo":
+        if settings.DODO_API_KEY:
+            try:
+                from ..adapters.dodo import DodoAdapter
+
+                # Convert INR price to USD
+                price_usd = round(price_inr / 83, 2)
+                callback_url = f"{settings.API_BASE_URL}/v1/credits/payment-callback/dodo"
+
+                dodo = DodoAdapter({
+                    "DODO_API_KEY": settings.DODO_API_KEY,
+                    "DODO_MODE": settings.DODO_MODE
+                })
+
+                dodo_result = await dodo.create_payment_link(
+                    amount=price_usd,
+                    description=f"Purchase {credits_to_buy} OneRouter credits",
+                    currency="USD",
+                    callback_url=callback_url,
+                    notes={
+                        "onerouter_user_id": user_id,
+                        "credits": str(credits_to_buy),
+                        "type": "credit_purchase",
+                        "customer_email": user_email
+                    }
+                )
+
+                link = {
+                    "provider_order_id": dodo_result.get("provider_order_id"),
+                    "checkout_url": dodo_result.get("checkout_url")
+                }
+                logger.info(
+                    "Payment link created via Dodo Payments",
+                    extra={"credits_purchased": credits_to_buy, "amount_usd": price_usd}
+                )
+
+            except Exception as e:
+                logger.error(f"Dodo payment failed: {str(e)}", exc_info=True)
+        else:
+            logger.warning("Dodo provider selected but DODO_API_KEY not configured")
 
     # Demo fallback for development
     if link is None:
@@ -529,6 +571,184 @@ async def razorpay_webhook(
                 await db.commit()
 
     return {"status": "received"}
+
+
+@router.post("/webhook/dodo")
+async def dodo_webhook(
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Handle Dodo Payments webhook for payment success/failure.
+    Implements Standard Webhooks signature verification.
+    """
+    from ..adapters.dodo import DodoAdapter
+
+    # Get raw body for signature verification
+    body = await request.body()
+
+    # Get Standard Webhooks headers
+    webhook_id = request.headers.get("webhook-id", "")
+    webhook_signature = request.headers.get("webhook-signature", "")
+    webhook_timestamp = request.headers.get("webhook-timestamp", "")
+
+    # Verify webhook secret is configured
+    if not settings.DODO_WEBHOOK_SECRET:
+        logger.error("Dodo webhook secret not configured")
+        raise HTTPException(
+            status_code=401,
+            detail="Webhook configuration error"
+        )
+
+    if not webhook_signature:
+        logger.error("Missing Dodo webhook signature")
+        raise HTTPException(
+            status_code=400,
+            detail="Missing signature"
+        )
+
+    # Verify signature using Standard Webhooks spec
+    dodo = DodoAdapter({
+        "DODO_API_KEY": settings.DODO_API_KEY,
+        "DODO_MODE": settings.DODO_MODE
+    })
+
+    if not dodo.verify_webhook_signature(
+        payload=body,
+        webhook_id=webhook_id,
+        webhook_signature=webhook_signature,
+        webhook_timestamp=webhook_timestamp,
+        webhook_secret=settings.DODO_WEBHOOK_SECRET
+    ):
+        logger.error("Dodo webhook signature verification failed")
+        raise HTTPException(
+            status_code=400,
+            detail="Signature verification failed"
+        )
+
+    # Parse payload
+    try:
+        payload = json.loads(body.decode("utf-8")) if body else {}
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse Dodo webhook payload: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid webhook payload"
+        )
+
+    # Extract event type and data
+    event_type = payload.get("type", "")
+    event_data = payload.get("data", {})
+
+    logger.info(f"Dodo webhook received: {event_type}")
+
+    # Handle payment success
+    if event_type in ["payment.succeeded", "payment.completed", "payment.paid"]:
+        payment_id = event_data.get("payment_id", "")
+
+        # Find payment by provider_order_id
+        if payment_id:
+            result = await db.execute(
+                select(OneRouterPayment)
+                .where(OneRouterPayment.provider_order_id == payment_id)
+            )
+            payment = result.scalar_one_or_none()
+
+            if payment:
+                # Idempotency check
+                if payment.status in (PaymentStatus.SUCCESS, PaymentStatus.FAILED, PaymentStatus.REFUNDED):
+                    return {"status": "already_processed"}
+
+                # Update payment status
+                payment.status = PaymentStatus.SUCCESS
+                payment.provider_payment_id = payment_id
+
+                # Add credits to user
+                try:
+                    await CreditsService.add_credits(
+                        user_id=payment.user_id,
+                        amount=payment.credits_purchased,
+                        transaction_type=TransactionType.PURCHASE,
+                        payment_id=str(payment.id),
+                        description=f"Purchased {payment.credits_purchased} credits via Dodo",
+                        db=db
+                    )
+                    await db.commit()
+                    logger.info(f"Dodo payment {payment_id} processed, added {payment.credits_purchased} credits")
+                except Exception as e:
+                    await db.rollback()
+                    payment.status = PaymentStatus.PENDING
+                    await db.commit()
+                    logger.error(f"Failed to add credits for Dodo payment {payment.id}: {e}")
+                    return {"status": "error", "message": "Credit addition failed"}
+
+    # Handle payment failure
+    elif event_type in ["payment.failed", "payment.cancelled", "payment.expired"]:
+        payment_id = event_data.get("payment_id", "")
+        error_reason = event_data.get("failure_reason", event_type)
+
+        if payment_id:
+            result = await db.execute(
+                select(OneRouterPayment)
+                .where(OneRouterPayment.provider_order_id == payment_id)
+            )
+            payment = result.scalar_one_or_none()
+
+            if payment and payment.status == PaymentStatus.PENDING:
+                payment.status = PaymentStatus.FAILED
+                payment.error_message = error_reason
+                await db.commit()
+                logger.info(f"Dodo payment {payment_id} marked as failed: {error_reason}")
+
+    return {"status": "received"}
+
+
+@router.get("/payment-callback/dodo")
+async def dodo_payment_callback(
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Handle Dodo payment callback redirect.
+    Redirects user to payment result page.
+    """
+    # Get payment ID from query params
+    payment_id = request.query_params.get("payment_id", "")
+    status = request.query_params.get("status", "")
+
+    if not payment_id:
+        # Redirect to credits page with error
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_URL}/credits?error=missing_payment_id",
+            status_code=303
+        )
+
+    # Find payment record
+    result = await db.execute(
+        select(OneRouterPayment)
+        .where(OneRouterPayment.provider_order_id == payment_id)
+    )
+    payment = result.scalar_one_or_none()
+
+    if not payment:
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_URL}/credits?error=payment_not_found",
+            status_code=303
+        )
+
+    # Generate JWT token for secure result verification
+    token_payload = {
+        "payment_id": str(payment.id),
+        "user_id": str(payment.user_id),
+        "exp": datetime.utcnow() + timedelta(minutes=10)
+    }
+    token = jwt.encode(token_payload, settings.SECRET_KEY, algorithm="HS256")
+
+    # Redirect to payment result page
+    return RedirectResponse(
+        url=f"{settings.FRONTEND_URL}/credits/payment-result?token={token}",
+        status_code=303
+    )
 
 
 @router.get("/verify-payment/{payment_id}")
