@@ -31,6 +31,102 @@ const allSections: Section[] = [
   { id: 'sdks', title: 'SDKs' },
 ];
 
+// Section-specific table of contents (headings within each section)
+const sectionTOC: Record<string, { id: string; title: string; level: number }[]> = {
+  'introduction': [
+    { id: 'intro-features', title: 'Features', level: 2 },
+    { id: 'intro-how-it-works', title: 'How it works', level: 2 },
+  ],
+  'quickstart': [
+    { id: 'qs-api-key', title: 'Get your API key', level: 2 },
+    { id: 'qs-configure', title: 'Configure a provider', level: 2 },
+    { id: 'qs-first-request', title: 'Make your first request', level: 2 },
+    { id: 'qs-response', title: 'Response', level: 2 },
+  ],
+  'authentication': [
+    { id: 'auth-header', title: 'Authorization header', level: 2 },
+    { id: 'auth-rate-limits', title: 'Rate limits', level: 2 },
+    { id: 'auth-headers', title: 'Rate limit headers', level: 2 },
+  ],
+  'razorpay-setup': [
+    { id: 'rz-create', title: 'Create Razorpay Account', level: 2 },
+    { id: 'rz-keys', title: 'Get API Keys', level: 2 },
+    { id: 'rz-add', title: 'Add to OneRouter', level: 2 },
+    { id: 'rz-test', title: 'Test Cards', level: 2 },
+    { id: 'rz-webhook', title: 'Webhook Setup', level: 3 },
+  ],
+  'paypal-setup': [
+    { id: 'pp-create', title: 'Create Developer Account', level: 2 },
+    { id: 'pp-app', title: 'Create an App', level: 2 },
+    { id: 'pp-creds', title: 'Get Credentials', level: 2 },
+    { id: 'pp-add', title: 'Add to OneRouter', level: 2 },
+    { id: 'pp-sandbox', title: 'Sandbox Test Accounts', level: 2 },
+  ],
+  'twilio-setup': [
+    { id: 'tw-create', title: 'Create Twilio Account', level: 2 },
+    { id: 'tw-creds', title: 'Get Credentials', level: 2 },
+    { id: 'tw-phone', title: 'Get a Phone Number', level: 2 },
+    { id: 'tw-add', title: 'Add to OneRouter', level: 2 },
+    { id: 'tw-test', title: 'Test Numbers', level: 2 },
+  ],
+  'resend-setup': [
+    { id: 'rs-create', title: 'Create Resend Account', level: 2 },
+    { id: 'rs-key', title: 'Get API Key', level: 2 },
+    { id: 'rs-domain', title: 'Verify Domain', level: 2 },
+    { id: 'rs-add', title: 'Add to OneRouter', level: 2 },
+    { id: 'rs-test', title: 'Testing', level: 2 },
+  ],
+  'payments': [
+    { id: 'pay-endpoint', title: 'POST /v1/payments/orders', level: 2 },
+    { id: 'pay-request', title: 'Request Body', level: 3 },
+    { id: 'pay-response', title: 'Response', level: 3 },
+    { id: 'pay-providers', title: 'Supported Providers', level: 3 },
+  ],
+  'payment-links': [
+    { id: 'plink-endpoint', title: 'POST /v1/payment-links', level: 2 },
+    { id: 'plink-request', title: 'Request Body', level: 3 },
+    { id: 'plink-response', title: 'Response', level: 3 },
+  ],
+  'subscriptions': [
+    { id: 'sub-endpoints', title: 'Endpoints', level: 2 },
+    { id: 'sub-create', title: 'Create Subscription', level: 3 },
+  ],
+  'sms': [
+    { id: 'sms-send', title: 'POST /v1/sms', level: 2 },
+    { id: 'sms-status', title: 'GET /v1/sms/{id}', level: 2 },
+    { id: 'sms-test', title: 'Test Mode', level: 3 },
+  ],
+  'email': [
+    { id: 'email-send', title: 'POST /v1/email', level: 2 },
+    { id: 'email-test', title: 'Test Mode', level: 3 },
+  ],
+  'webhooks': [
+    { id: 'wh-config', title: 'Configuration', level: 2 },
+    { id: 'wh-payload', title: 'Webhook Payload', level: 2 },
+    { id: 'wh-events', title: 'Event Types', level: 2 },
+  ],
+  'errors': [
+    { id: 'err-format', title: 'Error format', level: 2 },
+    { id: 'err-codes', title: 'Status codes', level: 2 },
+  ],
+  'troubleshooting': [
+    { id: 'ts-auth', title: 'Authentication Errors', level: 2 },
+    { id: 'ts-razorpay', title: 'Razorpay Issues', level: 2 },
+    { id: 'ts-twilio', title: 'Twilio Issues', level: 2 },
+    { id: 'ts-resend', title: 'Resend Issues', level: 2 },
+    { id: 'ts-paypal', title: 'PayPal Issues', level: 2 },
+    { id: 'ts-contact', title: 'Still stuck?', level: 3 },
+  ],
+  'sdks': [
+    { id: 'sdk-python', title: 'Python SDK', level: 2 },
+    { id: 'sdk-python-install', title: 'Installation', level: 3 },
+    { id: 'sdk-python-start', title: 'Quick start', level: 3 },
+    { id: 'sdk-js', title: 'JavaScript SDK', level: 2 },
+    { id: 'sdk-js-install', title: 'Installation', level: 3 },
+    { id: 'sdk-js-start', title: 'Quick start', level: 3 },
+  ],
+};
+
 // CodeBlock component - defined outside to avoid recreation during render
 function CodeBlock({
   code,
@@ -274,7 +370,19 @@ export default function DocsPage() {
       {sidebarOpen && (
         <>
           <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
-          <aside className="fixed lg:hidden top-14 left-0 bottom-0 w-64 bg-[#050005] border-r border-white/5 z-40 overflow-y-auto">
+          <aside className="fixed lg:hidden top-14 left-0 bottom-0 w-72 bg-[#050505] border-r border-white/10 z-50 overflow-y-auto animate-in slide-in-from-left duration-200">
+            {/* Mobile Sidebar Header */}
+            <div className="sticky top-0 bg-[#050505] border-b border-white/10 px-4 py-3 flex items-center justify-between">
+              <span className="text-sm font-medium text-white">Documentation</span>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="p-1 text-gray-400 hover:text-white transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
             <div className="p-4">
               <div className="mb-6">
                 <p className="text-xs font-medium text-[#666] uppercase tracking-widest mb-2">Getting Started</p>
@@ -360,9 +468,24 @@ export default function DocsPage() {
         </>
       )}
 
+      {/* Mobile Docs Navigation Bar */}
+      <div className="lg:hidden fixed top-16 left-0 right-0 z-30 bg-[#0a0a0a] border-b border-white/10 px-4 py-3">
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="flex items-center gap-3 text-white w-full"
+        >
+          <Menu className="w-5 h-5 text-gray-400" />
+          <span className="text-sm font-medium">{allSections.find(s => s.id === activeSection)?.title || 'Documentation'}</span>
+          <svg className="w-4 h-4 text-gray-500 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      </div>
+
       {/* Main Content - Scrolls */}
-      <main className="lg:pl-64 lg:pr-48 pt-14 min-h-screen">
-        <div className="max-w-3xl mx-auto px-6 py-10">
+      <main className="lg:pl-64 xl:pr-52 pt-14 lg:pt-14 min-h-screen">
+        {/* Add extra padding on mobile for the docs nav bar */}
+        <div className="max-w-3xl mx-auto px-6 py-10 pt-16 lg:pt-10">
           {activeSection === 'introduction' && (
             <div className="space-y-6">
               <div>
@@ -372,6 +495,9 @@ export default function DocsPage() {
                 </p>
               </div>
 
+              <div id="intro-features">
+                <h2 className="text-xl font-medium text-white mb-3">Features</h2>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 {[
                   { title: 'Payments', desc: 'Razorpay, PayPal' },
@@ -386,7 +512,7 @@ export default function DocsPage() {
                 ))}
               </div>
 
-              <div>
+              <div id="intro-how-it-works">
                 <h2 className="text-xl font-medium text-white mb-3">How it works</h2>
                 <ol className="space-y-2 text-[#888]">
                   <li>1. Sign up and get your OneRouter API key</li>
@@ -417,21 +543,21 @@ export default function DocsPage() {
                 </p>
               </div>
 
-              <div>
+              <div id="qs-api-key">
                 <h2 className="text-xl font-medium text-white mb-3">1. Get your API key</h2>
                 <p className="text-[#888] mb-3">
                   Sign up at <Link href="/dashboard" className="text-white hover:underline">dashboard</Link> and create an API key from the API Keys page.
                 </p>
               </div>
 
-              <div>
+              <div id="qs-configure">
                 <h2 className="text-xl font-medium text-white mb-3">2. Configure a provider</h2>
                 <p className="text-[#888] mb-3">
                   Go to Services and add your provider credentials (e.g., Razorpay API keys, Twilio credentials).
                 </p>
               </div>
 
-              <div>
+              <div id="qs-first-request">
                 <h2 className="text-xl font-medium text-white mb-3">3. Make your first request</h2>
                 <CodeBlock
                   copied={copied}
@@ -450,7 +576,7 @@ export default function DocsPage() {
                 />
               </div>
 
-              <div>
+              <div id="qs-response">
                 <h2 className="text-xl font-medium text-white mb-3">Response</h2>
                 <CodeBlock
                   copied={copied}
@@ -485,7 +611,7 @@ export default function DocsPage() {
                 </p>
               </div>
 
-              <div>
+              <div id="auth-header">
                 <h2 className="text-xl font-medium text-white mb-3">Authorization header</h2>
                 <p className="text-[#888] mb-3">
                   Include your API key in the Authorization header of every request.
@@ -493,13 +619,13 @@ export default function DocsPage() {
                 <CodeBlock
                   copied={copied}
                   onCopy={copyToClipboard}
-                  id="auth-header"
+                  id="auth-header-code"
                   language="text"
                   code={`Authorization: Bearer sk_test_xxxxx`}
                 />
               </div>
 
-              <div>
+              <div id="auth-rate-limits">
                 <h2 className="text-xl font-medium text-white mb-3">Rate limits</h2>
                 <p className="text-[#888] mb-3">
                   Rate limits are applied per API key.
@@ -518,7 +644,7 @@ export default function DocsPage() {
                 </div>
               </div>
 
-              <div>
+              <div id="auth-headers">
                 <h2 className="text-xl font-medium text-white mb-3">Rate limit headers</h2>
                 <CodeBlock
                   copied={copied}
@@ -543,14 +669,14 @@ Retry-After: 60`}
                 </p>
               </div>
 
-              <div>
+              <div id="pay-endpoint">
                 <div className="flex items-center gap-3 mb-3">
                   <MethodBadge method="POST" />
                   <code className="text-white">/v1/payments/orders</code>
                 </div>
                 <p className="text-[#888] mb-3">Create a payment order. Supports Razorpay and PayPal.</p>
 
-                <h3 className="text-white font-medium mb-2">Request Body</h3>
+                <h3 id="pay-request" className="text-white font-medium mb-2">Request Body</h3>
                 <CodeBlock
                   copied={copied}
                   onCopy={copyToClipboard}
@@ -567,7 +693,7 @@ Retry-After: 60`}
 }`}
                 />
 
-                <h3 className="text-white font-medium mb-2 mt-4">Response</h3>
+                <h3 id="pay-response" className="text-white font-medium mb-2 mt-4">Response</h3>
                 <CodeBlock
                   copied={copied}
                   onCopy={copyToClipboard}
@@ -585,7 +711,7 @@ Retry-After: 60`}
                 />
               </div>
 
-              <div className="p-4 bg-[#0D0D0D] rounded-lg">
+              <div id="pay-providers" className="p-4 bg-[#0D0D0D] rounded-lg">
                 <h3 className="text-white font-medium mb-2">Supported Providers</h3>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
@@ -885,7 +1011,7 @@ Retry-After: 60`}
                 </p>
               </div>
 
-              <div>
+              <div id="err-format">
                 <h2 className="text-xl font-medium text-white mb-3">Error format</h2>
                 <CodeBlock
                   copied={copied}
@@ -901,7 +1027,7 @@ Retry-After: 60`}
                 />
               </div>
 
-              <div>
+              <div id="err-codes">
                 <h2 className="text-xl font-medium text-white mb-3">Status codes</h2>
                 <div className="space-y-2">
                   {[
@@ -939,7 +1065,7 @@ Retry-After: 60`}
                 </p>
               </div>
 
-              <div>
+              <div id="rz-create">
                 <h2 className="text-xl font-medium text-white mb-3">1. Create Razorpay Account</h2>
                 <ol className="space-y-2 text-[#888] text-sm">
                   <li>1. Go to <a href="https://dashboard.razorpay.com/signup" target="_blank" className="text-white hover:underline">dashboard.razorpay.com/signup</a></li>
@@ -948,7 +1074,7 @@ Retry-After: 60`}
                 </ol>
               </div>
 
-              <div>
+              <div id="rz-keys">
                 <h2 className="text-xl font-medium text-white mb-3">2. Get API Keys</h2>
                 <p className="text-[#888] mb-3">Razorpay provides separate keys for test and live environments:</p>
                 <div className="grid grid-cols-2 gap-4">
@@ -965,7 +1091,7 @@ Retry-After: 60`}
                 </div>
               </div>
 
-              <div>
+              <div id="rz-add">
                 <h2 className="text-xl font-medium text-white mb-3">3. Add to OneRouter</h2>
                 <ol className="space-y-2 text-[#888] text-sm">
                   <li>1. Go to <Link href="/razorpay-setup" className="text-white hover:underline">OneRouter Dashboard → Razorpay Setup</Link></li>
@@ -975,7 +1101,7 @@ Retry-After: 60`}
                 </ol>
               </div>
 
-              <div>
+              <div id="rz-test">
                 <h2 className="text-xl font-medium text-white mb-3">4. Test Cards</h2>
                 <CodeBlock
                   copied={copied}
@@ -992,7 +1118,7 @@ UPI Test: success@razorpay (auto-succeeds)`}
                 />
               </div>
 
-              <div className="p-4 bg-[#0D0D0D] rounded-lg">
+              <div id="rz-webhook" className="p-4 bg-[#0D0D0D] rounded-lg">
                 <h3 className="text-white font-medium mb-2">Webhook Setup (Optional)</h3>
                 <p className="text-[#666] text-sm mb-2">
                   To receive payment status updates, configure webhooks in Razorpay Dashboard:
@@ -1263,7 +1389,7 @@ To: any email address`}
                 </p>
               </div>
 
-              <div>
+              <div id="ts-auth">
                 <h2 className="text-xl font-medium text-white mb-3">Authentication Errors</h2>
                 <div className="space-y-3">
                   <div className="p-4 bg-[#0D0D0D] rounded-lg">
@@ -1284,7 +1410,7 @@ To: any email address`}
                 </div>
               </div>
 
-              <div>
+              <div id="ts-razorpay">
                 <h2 className="text-xl font-medium text-white mb-3">Razorpay Issues</h2>
                 <div className="space-y-3">
                   <div className="p-4 bg-[#0D0D0D] rounded-lg">
@@ -1305,7 +1431,7 @@ To: any email address`}
                 </div>
               </div>
 
-              <div>
+              <div id="ts-twilio">
                 <h2 className="text-xl font-medium text-white mb-3">Twilio Issues</h2>
                 <div className="space-y-3">
                   <div className="p-4 bg-[#0D0D0D] rounded-lg">
@@ -1326,7 +1452,7 @@ To: any email address`}
                 </div>
               </div>
 
-              <div>
+              <div id="ts-resend">
                 <h2 className="text-xl font-medium text-white mb-3">Resend Issues</h2>
                 <div className="space-y-3">
                   <div className="p-4 bg-[#0D0D0D] rounded-lg">
@@ -1347,7 +1473,7 @@ To: any email address`}
                 </div>
               </div>
 
-              <div>
+              <div id="ts-paypal">
                 <h2 className="text-xl font-medium text-white mb-3">PayPal Issues</h2>
                 <div className="space-y-3">
                   <div className="p-4 bg-[#0D0D0D] rounded-lg">
@@ -1361,7 +1487,7 @@ To: any email address`}
                 </div>
               </div>
 
-              <div className="p-4 bg-[#1A1A1A] rounded-lg">
+              <div id="ts-contact" className="p-4 bg-[#1A1A1A] rounded-lg">
                 <h3 className="text-white font-medium mb-2">Still stuck?</h3>
                 <p className="text-[#888] text-sm">
                   Contact us at <a href="mailto:support@onerouter.com" className="text-white hover:underline">support@onerouter.com</a> with:
@@ -1384,14 +1510,14 @@ To: any email address`}
                 </p>
               </div>
 
-              <div>
+              <div id="sdk-python">
                 <h2 className="text-xl font-medium text-white mb-3">Python SDK</h2>
                 <p className="text-[#888] text-lg leading-relaxed">
                   Official Python SDK for OneRouter. Supports Python 3.8+ with async/sync interfaces.
                 </p>
               </div>
 
-              <div>
+              <div id="sdk-python-install">
                 <h2 className="text-xl font-medium text-white mb-3">Installation</h2>
                 <CodeBlock
                   copied={copied}
@@ -1410,7 +1536,7 @@ To: any email address`}
                 />
               </div>
 
-              <div>
+              <div id="sdk-python-start">
                 <h2 className="text-xl font-medium text-white mb-3">Quick start</h2>
                 <CodeBlock
                   copied={copied}
@@ -1457,14 +1583,14 @@ email = client.email.send(
 
               <hr className="border-white/10 my-8" />
 
-              <div>
+              <div id="sdk-js">
                 <h2 className="text-xl font-medium text-white mb-3">JavaScript / TypeScript SDK</h2>
                 <p className="text-[#888] mb-3">
                   Works with Node.js, React, and Next.js.
                 </p>
               </div>
 
-              <div>
+              <div id="sdk-js-install">
                 <h3 className="text-white font-medium mb-2">Installation</h3>
                 <CodeBlock
                   copied={copied}
@@ -1475,7 +1601,7 @@ email = client.email.send(
                 />
               </div>
 
-              <div>
+              <div id="sdk-js-start">
                 <h3 className="text-white font-medium mb-2">Quick start</h3>
                 <CodeBlock
                   copied={copied}
@@ -1524,26 +1650,57 @@ const email = await client.email.send({
         </div>
       </main>
 
-      {/* Fixed TOC - Right */}
-      <aside className="hidden xl:block fixed right-0 top-14 bottom-0 w-48 bg-[#050505] border-l border-white/5 overflow-y-auto z-40">
+      {/* Fixed TOC - Right (Section-specific table of contents) */}
+      <aside className="hidden xl:block fixed right-0 top-14 bottom-0 w-52 bg-[#050505] border-l border-white/5 overflow-y-auto z-40">
         <div className="p-4">
           <p className="text-xs font-medium text-[#666] uppercase tracking-widest mb-3">On this page</p>
-          <ul className="space-y-1.5">
-            {allSections.map((section) => (
-              <li key={section.id}>
-                <button
-                  onClick={() => setActiveSection(section.id)}
-                  className={`text-sm text-left transition-colors ${
-                    activeSection === section.id
-                      ? 'text-white font-medium'
-                      : 'text-[#666] hover:text-gray-400'
-                  }`}
+          {sectionTOC[activeSection] && sectionTOC[activeSection].length > 0 ? (
+            <ul className="space-y-1">
+              {sectionTOC[activeSection].map((item) => (
+                <li key={item.id}>
+                  <a
+                    href={`#${item.id}`}
+                    className={`block text-sm text-[#888] hover:text-white transition-colors py-1 ${
+                      item.level === 3 ? 'pl-3 text-xs' : ''
+                    }`}
+                  >
+                    {item.title}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-[#555] text-sm">No sections</p>
+          )}
+
+          {/* Quick links */}
+          <div className="mt-6 pt-4 border-t border-white/5">
+            <p className="text-xs font-medium text-[#666] uppercase tracking-widest mb-3">Resources</p>
+            <ul className="space-y-2">
+              <li>
+                <a
+                  href={swaggerUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-sm text-[#888] hover:text-white transition-colors"
                 >
-                  {section.title}
-                </button>
+                  <ExternalLink className="w-3 h-3" />
+                  API Reference
+                </a>
               </li>
-            ))}
-          </ul>
+              <li>
+                <a
+                  href="https://github.com/onerouter"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-sm text-[#888] hover:text-white transition-colors"
+                >
+                  <Github className="w-3 h-3" />
+                  GitHub
+                </a>
+              </li>
+            </ul>
+          </div>
         </div>
       </aside>
     </div>
