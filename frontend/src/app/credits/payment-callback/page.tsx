@@ -13,6 +13,7 @@ function PaymentCallbackContent() {
       try {
         const paymentId = searchParams.get("razorpay_payment_id");
         const paymentLinkId = searchParams.get("razorpay_payment_link_id");
+        const paymentLinkReferenceId = searchParams.get("razorpay_payment_link_reference_id");
         const paymentLinkStatus = searchParams.get("razorpay_payment_link_status");
         const signature = searchParams.get("razorpay_signature");
 
@@ -24,6 +25,7 @@ function PaymentCallbackContent() {
         const queryParams = new URLSearchParams();
         queryParams.append("razorpay_payment_id", paymentId);
         if (paymentLinkId) queryParams.append("razorpay_payment_link_id", paymentLinkId);
+        if (paymentLinkReferenceId) queryParams.append("razorpay_payment_link_reference_id", paymentLinkReferenceId);
         queryParams.append("razorpay_payment_link_status", paymentLinkStatus);
         if (signature) queryParams.append("razorpay_signature", signature);
 

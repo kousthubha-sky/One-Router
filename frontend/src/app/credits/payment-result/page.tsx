@@ -70,8 +70,9 @@ function PaymentResultContent() {
 
   const status = result.status;
   const message = result.message;
-  const creditsAdded = result.credits.toString();
-  const newBalance = result.balance.toString();
+  // Credits are stored in cents, convert to dollars for display
+  const creditsAdded = (result.credits * 0.01).toFixed(2);
+  const newBalance = (result.balance * 0.01).toFixed(2);
 
   const isSuccess = status === "success";
   const isFailed = status === "failed" || status === "error";
@@ -123,17 +124,17 @@ function PaymentResultContent() {
               <>
                 <div className="bg-black/50 rounded-lg p-4 space-y-2">
                   <div className="flex justify-between">
-                    <span className="text-gray-400">Credits Added:</span>
-                    <span className="text-cyan-400 font-semibold">{creditsAdded}</span>
+                    <span className="text-gray-400">Amount Added:</span>
+                    <span className="text-green-400 font-semibold">+${creditsAdded}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-400">New Balance:</span>
-                    <span className="text-cyan-400 font-semibold">{newBalance}</span>
+                    <span className="text-cyan-400 font-semibold">${newBalance}</span>
                   </div>
                 </div>
 
                 <p className="text-sm text-gray-500 text-center">
-                  Your credits have been added to your account and are ready to use.
+                  Your balance has been updated and is ready to use.
                 </p>
               </>
             )}

@@ -2,4 +2,12 @@ docsi
 tests123
 fix.txt
 
+.claude/
+
 *.env
+
+.pytest_cache/
+__pycache__/
+.vscode/
+node_modules/
+

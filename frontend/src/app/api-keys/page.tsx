@@ -218,11 +218,7 @@ export default function APIKeysPage() {
                   <div className="px-4 rounded-full text-sm font-medium text-cyan-500 transition-all duration-300 hover:bg-cyan-500/10">
                     Free Plan
                   </div>
-                  <Link href="/api-keys" className="w-full sm:w-auto">
-                    <Button className="text-white hover:bg-[#1a1a1a] border-0 transition-all duration-300 hover:shadow-md hover:shadow-blue-300 hover:scale-105 w-full sm:w-auto">
-                      Manage API Keys
-                    </Button>
-                  </Link>
+                  
                 </div>
               </div>
             </div>

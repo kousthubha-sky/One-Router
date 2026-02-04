@@ -229,10 +229,10 @@ async def send_sms(
         raise
 
     except Exception as e:
-        logger.error(f"SMS sending failed: {str(e)}")
+        logger.error(f"SMS sending failed: {type(e).__name__}: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to send SMS: {str(e)}"
+            detail="Failed to send SMS. Please try again or contact support."
         )
 
 
@@ -273,10 +273,10 @@ async def get_sms_status(
         }
 
     except Exception as e:
-        logger.error(f"Failed to get SMS status: {str(e)}")
+        logger.error(f"Failed to get SMS status: {type(e).__name__}: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to get SMS status: {str(e)}"
+            detail="Failed to get SMS status"
         )
 
 
@@ -445,10 +445,10 @@ async def send_email(
         raise
 
     except Exception as e:
-        logger.error(f"Email sending failed: {str(e)}")
+        logger.error(f"Email sending failed: {type(e).__name__}: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to send email: {str(e)}"
+            detail="Failed to send email. Please try again or contact support."
         )
 
 
@@ -491,8 +491,8 @@ async def get_email_status(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get email status: {str(e)}")
+        logger.error(f"Failed to get email status: {type(e).__name__}: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to get email status: {str(e)}"
+            detail="Failed to get email status"
         )

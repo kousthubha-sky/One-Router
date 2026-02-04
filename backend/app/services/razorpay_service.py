@@ -191,8 +191,10 @@ class RazorpayService:
 
     def verify_payment_link_signature(
         self,
-        payment_id: str,
         payment_link_id: str,
+        payment_link_reference_id: str,
+        payment_link_status: str,
+        razorpay_payment_id: str,
         signature: str
     ) -> bool:
         """
@@ -201,22 +203,28 @@ class RazorpayService:
         For payment link callbacks, Razorpay provides a signature that can be
         verified using HMAC-SHA256 with the account's key secret.
 
+        Signature format: {payment_link_id}|{payment_link_reference_id}|{payment_link_status}|{razorpay_payment_id}
+
         Args:
-            payment_id: Razorpay payment ID from callback
             payment_link_id: Razorpay payment link ID from callback
-            signature: Razorpay-Signature header value
+            payment_link_reference_id: Reference ID set during payment link creation
+            payment_link_status: Payment link status (e.g., "paid")
+            razorpay_payment_id: Razorpay payment ID from callback
+            signature: Razorpay signature from callback
 
         Returns:
             True if signature is valid, False otherwise
         """
-        if not payment_id or not payment_link_id or not signature:
+        if not payment_link_id or not signature or not razorpay_payment_id:
             return False
 
         if not self.key_secret:
             logger.warning("Razorpay key secret not configured, skipping signature verification")
             return False
 
-        payload = f"{payment_id}|{payment_link_id}"
+        # Razorpay payment link signature format
+        # reference_id can be empty string if not set
+        payload = f"{payment_link_id}|{payment_link_reference_id or ''}|{payment_link_status}|{razorpay_payment_id}"
         expected_signature = hmac.new(
             self.key_secret.encode(),
             payload.encode(),
@@ -378,6 +386,55 @@ class CreditPricingService:
             return credits * 0.10  # Starter rate
         else:
             return credits * 0.15  # Standard rate
+
+    USD_TO_INR = 86.0  # Exchange rate: 1 USD = 86 INR
+
+    @classmethod
+    def calculate_amount_for_amount(cls, amount: float, currency: str = "INR") -> float:
+        """
+        Calculate INR equivalent of monetary amount in specified currency.
+        
+        Args:
+            amount: Monetary amount (e.g., 15 USD or 15 INR)
+            currency: Currency code (USD or INR)
+            
+        Returns:
+            Equivalent amount in INR
+        """
+        if currency.upper() == "USD":
+            return round(amount * cls.USD_TO_INR, 2)
+        return round(amount, 2)
+
+    @classmethod
+    def calculate_credits_for_amount(cls, amount: float, currency: str = "INR") -> int:
+        """
+        Calculate how many API credits user gets for a monetary amount.
+        
+        Pricing rates:
+        - Enterprise (≥100000 credits): ₹0.07/credit
+        - Pro (≥10000 credits): ₹0.08/credit
+        - Starter (≥1000 credits): ₹0.10/credit
+        - Standard (<1000 credits): ₹0.15/credit
+        
+        Args:
+            amount: Monetary amount (e.g., 15 USD or 15 INR)
+            currency: Currency code (USD or INR)
+            
+        Returns:
+            Number of API credits awarded
+        """
+        # Convert to INR for calculation
+        amount_inr = cls.calculate_amount_for_amount(amount, currency)
+        
+        # Calculate credits based on INR amount using tiered pricing
+        if amount_inr >= 7000:  # Enterprise threshold (₹7000+)
+            return int(amount_inr / 0.07)
+        elif amount_inr >= 800:  # Pro threshold (₹800+)
+            return int(amount_inr / 0.08)
+        elif amount_inr >= 100:  # Starter threshold (₹100+)
+            return int(amount_inr / 0.10)
+        else:  # Standard rate
+            return int(amount_inr / 0.15)
 
     @classmethod
     def credits_to_paise(cls, price_inr: float) -> int:

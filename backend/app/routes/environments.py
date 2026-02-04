@@ -37,7 +37,6 @@ async def get_service_environments(
     """
     try:
         user_id = str(user.get("id"))
-        print(f"Getting environments for user {user_id}, service {service_name}")
 
         # Get all credentials for this service and user
         result = await db.execute(
@@ -48,8 +47,6 @@ async def get_service_environments(
             )
         )
         credentials = result.scalars().all()
-
-        print(f"Found {len(credentials)} credentials for service {service_name}")
 
         # Build environment status
         environments = {
@@ -63,11 +60,10 @@ async def get_service_environments(
                 environments[env]["configured"] = True  # type: ignore
                 environments[env]["last_used"] = cred.updated_at.isoformat() if cred.updated_at is not None else None  # type: ignore
 
-        print(f"Returning environments: {environments}")
         return environments
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get environment status: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get environment status")
 
 
 @router.post("/{service_name}/switch-environment")
@@ -90,13 +86,11 @@ async def switch_environment(
         HTTPException: If the environment value is invalid, no active credential exists for the service, or an internal error occurs.
     """
     try:
-        print(f"Switch environment request: service={service_name}, body={body}")
         environment = body.get("environment")
         if not environment or environment not in ["test", "live"]:
             raise HTTPException(status_code=400, detail="Environment must be 'test' or 'live'")
 
         user_id = str(user.get("id"))
-        print(f"User ID: {user_id}, Target environment: {environment}")
 
         # First, find the active service credential for this user and service
         result = await db.execute(
@@ -109,20 +103,17 @@ async def switch_environment(
         credential_result = result.scalar_one_or_none()
 
         if not credential_result:
-            raise HTTPException(status_code=404, detail=f"No active credential found for {service_name}")
+            raise HTTPException(status_code=404, detail="No active credential found for this service")
 
         credential = credential_result
 
         # Update the service credential environment
-        print(f"Updating credential {credential.id} for service {service_name} to environment {environment}")
         stmt = (
             update(ServiceCredential)
             .where(ServiceCredential.id == credential.id)
             .values(environment=environment)
         )
-        result = await db.execute(stmt)
-
-        print(f"Environment switch completed for {service_name}: {environment}")
+        await db.execute(stmt)
 
         # Also update user preferences for consistency
         result = await db.execute(
@@ -153,8 +144,8 @@ async def switch_environment(
 
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to switch environment: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to switch environment")
 
 
 @router.get("/debug/service-environments")
@@ -188,8 +179,8 @@ async def debug_service_environments(
             "services": services
         }
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get debug info: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to get debug info")
 @router.get("/user/environment-preferences")
 async def get_environment_preferences(
     user=Depends(get_current_user),
@@ -225,8 +216,8 @@ async def get_environment_preferences(
 
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get preferences: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to get preferences")
 
 
 @router.post("/user/set-environment")
@@ -270,5 +261,5 @@ async def set_user_environment(
 
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to set environment preference: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to set environment preference")

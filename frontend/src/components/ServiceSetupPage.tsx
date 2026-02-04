@@ -4,9 +4,8 @@ import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useClientApiCall } from "@/lib/api-client";
-import { ArrowLeft, ExternalLink, Loader2, Eye, EyeOff, CheckCircle2, AlertCircle } from "lucide-react";
+import { ArrowLeft, ExternalLink, Loader2, Eye, EyeOff, Check, AlertCircle } from "lucide-react";
 import Link from "next/link";
-import Image from "next/image";
 
 interface CredentialField {
   key: string;
@@ -15,6 +14,7 @@ interface CredentialField {
   type?: "text" | "password";
   hint?: string;
   testPlaceholder?: string;
+  optional?: boolean;
 }
 
 interface ServiceConfig {
@@ -66,7 +66,7 @@ function ServiceSetupContent({ config }: ServiceSetupPageProps) {
       const response = await apiClient(config.statusEndpoint);
       setStatus(response as StatusResponse);
     } catch {
-      // Status endpoint might not exist for all services
+      // Status endpoint might not exist
     } finally {
       setLoading(false);
     }
@@ -82,11 +82,11 @@ function ServiceSetupContent({ config }: ServiceSetupPageProps) {
     setShowSecrets(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const allFieldsFilled = config.fields.every(f => fields[f.key]?.trim());
+  const requiredFields = config.fields.filter(f => !f.optional);
+  const allFieldsFilled = requiredFields.every(f => fields[f.key]?.trim());
 
   const handleValidate = async () => {
     if (!allFieldsFilled) return;
-
     setValidating(true);
     setError(null);
     setSuccess(null);
@@ -99,7 +99,7 @@ function ServiceSetupContent({ config }: ServiceSetupPageProps) {
       });
 
       if (response.valid) {
-        setSuccess("Credentials verified successfully");
+        setSuccess("Credentials verified");
       } else {
         setError((response.message as string) || "Invalid credentials");
       }
@@ -112,7 +112,6 @@ function ServiceSetupContent({ config }: ServiceSetupPageProps) {
 
   const handleSave = async () => {
     if (!allFieldsFilled) return;
-
     setSaving(true);
     setError(null);
     setSuccess(null);
@@ -129,10 +128,9 @@ function ServiceSetupContent({ config }: ServiceSetupPageProps) {
         return;
       }
 
-      setSuccess(`${environment === "live" ? "Live" : "Test"} credentials saved`);
+      setSuccess("Credentials saved");
       setFields({});
       await loadStatus();
-
       setTimeout(() => router.push("/services"), 1200);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save");
@@ -145,86 +143,61 @@ function ServiceSetupContent({ config }: ServiceSetupPageProps) {
 
   return (
     <DashboardLayout>
-      <div className="min-h-screen bg-[#050505]">
-        <div className="max-w-lg mx-auto px-4 py-8">
-          {/* Header */}
-          <div className="flex items-center gap-3 mb-8">
+      <div className="min-h-screen bg-[#09090b]">
+        {/* Compact Header */}
+        <div className="border-b border-zinc-800/50 bg-[#09090b]/80 backdrop-blur-sm sticky top-0 z-10">
+          <div className="max-w-lg mx-auto px-4 h-12 flex items-center justify-between">
             <Link
               href="/services"
-              className="p-2 -ml-2 text-[#666] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors"
+              className="flex items-center gap-2 text-sm text-zinc-500 hover:text-white transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
+              <span className="hidden sm:inline">Services</span>
             </Link>
-            <div className="w-8 h-8 bg-[#111] rounded-lg flex items-center justify-center">
-              <Image src={config.logo} alt={config.name} width={20} height={20} className="object-contain" />
-            </div>
-            <div className="flex-1">
-              <h1 className="text-base font-medium text-white">{config.name}</h1>
-              <p className="text-xs text-[#666]">{config.description}</p>
+            <div className="flex items-center gap-2">
+              <img src={config.logo} alt={config.name} className="w-5 h-5 rounded" />
+              <span className="text-sm font-medium">{config.name}</span>
             </div>
             <a
               href={config.docsUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-[#666] hover:text-white border border-[#222] hover:border-[#444] rounded-lg transition-colors"
+              className="text-xs text-zinc-600 hover:text-zinc-400 flex items-center gap-1"
             >
-              {config.docsLabel}
-              <ExternalLink className="w-3 h-3" />
+              Docs <ExternalLink className="w-3 h-3" />
             </a>
           </div>
+        </div>
 
+        <div className="max-w-lg mx-auto px-4 py-6">
           {/* Environment Toggle */}
-          <div className="flex gap-1 p-1 bg-[#111] rounded-lg mb-6">
-            <button
-              onClick={() => setEnvironment("test")}
-              className={`flex-1 px-4 py-2 text-xs font-medium rounded-md transition-all ${
-                environment === "test"
-                  ? "bg-[#1a1a1a] text-white"
-                  : "text-[#666] hover:text-white"
-              }`}
-            >
-              Test
-              {status?.test?.configured && (
-                <CheckCircle2 className="w-3 h-3 inline ml-1.5 text-emerald-500" />
-              )}
-            </button>
-            <button
-              onClick={() => setEnvironment("live")}
-              className={`flex-1 px-4 py-2 text-xs font-medium rounded-md transition-all ${
-                environment === "live"
-                  ? "bg-[#1a1a1a] text-white"
-                  : "text-[#666] hover:text-white"
-              }`}
-            >
-              Live
-              {status?.live?.configured && (
-                <CheckCircle2 className="w-3 h-3 inline ml-1.5 text-emerald-500" />
-              )}
-            </button>
+          <div className="flex gap-1 p-1 bg-zinc-900/50 rounded-lg mb-5 w-fit">
+            {(["test", "live"] as const).map((env) => {
+              const envConfigured = env === "test" ? status?.test?.configured : status?.live?.configured;
+              return (
+                <button
+                  key={env}
+                  onClick={() => setEnvironment(env)}
+                  className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
+                    environment === env
+                      ? env === "live"
+                        ? "bg-emerald-500/15 text-emerald-400"
+                        : "bg-blue-500/15 text-blue-400"
+                      : "text-zinc-600 hover:text-zinc-400"
+                  }`}
+                >
+                  {env === "test" ? "Test" : "Live"}
+                  {envConfigured && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
+                </button>
+              );
+            })}
           </div>
 
-          {/* Status Badge */}
-          {!loading && (
-            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg mb-6 ${
-              isConfigured
-                ? "bg-emerald-500/10 border border-emerald-500/20"
-                : "bg-[#111] border border-[#222]"
-            }`}>
-              {isConfigured ? (
-                <>
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                  <span className="text-xs text-emerald-400">
-                    {environment === "live" ? "Live" : "Test"} credentials configured
-                  </span>
-                </>
-              ) : (
-                <>
-                  <AlertCircle className="w-3.5 h-3.5 text-[#666]" />
-                  <span className="text-xs text-[#666]">
-                    {environment === "live" ? "Live" : "Test"} credentials not set
-                  </span>
-                </>
-              )}
+          {/* Status */}
+          {!loading && isConfigured && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg mb-5 text-xs text-emerald-400">
+              <Check className="w-3.5 h-3.5" />
+              {environment === "live" ? "Live" : "Test"} credentials configured
             </div>
           )}
 
@@ -232,8 +205,11 @@ function ServiceSetupContent({ config }: ServiceSetupPageProps) {
           <div className="space-y-4">
             {config.fields.map((field) => (
               <div key={field.key}>
-                <label className="block text-xs font-medium text-[#888] mb-2">
-                  {field.label}
+                <label className="flex items-center justify-between text-xs text-zinc-500 mb-1.5">
+                  <span>
+                    {field.label}
+                    {field.optional && <span className="text-zinc-700 ml-1">(optional)</span>}
+                  </span>
                 </label>
                 <div className="relative">
                   <input
@@ -241,70 +217,59 @@ function ServiceSetupContent({ config }: ServiceSetupPageProps) {
                     value={fields[field.key] || ""}
                     onChange={(e) => handleFieldChange(field.key, e.target.value)}
                     placeholder={environment === "test" && field.testPlaceholder ? field.testPlaceholder : field.placeholder}
-                    className="w-full px-3 py-2.5 bg-[#111] border border-[#222] rounded-lg text-sm text-white placeholder-[#444] font-mono focus:outline-none focus:border-[#444] transition-colors"
+                    className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-700 font-mono focus:outline-none focus:border-zinc-700 transition-colors"
                   />
                   {field.type === "password" && (
                     <button
                       type="button"
                       onClick={() => toggleShowSecret(field.key)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#666] hover:text-white transition-colors"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors"
                     >
-                      {showSecrets[field.key] ? (
-                        <EyeOff className="w-4 h-4" />
-                      ) : (
-                        <Eye className="w-4 h-4" />
-                      )}
+                      {showSecrets[field.key] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                     </button>
                   )}
                 </div>
-                {field.hint && (
-                  <p className="text-[10px] text-[#555] mt-1.5">{field.hint}</p>
-                )}
+                {field.hint && <p className="text-[10px] text-zinc-600 mt-1">{field.hint}</p>}
               </div>
             ))}
           </div>
 
           {/* Messages */}
           {error && (
-            <div className="mt-4 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg">
-              <p className="text-xs text-red-400">{error}</p>
+            <div className="mt-4 flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-400">
+              <AlertCircle className="w-3.5 h-3.5" />
+              {error}
             </div>
           )}
           {success && (
-            <div className="mt-4 px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-              <p className="text-xs text-emerald-400">{success}</p>
+            <div className="mt-4 flex items-center gap-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-xs text-emerald-400">
+              <Check className="w-3.5 h-3.5" />
+              {success}
             </div>
           )}
 
           {/* Actions */}
-          <div className="flex gap-3 mt-6">
+          <div className="flex gap-2 mt-5">
             <button
               onClick={handleValidate}
               disabled={!allFieldsFilled || validating || saving}
-              className="flex-1 px-4 py-2.5 bg-[#1a1a1a] text-white text-xs font-medium rounded-lg hover:bg-[#222] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="flex-1 px-4 py-2 bg-zinc-900 border border-zinc-800 text-white text-xs font-medium rounded-lg hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
             >
-              {validating ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto" />
-              ) : (
-                "Verify"
-              )}
+              {validating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+              {validating ? "Verifying..." : "Verify"}
             </button>
             <button
               onClick={handleSave}
               disabled={!allFieldsFilled || validating || saving}
-              className="flex-1 px-4 py-2.5 bg-white text-black text-xs font-medium rounded-lg hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="flex-1 px-4 py-2 bg-white text-black text-xs font-medium rounded-lg hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
             >
-              {saving ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto" />
-              ) : (
-                "Save"
-              )}
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+              {saving ? "Saving..." : "Save"}
             </button>
           </div>
 
-          {/* Help text */}
-          <p className="text-[10px] text-[#444] text-center mt-4">
-            Credentials are encrypted and stored securely
+          <p className="text-[10px] text-zinc-700 text-center mt-4">
+            Credentials are encrypted with AES-256
           </p>
         </div>
       </div>
@@ -317,8 +282,8 @@ export function ServiceSetupPage({ config }: ServiceSetupPageProps) {
     <Suspense
       fallback={
         <DashboardLayout>
-          <div className="flex items-center justify-center min-h-screen bg-[#050505]">
-            <Loader2 className="w-5 h-5 animate-spin text-[#666]" />
+          <div className="flex items-center justify-center min-h-screen bg-[#09090b]">
+            <Loader2 className="w-5 h-5 animate-spin text-zinc-600" />
           </div>
         </DashboardLayout>
       }

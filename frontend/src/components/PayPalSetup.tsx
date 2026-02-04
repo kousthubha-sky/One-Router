@@ -1,19 +1,12 @@
-// frontend/src/components/PayPalSetup.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Shield, Zap, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { Check, AlertCircle, Loader2, Eye, EyeOff, ExternalLink } from "lucide-react";
 
 interface PayPalStatus {
-  test: {
-    configured: boolean;
-    client_id_prefix: string | null;
-  };
-  live: {
-    configured: boolean;
-    client_id_prefix: string | null;
-  };
+  test: { configured: boolean; client_id_prefix: string | null };
+  live: { configured: boolean; client_id_prefix: string | null };
   active_environment: string;
 }
 
@@ -29,22 +22,22 @@ interface Props {
 
 export function PayPalSetup({ apiClient }: Props) {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const initialEnv = searchParams.get("environment") === "live" ? "live" : "test";
 
   const [environment, setEnvironment] = useState<"test" | "live">(initialEnv);
   const [status, setStatus] = useState<PayPalStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [actionInProgress, setActionInProgress] = useState<"validate" | "store" | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [validating, setValidating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [showSecrets, setShowSecrets] = useState(false);
 
-  // Form state
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [webhookId, setWebhookId] = useState("");
-  const router = useRouter();
 
-  // Load status
   useEffect(() => {
     loadStatus();
   }, []);
@@ -54,305 +47,217 @@ export function PayPalSetup({ apiClient }: Props) {
       setLoading(true);
       const response = await apiClient("/api/paypal/status");
       setStatus(response as unknown as PayPalStatus);
-      setError(null);
-    } catch (err) {
-      // If status endpoint fails, just show empty state
+    } catch {
       setStatus({
         test: { configured: false, client_id_prefix: null },
         live: { configured: false, client_id_prefix: null },
         active_environment: "test"
       });
-      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleEnvironmentKeyDown = (env: "test" | "live") => (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      setEnvironment(env);
+  const handleValidate = async () => {
+    setValidating(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const response = await apiClient("/api/paypal/validate-credentials", {
+        method: "POST",
+        body: JSON.stringify({ environment, client_id: clientId, client_secret: clientSecret }),
+      });
+      if (response.valid) {
+        setSuccess("Credentials verified successfully");
+      } else {
+        setError("Invalid credentials");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Validation failed");
+    } finally {
+      setValidating(false);
     }
   };
 
-  const handleValidate = async () => {
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
     try {
-      setActionInProgress("validate");
-      setError(null);
-      setSuccess(null);
-
-      const response = await apiClient("/api/paypal/validate-credentials", {
+      const response = await apiClient("/api/paypal/credentials", {
         method: "POST",
         body: JSON.stringify({
           environment,
           client_id: clientId,
           client_secret: clientSecret,
+          webhook_id: webhookId || null,
         }),
       });
-
-      if (response.valid) {
-        setSuccess(`${environment.toUpperCase()} PayPal credentials are valid!`);
-      } else {
-        setError("Credentials validation failed");
-      }
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : "Validation failed";
-      setError(errorMessage);
-    } finally {
-      setActionInProgress(null);
-    }
-  };
-
-  const handleStore = async () => {
-    try {
-      setActionInProgress("store");
-      setError(null);
-      setSuccess(null);
-
-      const payload = {
-        environment,
-        client_id: clientId,
-        client_secret: clientSecret,
-        webhook_id: webhookId && webhookId.trim() !== "" ? webhookId : null,
-      };
-
-      // SECURITY: Never log credentials to console
-
-      const response = await apiClient("/api/paypal/credentials", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-
       if (response.success) {
-        setSuccess(
-          `${environment.toUpperCase()} PayPal credentials saved successfully!`
-        );
-        // Reset form
+        setSuccess("Credentials saved");
         setClientId("");
         setClientSecret("");
         setWebhookId("");
-        // Reload status
         await loadStatus();
-
-        // Redirect back to services after short delay to show success message
-        setTimeout(() => {
-          router.push("/services");
-        }, 1500);
+        setTimeout(() => router.push("/services"), 1500);
       }
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to store credentials";
-      setError(errorMessage);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save");
     } finally {
-      setActionInProgress(null);
+      setSaving(false);
     }
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="w-6 h-6 animate-spin text-cyan-500" />
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-5 h-5 animate-spin text-zinc-500" />
       </div>
     );
   }
 
+  const currentEnvStatus = environment === "test" ? status?.test : status?.live;
+
   return (
     <div className="space-y-6">
-      {/* Environment Status Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Test Environment Card */}
-        <div
-          role="button"
-          tabIndex={0}
-          aria-pressed={environment === "test"}
-          onKeyDown={handleEnvironmentKeyDown("test")}
-          className={`p-4 rounded-lg border-2 transition-all cursor-pointer ${
-            environment === "test"
-              ? "border-cyan-500 bg-cyan-500/10"
-              : "border-gray-700 bg-gray-900/50"
-          }`}
-          onClick={() => setEnvironment("test")}
-        >
-          <div className="flex items-start gap-3">
-            <Zap className="w-5 h-5 text-cyan-500 mt-1" />
-            <div className="flex-1">
-              <h3 className="font-semibold text-white mb-2">Sandbox Environment</h3>
-              <div className="space-y-1 text-sm">
-                <div className="flex items-center gap-2">
-                  {status?.test.configured ? (
-                    <CheckCircle2 className="w-4 h-4 text-green-500" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 text-yellow-500" />
-                  )}
-                  <span className="text-gray-300">
-                    {status?.test.configured
-                      ? `Configured: ${status.test.client_id_prefix}...`
-                      : "Not configured"}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Live Environment Card */}
-        <div
-          role="button"
-          tabIndex={0}
-          aria-pressed={environment === "live"}
-          onKeyDown={handleEnvironmentKeyDown("live")}
-          className={`p-4 rounded-lg border-2 transition-all cursor-pointer ${
-            environment === "live"
-              ? "border-green-500 bg-green-500/10"
-              : "border-gray-700 bg-gray-900/50"
-          }`}
-          onClick={() => setEnvironment("live")}
-        >
-          <div className="flex items-start gap-3">
-            <Shield className="w-5 h-5 text-green-500 mt-1" />
-            <div className="flex-1">
-              <h3 className="font-semibold text-white mb-2">Live Environment</h3>
-              <div className="space-y-1 text-sm">
-                <div className="flex items-center gap-2">
-                  {status?.live.configured ? (
-                    <CheckCircle2 className="w-4 h-4 text-green-500" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 text-yellow-500" />
-                  )}
-                  <span className="text-gray-300">
-                    {status?.live.configured
-                      ? `Configured: ${status.live.client_id_prefix}...`
-                      : "Not configured"}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* Environment Toggle */}
+      <div className="flex gap-2 p-1 bg-zinc-900 rounded-lg w-fit">
+        {(["test", "live"] as const).map((env) => (
+          <button
+            key={env}
+            onClick={() => setEnvironment(env)}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              environment === env
+                ? env === "live" ? "bg-emerald-500/20 text-emerald-400" : "bg-blue-500/20 text-blue-400"
+                : "text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            {env === "test" ? "Sandbox" : "Live"}
+            {(env === "test" ? status?.test : status?.live)?.configured && (
+              <Check className="w-3 h-3 ml-1.5 inline" />
+            )}
+          </button>
+        ))}
       </div>
 
-      {/* Setup Form */}
-      <div className="p-6 bg-gray-900 border border-gray-700 rounded-lg space-y-4">
-        <div>
-          <h3 className="text-lg font-semibold text-white mb-4">
-            Configure {environment === "live" ? "Live" : "Sandbox"} PayPal Credentials
-          </h3>
-          <p className="text-gray-400 text-sm mb-4">
-            {environment === "live"
-              ? "Enter your live PayPal API credentials for production transactions"
-              : "Enter your sandbox PayPal API credentials for testing"}
-          </p>
+      {/* Status Banner */}
+      {currentEnvStatus?.configured && (
+        <div className="flex items-center gap-2 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-sm">
+          <Check className="w-4 h-4 text-emerald-400" />
+          <span className="text-emerald-400">
+            Configured: {currentEnvStatus.client_id_prefix}...
+          </span>
         </div>
+      )}
 
-        {/* Client ID Input */}
+      {/* Form */}
+      <div className="space-y-4">
         <div>
-          <label htmlFor="paypal-client-id" className="block text-sm font-medium text-gray-300 mb-2">
-            Client ID
-          </label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-sm text-zinc-400">Client ID</label>
+            <a
+              href="https://developer.paypal.com/dashboard/applications"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-zinc-600 hover:text-zinc-400 flex items-center gap-1"
+            >
+              Get credentials <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
           <input
-            id="paypal-client-id"
-            type="password"
+            type={showSecrets ? "text" : "password"}
             value={clientId}
             onChange={(e) => setClientId(e.target.value)}
-            placeholder={`Enter your ${environment === "live" ? "live" : "sandbox"} PayPal Client ID`}
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500"
+            placeholder={`${environment === "live" ? "Live" : "Sandbox"} Client ID`}
+            className="w-full px-3 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-600 focus:border-zinc-600 focus:outline-none transition-colors"
           />
         </div>
 
-        {/* Client Secret Input */}
         <div>
-          <label htmlFor="paypal-client-secret" className="block text-sm font-medium text-gray-300 mb-2">
-            Client Secret
-          </label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-sm text-zinc-400">Client Secret</label>
+            <button
+              onClick={() => setShowSecrets(!showSecrets)}
+              className="text-xs text-zinc-600 hover:text-zinc-400 flex items-center gap-1"
+            >
+              {showSecrets ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+              {showSecrets ? "Hide" : "Show"}
+            </button>
+          </div>
           <input
-            id="paypal-client-secret"
-            type="password"
+            type={showSecrets ? "text" : "password"}
             value={clientSecret}
             onChange={(e) => setClientSecret(e.target.value)}
-            placeholder="Enter your PayPal Client Secret"
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500"
+            placeholder="Client Secret"
+            className="w-full px-3 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-600 focus:border-zinc-600 focus:outline-none transition-colors"
           />
         </div>
 
-        {/* Webhook ID Input (Optional) */}
         <div>
-          <label htmlFor="paypal-webhook-id" className="block text-sm font-medium text-gray-300 mb-2">
-            Webhook ID (Optional)
+          <label className="text-sm text-zinc-400 mb-2 block">
+            Webhook ID <span className="text-zinc-600">(optional)</span>
           </label>
           <input
-            id="paypal-webhook-id"
             type="text"
             value={webhookId}
             onChange={(e) => setWebhookId(e.target.value)}
-            placeholder="Enter webhook ID if configured"
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500"
+            placeholder="Webhook ID for payment notifications"
+            className="w-full px-3 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-600 focus:border-zinc-600 focus:outline-none transition-colors"
           />
-        </div>
-
-        {/* Messages */}
-        {error && (
-          <div className="p-3 bg-red-900/30 border border-red-700 rounded text-red-300 text-sm">
-            {error}
-          </div>
-        )}
-        {success && (
-          <div className="p-3 bg-green-900/30 border border-green-700 rounded text-green-300 text-sm">
-            {success}
-          </div>
-        )}
-
-        {/* Action Buttons */}
-        <div className="flex gap-3 pt-4">
-          <button
-            onClick={handleValidate}
-            disabled={actionInProgress !== null || !clientId || !clientSecret}
-            className="flex-1 px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {actionInProgress === "validate" ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin inline" />
-                Validating...
-              </>
-            ) : (
-              "Validate Credentials"
-            )}
-          </button>
-          <button
-            onClick={handleStore}
-            disabled={actionInProgress !== null || !clientId || !clientSecret}
-            className="flex-1 px-4 py-2 bg-cyan-600 text-white rounded hover:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {actionInProgress === "store" ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin inline" />
-                Saving...
-              </>
-            ) : (
-              "Save Credentials"
-            )}
-          </button>
         </div>
       </div>
 
-      {/* Summary */}
-      {status && (
-        <div className="p-4 bg-gray-900/50 border border-gray-700 rounded-lg">
-          <h4 className="font-semibold text-white mb-3">Configuration Summary</h4>
-          <div className="space-y-2 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-gray-400">Sandbox Environment</span>
-              <span className={status.test.configured ? "text-green-400" : "text-gray-400"}>
-                {status.test.configured ? "✓ Ready" : "○ Not Set"}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-gray-400">Live Environment</span>
-              <span className={status.live.configured ? "text-green-400" : "text-gray-400"}>
-                {status.live.configured ? "✓ Ready" : "○ Not Set"}
-              </span>
-            </div>
-          </div>
+      {/* Messages */}
+      {error && (
+        <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-400">
+          <AlertCircle className="w-4 h-4" />
+          {error}
         </div>
       )}
+      {success && (
+        <div className="flex items-center gap-2 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-sm text-emerald-400">
+          <Check className="w-4 h-4" />
+          {success}
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="flex gap-3">
+        <button
+          onClick={handleValidate}
+          disabled={validating || saving || !clientId || !clientSecret}
+          className="flex-1 px-4 py-2.5 border border-zinc-700 rounded-lg text-sm hover:bg-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+        >
+          {validating && <Loader2 className="w-4 h-4 animate-spin" />}
+          {validating ? "Verifying..." : "Verify"}
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={validating || saving || !clientId || !clientSecret}
+          className="flex-1 px-4 py-2.5 bg-white text-black rounded-lg text-sm font-medium hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+        >
+          {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+          {saving ? "Saving..." : "Save Credentials"}
+        </button>
+      </div>
+
+      {/* Summary */}
+      <div className="pt-4 border-t border-zinc-800">
+        <p className="text-xs text-zinc-600 mb-3">Configuration Status</p>
+        <div className="grid grid-cols-2 gap-3">
+          {(["test", "live"] as const).map((env) => {
+            const envStatus = env === "test" ? status?.test : status?.live;
+            return (
+              <div key={env} className="flex items-center justify-between p-2.5 bg-zinc-900/50 rounded-lg">
+                <span className="text-xs text-zinc-500 capitalize">{env === "test" ? "Sandbox" : "Live"}</span>
+                <span className={`text-xs ${envStatus?.configured ? "text-emerald-400" : "text-zinc-600"}`}>
+                  {envStatus?.configured ? "Ready" : "Not set"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

@@ -35,7 +35,8 @@ router = APIRouter(prefix="/v1/credits", tags=["Credits"])
 # Pydantic models
 class CreditPurchaseRequest(BaseModel):
     """Request to purchase credits"""
-    credits: int = Field(..., ge=100, le=100000, description="Number of credits to purchase")
+    # credits field represents the monetary amount user wants to pay (e.g., 10 for $10)
+    credits: float = Field(..., ge=1, le=10000, description="Monetary amount to pay (e.g., 10 for $10)")
     currency: str = Field(default="INR", description="Currency for payment")
     plan_id: Optional[str] = Field(None, description="Predefined plan ID")
     provider: Optional[str] = Field(default="razorpay", description="Payment provider: razorpay, paypal, or dodo")
@@ -171,6 +172,7 @@ async def purchase_credits(
     )
 
     # Calculate credits and price
+    # request.credits is the MONETARY AMOUNT user wants to pay (e.g., 15 USD or 15 INR)
     if request.plan_id:
         plan = CreditPricingService.get_plan(request.plan_id)
         if not plan:
@@ -178,11 +180,14 @@ async def purchase_credits(
                 status_code=400,
                 detail=f"Invalid plan ID: {request.plan_id}"
             )
+        monetary_amount = plan["price_inr"] if request.currency == "INR" else plan["price_usd"]
         credits_to_buy = plan["credits"]
         price_inr = plan["price_inr"]
     else:
-        credits_to_buy = request.credits
-        price_inr = CreditPricingService.calculate_amount(credits_to_buy, request.currency)
+        monetary_amount = float(request.credits)
+        # Calculate credits based on the monetary amount and currency
+        price_inr = CreditPricingService.calculate_amount_for_amount(monetary_amount, request.currency)
+        credits_to_buy = CreditPricingService.calculate_credits_for_amount(monetary_amount, request.currency)
 
     link = None
     selected_provider = request.provider or "razorpay"
@@ -236,14 +241,27 @@ async def purchase_credits(
             try:
                 # Create Razorpay payment link directly
                 async with httpx.AsyncClient() as client:
-                    amount_paise = CreditPricingService.credits_to_paise(price_inr)
+                    # User enters INR amount directly
+                    amount_inr = float(monetary_amount)
+                    amount_paise = int(round(amount_inr * 100))
+
+                    # Convert INR to USD for credits (balance is in USD cents)
+                    # Using exchange rate from CreditPricingService
+                    usd_to_inr = CreditPricingService.USD_TO_INR  # e.g., 86
+                    amount_usd = amount_inr / usd_to_inr
+                    credits_in_cents = int(round(amount_usd * 100))
+
                     callback_url = f"{settings.API_BASE_URL}/credits/payment-callback"
+
+                    # Generate reference_id for signature verification
+                    reference_id = f"credit_{user_id[:8]}_{uuid4().hex[:8]}"
 
                     payload = {
                         "amount": amount_paise,
-                        "currency": request.currency,
+                        "currency": "INR",
                         "accept_partial": False,
-                        "description": f"Purchase {credits_to_buy} OneRouter credits",
+                        "reference_id": reference_id,
+                        "description": f"OneRouter Balance - ₹{amount_inr:.2f} (≈${amount_usd:.2f})",
                         "customer": {
                             "email": user_email or "customer@example.com"
                         },
@@ -254,7 +272,9 @@ async def purchase_credits(
                         "callback_method": "get",
                         "notes": {
                             "onerouter_user_id": user_id,
-                            "credits": str(credits_to_buy),
+                            "credits": str(credits_in_cents),
+                            "amount_inr": str(amount_inr),
+                            "amount_usd": str(amount_usd),
                             "type": "credit_purchase"
                         }
                     }
@@ -268,13 +288,15 @@ async def purchase_credits(
 
                     if response.status_code == 200:
                         rz_link = response.json()
+                        # Override credits_to_buy with USD-converted credits
+                        credits_to_buy = credits_in_cents
                         link = {
                             "provider_order_id": rz_link.get("id"),
                             "checkout_url": rz_link.get("short_url")
                         }
                         logger.info(
                             "Payment link created via direct Razorpay",
-                            extra={"credits_purchased": credits_to_buy, "amount_inr": price_inr}
+                            extra={"credits_purchased": credits_in_cents, "amount_inr": amount_inr, "amount_usd": amount_usd}
                         )
                     else:
                         logger.error(f"Razorpay payment link creation failed: {response.text}")
@@ -288,27 +310,38 @@ async def purchase_credits(
             try:
                 from ..adapters.dodo import DodoAdapter
 
-                # Convert INR price to USD
-                price_usd = round(price_inr / 83, 2)
-                callback_url = f"{settings.API_BASE_URL}/v1/credits/payment-callback/dodo"
+                # User enters monetary amount directly - use as-is
+                amount_usd = float(monetary_amount)
+
+                # Direct money credits: $10 = 1000 credits (stored in cents)
+                # This gives 1:1 money to balance (user pays $10, gets $10 balance)
+                credits_in_cents = int(round(amount_usd * 100))
+
+                # Callback URL - Dodo redirects here after payment
+                callback_url = f"{settings.FRONTEND_URL}/credits/payment-callback/dodo"
 
                 dodo = DodoAdapter({
                     "DODO_API_KEY": settings.DODO_API_KEY,
-                    "DODO_MODE": settings.DODO_MODE
+                    "DODO_MODE": settings.DODO_MODE,
+                    "DODO_PRODUCT_ID": getattr(settings, "DODO_PRODUCT_ID", "")
                 })
 
                 dodo_result = await dodo.create_payment_link(
-                    amount=price_usd,
-                    description=f"Purchase {credits_to_buy} OneRouter credits",
+                    amount=amount_usd,
+                    description=f"OneRouter Balance - ${amount_usd:.2f}",
                     currency="USD",
                     callback_url=callback_url,
                     notes={
                         "onerouter_user_id": user_id,
-                        "credits": str(credits_to_buy),
+                        "credits": str(credits_in_cents),
+                        "amount_usd": str(amount_usd),
                         "type": "credit_purchase",
                         "customer_email": user_email
                     }
                 )
+
+                # Override credits_to_buy with the direct money credits
+                credits_to_buy = credits_in_cents
 
                 link = {
                     "provider_order_id": dodo_result.get("provider_order_id"),
@@ -316,14 +349,21 @@ async def purchase_credits(
                 }
                 logger.info(
                     "Payment link created via Dodo Payments",
-                    extra={"credits_purchased": credits_to_buy, "amount_usd": price_usd}
+                    extra={"credits_purchased": credits_in_cents, "amount_usd": amount_usd}
                 )
 
             except Exception as e:
                 logger.error(f"Dodo payment failed: {str(e)}", exc_info=True)
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"Dodo payment service error: {str(e)}"
+                )
         else:
             logger.warning("Dodo provider selected but DODO_API_KEY not configured")
-
+            raise HTTPException(
+                status_code=503,
+                detail="Dodo payment provider not configured"
+            )
     # Demo fallback for development
     if link is None:
         if settings.ENVIRONMENT == "development" or settings.DEBUG:
@@ -343,12 +383,15 @@ async def purchase_credits(
     order_id = link.get("provider_order_id") or link.get("id") or link.get("transaction_id", "")
     checkout_url = link.get("checkout_url") or link.get("short_url", "")
 
+    # Store payment with correct amount and provider
+    payment_amount = float(monetary_amount)
+
     payment = OneRouterPayment(
         user_id=user_id,
-        amount=price_inr,
+        amount=payment_amount,
         currency=request.currency,
         credits_purchased=credits_to_buy,
-        provider="onerouter",  # Changed from "razorpay" - we're dogfooding
+        provider=selected_provider,
         provider_order_id=order_id,
         checkout_url=checkout_url,
         status=PaymentStatus.PENDING
@@ -361,7 +404,7 @@ async def purchase_credits(
         payment_id=str(payment.id),
         order_id=order_id,
         credits=credits_to_buy,
-        amount=price_inr,
+        amount=payment_amount,
         currency=request.currency,
         checkout_url=checkout_url
     )
@@ -710,14 +753,16 @@ async def dodo_payment_callback(
 ):
     """
     Handle Dodo payment callback redirect.
-    Redirects user to payment result page.
+    Verifies payment status with Dodo API before redirecting.
     """
+    from ..adapters.dodo import DodoAdapter
+
     # Get payment ID from query params
     payment_id = request.query_params.get("payment_id", "")
-    status = request.query_params.get("status", "")
+    logger.info(f"Dodo callback received with payment_id: {payment_id}")
 
     if not payment_id:
-        # Redirect to credits page with error
+        logger.warning("Dodo callback missing payment_id")
         return RedirectResponse(
             url=f"{settings.FRONTEND_URL}/credits?error=missing_payment_id",
             status_code=303
@@ -731,20 +776,98 @@ async def dodo_payment_callback(
     payment = result.scalar_one_or_none()
 
     if not payment:
+        logger.warning(f"Dodo callback: payment not found for payment_id: {payment_id}")
         return RedirectResponse(
             url=f"{settings.FRONTEND_URL}/credits?error=payment_not_found",
             status_code=303
         )
 
-    # Generate JWT token for secure result verification
+    # Ensure payment attributes are loaded
+    await db.refresh(payment)
+
+    logger.info(f"Dodo callback: found payment {payment.id}, status: {payment.status}")
+
+    # Verify payment status with Dodo API
+    verified_status = "unknown"
+    dodo_raw_status = "unknown"
+    try:
+        dodo = DodoAdapter({
+            "DODO_API_KEY": settings.DODO_API_KEY,
+            "DODO_MODE": settings.DODO_MODE
+        })
+        dodo_status = await dodo.get_payment_status(payment_id)
+        verified_status = dodo_status.get("status", "unknown")
+        dodo_raw_status = dodo_status.get("raw_status", "unknown")
+        logger.info(f"Dodo payment status: verified={verified_status}, raw={dodo_raw_status}, data={dodo_status}")
+    except Exception as e:
+        logger.error(f"Failed to verify Dodo payment status: {e}", exc_info=True)
+        verified_status = "unknown"
+
+    # Map Dodo status to our status
+    status_map = {
+        "success": "success",
+        "pending": "pending",
+        "failed": "failed",
+        "unknown": "pending"
+    }
+    final_status = status_map.get(verified_status, "pending")
+
+    # If payment succeeded and credits not yet added, add them now
+    current_balance = None
+    payment_user_id = str(payment.user_id)
+    payment_credits = int(payment.credits_purchased) if payment.credits_purchased else 0
+    if final_status == "success" and str(payment.status) != str(PaymentStatus.SUCCESS):
+        try:
+            await CreditsService.add_credits(
+                user_id=payment_user_id,
+                amount=payment_credits,
+                transaction_type=TransactionType.PURCHASE,
+                payment_id=str(payment.id),
+                description=f"Purchased {payment_credits} credits via Dodo",
+                db=db
+            )
+            payment.status = PaymentStatus.SUCCESS
+            await db.commit()
+            logger.info(f"Dodo callback: added {payment_credits} credits for payment {payment.id}")
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"Failed to add credits in callback: {e}")
+            final_status = "error"
+            verified_status = "failed"
+
+    # Get current balance
+    try:
+        balance_result = await db.execute(
+            select(UserCredit.balance).where(UserCredit.user_id == payment_user_id)
+        )
+        current_balance = balance_result.scalar_one_or_none()
+    except Exception:
+        pass
+
+    # Generate message based on status
+    if final_status == "success":
+        message = f"Successfully purchased {payment_credits} credits via Dodo Payments"
+    elif final_status == "error":
+        message = "Failed to add credits. Please contact support."
+    elif final_status == "pending":
+        message = "Payment is being processed. Credits will be added shortly."
+    else:
+        message = "Payment failed. Please try again or contact support."
+
+    # Generate JWT token with verified status
     token_payload = {
         "payment_id": str(payment.id),
-        "user_id": str(payment.user_id),
+        "user_id": payment_user_id,
+        "status": final_status,
+        "message": message,
+        "credits": payment_credits,
+        "balance": int(current_balance) if current_balance else 0,
+        "verified": True,
         "exp": datetime.utcnow() + timedelta(minutes=10)
     }
     token = jwt.encode(token_payload, settings.SECRET_KEY, algorithm="HS256")
 
-    # Redirect to payment result page
+    # Redirect to payment result page with verified status
     return RedirectResponse(
         url=f"{settings.FRONTEND_URL}/credits/payment-result?token={token}",
         status_code=303
@@ -962,6 +1085,7 @@ def _verify_payment_result_token(token: str) -> Optional[Dict[str, Any]]:
 async def _process_payment_callback(
     razorpay_payment_id: Optional[str],
     razorpay_payment_link_id: Optional[str],
+    razorpay_payment_link_reference_id: Optional[str],
     razorpay_payment_link_status: Optional[str],
     razorpay_signature: Optional[str],
     db: AsyncSession
@@ -970,7 +1094,7 @@ async def _process_payment_callback(
     Shared helper to process Razorpay payment callbacks.
     Implements signature verification, transaction safety with row locks,
     and comprehensive error handling.
-    
+
     Returns response dict with 'status', 'message', and optional 'credits_added', 'new_balance'.
     """
     try:
@@ -980,50 +1104,57 @@ async def _process_payment_callback(
                 "status": "failed",
                 "message": "Payment status is required"
             }
-        
+
         if razorpay_payment_link_status != "paid":
             return {
                 "status": "failed",
                 "message": f"Payment not completed. Status: {razorpay_payment_link_status}"
             }
-        
+
         if not razorpay_payment_id:
             return {
                 "status": "failed",
                 "message": "No payment ID provided"
             }
-        
+
         if not razorpay_payment_link_id:
             return {
                 "status": "failed",
                 "message": "No payment link ID provided"
             }
-        
-        # Signature verification
-        if razorpay_signature:
-            try:
-                razorpay = RazorpayService()
-                is_valid = razorpay.verify_payment_link_signature(
-                    razorpay_payment_id,
-                    razorpay_payment_link_id,
-                    razorpay_signature
+
+        # Signature verification is MANDATORY for security
+        if not razorpay_signature:
+            logger.warning(f"Missing signature for payment {razorpay_payment_id}")
+            return {
+                "status": "failed",
+                "message": "Payment signature required"
+            }
+
+        try:
+            razorpay = RazorpayService()
+            is_valid = razorpay.verify_payment_link_signature(
+                payment_link_id=razorpay_payment_link_id,
+                payment_link_reference_id=razorpay_payment_link_reference_id or "",
+                payment_link_status=razorpay_payment_link_status,
+                razorpay_payment_id=razorpay_payment_id,
+                signature=razorpay_signature
+            )
+            if not is_valid:
+                logger.warning(
+                    f"Invalid signature for payment {razorpay_payment_id}, "
+                    f"link {razorpay_payment_link_id}"
                 )
-                if not is_valid:
-                    logger.warning(
-                        f"Invalid signature for payment {razorpay_payment_id}, "
-                        f"link {razorpay_payment_link_id}"
-                    )
-                    return {
-                        "status": "failed",
-                        "message": "Invalid payment signature"
-                    }
-                logger.debug(f"Signature verified for payment {razorpay_payment_id}")
-            except Exception as e:
-                logger.error(f"Signature verification error: {str(e)}")
                 return {
                     "status": "failed",
-                    "message": "Signature verification failed"
+                    "message": "Invalid payment signature"
                 }
+        except Exception as e:
+            logger.error(f"Signature verification error: {type(e).__name__}")
+            return {
+                "status": "failed",
+                "message": "Signature verification failed"
+            }
         
         # Find payment with row-level lock to prevent concurrent processing
         # Using SELECT ... FOR UPDATE to lock the row
@@ -1141,6 +1272,7 @@ async def razorpay_payment_callback(
     request: Request,
     razorpay_payment_id: Optional[str] = None,
     razorpay_payment_link_id: Optional[str] = None,
+    razorpay_payment_link_reference_id: Optional[str] = None,
     razorpay_payment_link_status: Optional[str] = None,
     razorpay_signature: Optional[str] = None,
     db: AsyncSession = Depends(get_db)
@@ -1151,10 +1283,11 @@ async def razorpay_payment_callback(
     Adds credits to user's account when payment is confirmed.
     """
     logger.info(f"Payment callback received - payment_id: {razorpay_payment_id}, status: {razorpay_payment_link_status}")
-    
+
     return await _process_payment_callback(
         razorpay_payment_id,
         razorpay_payment_link_id,
+        razorpay_payment_link_reference_id,
         razorpay_payment_link_status,
         razorpay_signature,
         db
@@ -1171,19 +1304,21 @@ async def razorpay_payment_callback_public(
     request: Request,
     razorpay_payment_id: Optional[str] = None,
     razorpay_payment_link_id: Optional[str] = None,
+    razorpay_payment_link_reference_id: Optional[str] = None,
     razorpay_payment_link_status: Optional[str] = None,
     razorpay_signature: Optional[str] = None,
     db: AsyncSession = Depends(get_db)
-    ):
+):
     """
     Public callback URL for Razorpay payment redirects (no /v1 prefix).
     Redirects to frontend with signed payment result token to prevent tampering.
     """
     frontend_url = settings.FRONTEND_URL or "http://localhost:3000"
-    
+
     result = await _process_payment_callback(
         razorpay_payment_id,
         razorpay_payment_link_id,
+        razorpay_payment_link_reference_id,
         razorpay_payment_link_status,
         razorpay_signature,
         db

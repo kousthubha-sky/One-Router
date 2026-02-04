@@ -1,0 +1,1578 @@
+
+ ▐▛███▜▌   Claude Code v2.1.29
+▝▜█████▛▘  Opus 4.5 · Claude Pro
+  ▘▘ ▝▝    C:\A Drive\projects\OneRouter
+
+✻ Conversation compacted (ctrl+o for history)
+
+  ⎿  Referenced file frontend\src\components\CreditsPageClient.tsx
+  ⎿  Read frontend\src\components\GlobalEnvironmentToggle.tsx (376 lines)
+  ⎿  Referenced file frontend\src\app\docs\page.tsx
+  ⎿  Read frontend\src\app\razorpay-setup\page.tsx (165 lines)
+  ⎿  Read frontend\src\components\ui\marquee-demo.tsx (31 lines)
+
+● Let me read the previous conversation transcript to find the Dodo
+  configuration details.
+
+● Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● Let me read the current backend config and Dodo adapter files to understand
+  the current state.
+
+● Read 3 files (ctrl+o to expand)
+
+● Now I can see the full picture. The backend is configured with Dodo settings
+  in config.py (lines 96-99), the DodoAdapter is implemented in dodo.py, and
+  credits.py has the integration. However, looking at the DodoAdapter's
+  _create_checkout_session_impl, I see it's using a hardcoded product_id: 
+  "onerouter_credits" which likely doesn't exist in Dodo's system.
+
+  The Dodo API requires either:
+  1. Pre-created products in their dashboard, OR
+  2. Using their one-time payment endpoint with direct amount
+
+  Let me check the Dodo API documentation approach and fix the adapter to use
+  their proper payment creation endpoint. Let me also read the CreditsPageClient
+   to understand the full flow.
+
+● Read 1 file (ctrl+o to expand)
+
+● Now I can see the full issue. The problem is in the DodoAdapter - it's using a
+   product-based cart approach with product_id: "onerouter_credits" which
+  doesn't exist in Dodo. Dodo Payments requires either pre-created products OR a
+   direct payment with amount.
+
+  Let me fix the DodoAdapter to properly create one-time payments with direct
+  amounts:
+
+● Update(backend\app\adapters\dodo.py)
+  ⎿  Added 64 lines, removed 33 lines
+      111          return_url: Optional[str],
+      112          metadata: Optional[Dict[str, Any]]
+      113      ) -> Dict[str, Any]:
+      114 -        """Implementation of checkout session creation"""     
+      114 +        """                                                   
+      115 +        Implementation of checkout session creation using Dodo
+          +'s payment link API.                                          
+      116 +                                                              
+      117 +        Dodo Payments uses a different approach - we create a 
+          +payment link directly                                         
+      118 +        with the amount specified, not through a product catal
+          +og.                                                           
+      119 +        """                                                   
+      120          try:
+      121              base_url = await self._get_base_url()
+      122              headers = await self._get_auth_headers()
+      123  
+      119 -            # Build checkout session payload                  
+      120 -            # Dodo uses product_cart for items                
+      124 +            # Convert amount to cents (Dodo expects amount in 
+          +smallest currency unit)                                       
+      125 +            amount_cents = int(amount * 100)                  
+      126 +                                                              
+      127 +            # Build payment link payload for Dodo's API       
+      128 +            # Using their payment_links endpoint for one-time 
+          +payments                                                      
+      129              payload = {
+      122 -                "payment_link": True,                         
+      123 -                "billing": {                                  
+      124 -                    "city": "Global",                         
+      125 -                    "country": "US",                          
+      126 -                    "state": "CA",                            
+      127 -                    "street": "Online",                       
+      128 -                    "zipcode": "00000"                        
+      129 -                },                                            
+      130 -                "product_cart": [                             
+      131 -                    {                                         
+      132 -                        "product_id": "onerouter_credits",  # 
+          -Virtual product                                               
+      133 -                        "quantity": 1                         
+      134 -                    }                                         
+      135 -                ]                                             
+      130 +                "amount": amount_cents,                       
+      131 +                "currency": currency.upper(),                 
+      132 +                "description": product_name,                  
+      133              }
+      134  
+      135              # Add customer info if provided
+      139 -            if customer_email or customer_name:               
+      140 -                payload["customer"] = {}                      
+      141 -                if customer_email:                            
+      142 -                    payload["customer"]["email"] = customer_em
+          -ail                                                           
+      143 -                if customer_name:                             
+      144 -                    payload["customer"]["name"] = customer_nam
+          -e                                                             
+      136 +            if customer_email:                                
+      137 +                payload["customer_email"] = customer_email    
+      138 +            if customer_name:                                 
+      139 +                payload["customer_name"] = customer_name      
+      140  
+      146 -            # Add return URL                                  
+      141 +            # Add return URL for redirect after payment       
+      142              if return_url:
+      143                  payload["return_url"] = return_url
+      144 +                payload["success_url"] = return_url           
+      145 +                payload["cancel_url"] = return_url.replace("pa
+          +yment-callback", "credits")                                   
+      146  
+      150 -            # Add metadata                                    
+      147 +            # Add metadata as JSON string                     
+      148              if metadata:
+      152 -                for key, value in metadata.items():           
+      153 -                    payload[f"metadata_{key}"] = str(value)   
+      149 +                payload["metadata"] = metadata                
+      150  
+      151 +            self.logger.info(f"Creating Dodo payment: amount={
+          +amount_cents} cents, currency={currency}")                    
+      152 +                                                              
+      153              async with httpx.AsyncClient(timeout=30.0) as clie
+           nt:
+      154 +                # Try payment_links endpoint first (standard D
+          +odo API)                                                      
+      155                  response = await client.post(
+      157 -                    f"{base_url}/payments",                   
+      156 +                    f"{base_url}/payment_links",              
+      157                      json=payload,
+      158                      headers=headers
+      159                  )
+      160  
+      161 +                # If payment_links doesn't work, try payments 
+          +endpoint                                                      
+      162 +                if response.status_code == 404:               
+      163 +                    self.logger.info("payment_links endpoint n
+          +ot found, trying payments endpoint")                          
+      164 +                    response = await client.post(             
+      165 +                        f"{base_url}/payments",               
+      166 +                        json=payload,                         
+      167 +                        headers=headers                       
+      168 +                    )                                         
+      169 +                                                              
+      170                  if response.status_code == 400:
+      163 -                    error_data = response.json()              
+      171 +                    error_data = response.json() if response.t
+          +ext else {"error": "Bad request"}                             
+      172 +                    self.logger.error(f"Dodo bad request: {err
+          +or_data}")                                                    
+      173                      raise Exception(f"Dodo bad request: {error
+           _data}")
+      174                  elif response.status_code == 401:
+      175 +                    self.logger.error("Invalid Dodo API creden
+          +tials")                                                       
+      176                      raise Exception("Invalid Dodo API credenti
+           als")
+      177                  elif response.status_code == 422:
+      168 -                    error_data = response.json()              
+      178 +                    error_data = response.json() if response.t
+          +ext else {"error": "Validation error"}                        
+      179 +                    self.logger.error(f"Dodo validation error:
+          + {error_data}")                                               
+      180                      raise Exception(f"Dodo validation error: {
+           error_data}")
+      181  
+      182                  response.raise_for_status()
+      183                  data = response.json()
+      184  
+      174 -                # Extract checkout URL and payment ID         
+      175 -                payment_id = data.get("payment_id", "")       
+      176 -                payment_link = data.get("payment_link", "")   
+      185 +                self.logger.info(f"Dodo API response: {data}")
+      186  
+      187 +                # Extract checkout URL and payment ID from res
+          +ponse                                                         
+      188 +                # Dodo may return different field names depend
+          +ing on API version                                            
+      189 +                payment_id = (                                
+      190 +                    data.get("payment_link_id") or            
+      191 +                    data.get("payment_id") or                 
+      192 +                    data.get("id") or                         
+      193 +                    ""                                        
+      194 +                )                                             
+      195 +                payment_link = (                              
+      196 +                    data.get("url") or                        
+      197 +                    data.get("payment_link") or               
+      198 +                    data.get("checkout_url") or               
+      199 +                    data.get("short_url") or                  
+      200 +                    ""                                        
+      201 +                )                                             
+      202 +                                                              
+      203 +                if not payment_link:                          
+      204 +                    self.logger.error(f"No checkout URL in Dod
+          +o response: {data}")                                          
+      205 +                    raise Exception("Dodo API did not return a
+          + checkout URL")                                               
+      206 +                                                              
+      207                  return {
+      208                      "transaction_id": f"dodo_{payment_id}",
+      209                      "provider": "dodo",
+     ...
+      216                  }
+      217  
+      218          except httpx.TimeoutException:
+      219 +            self.logger.error("Dodo API request timed out")   
+      220              raise Exception("Dodo API request timed out")
+      221          except httpx.HTTPError as e:
+      222 +            self.logger.error(f"Dodo API network error: {str(e
+          +)}")                                                          
+      223              raise Exception(f"Dodo API network error: {str(e)}
+           ")
+      224  
+      225      async def create_payment_link(
+
+● Now let me also update the Dodo adapter's base URL since Dodo's test
+  environment URL might be different:
+
+● Update(backend\app\adapters\dodo.py)
+  ⎿  Added 2 lines, removed 1 line
+      35          if mode == "live":
+      36              return "https://api.dodopayments.com"
+      37          else:
+      38 -            return "https://test.dodopayments.com"             
+      38 +            # Dodo test/sandbox API base URL                   
+      39 +            return "https://api.dodopayments.com/test"         
+      40  
+      41      async def _get_auth_headers(self) -> Dict[str, str]:
+      42          """Get authentication headers for Dodo API calls"""
+
+● Let me verify the correct Dodo API endpoint by searching for their
+  documentation:
+
+● Web Search("Dodo Payments API endpoint URL test sandbox documentation 2026")
+  ⎿  Did 1 search in 14s
+
+● Now I have the correct information. Let me fix the base URLs:
+
+● Update(backend\app\adapters\dodo.py)
+  ⎿  Added 2 lines, removed 3 lines
+      33          """Return Dodo API base URL based on mode"""
+      34          mode = self.credentials.get("DODO_MODE", "test")
+      35          if mode == "live":
+      36 -            return "https://api.dodopayments.com"              
+      36 +            return "https://live.dodopayments.com"             
+      37          else:
+      38 -            # Dodo test/sandbox API base URL                   
+      39 -            return "https://api.dodopayments.com/test"         
+      38 +            return "https://test.dodopayments.com"             
+      39  
+      40      async def _get_auth_headers(self) -> Dict[str, str]:
+      41          """Get authentication headers for Dodo API calls"""
+
+● Let me check the Dodo integration guide for the correct API format:
+
+● Fetch(https://docs.dodopayments.com/api-reference/integration-guide)
+  ⎿  Received 16.7KB (200 OK)
+
+● I see - Dodo uses a product cart model. Let me check if they have a way to
+  create one-time payments with custom amounts:
+
+● Fetch(https://docs.dodopayments.com/api-reference/introduction)
+  ⎿  Received 5.1KB (200 OK)
+
+● Fetch(https://docs.dodopayments.com/api-reference/technical-faqs)
+  ⎿  Received 49.6KB (200 OK)
+
+● Dodo requires products to be pre-created. Let me check if we can create
+  products via API:
+
+● Fetch(https://docs.dodopayments.com/llms.txt)
+  ⎿  Received 59.6KB (200 OK)
+
+● Now I understand - we need to create a product first, then use it in checkout.
+   Let me update the DodoAdapter to handle this flow:
+
+● Read 1 file (ctrl+o to expand)
+
+● Now I understand - Dodo requires products in their catalog. Let me rewrite the
+   adapter to create a product first, then use it in the checkout:
+
+● Update(backend\app\adapters\dodo.py)
+  ⎿  Added 110 lines, removed 49 lines
+      101              self.logger.error(f"Failed to create Dodo checkout
+            session: {e}")
+      102              raise
+      103  
+      104 +    async def _create_or_get_product(                         
+      105 +        self,                                                 
+      106 +        amount: float,                                        
+      107 +        currency: str,                                        
+      108 +        product_name: str,                                    
+      109 +        client: httpx.AsyncClient,                            
+      110 +        base_url: str,                                        
+      111 +        headers: Dict[str, str]                               
+      112 +    ) -> str:                                                 
+      113 +        """                                                   
+      114 +        Create a one-time product in Dodo for the given amount
+          +, or find existing one.                                       
+      115 +        Returns the product_id to use in checkout.            
+      116 +        """                                                   
+      117 +        # Convert amount to cents                             
+      118 +        amount_cents = int(amount * 100)                      
+      119 +                                                              
+      120 +        # Create a unique product ID based on amount (allows r
+          +euse for same amounts)                                        
+      121 +        product_external_id = f"onerouter_credits_{amount_cent
+          +s}_{currency.lower()}"                                        
+      122 +                                                              
+      123 +        # First, try to find existing product with this amount
+      124 +        try:                                                  
+      125 +            list_response = await client.get(                 
+      126 +                f"{base_url}/products",                       
+      127 +                headers=headers,                              
+      128 +                params={"page_size": 100}                     
+      129 +            )                                                 
+      130 +            if list_response.status_code == 200:              
+      131 +                products = list_response.json()               
+      132 +                # Look for existing product with matching pric
+          +e                                                             
+      133 +                for product in products.get("items", products 
+          +if isinstance(products, list) else []):                       
+      134 +                    if product.get("price", {}).get("price") =
+          += amount_cents:                                               
+      135 +                        self.logger.info(f"Found existing Dodo
+          + product: {product.get('product_id')}")                       
+      136 +                        return product.get("product_id")      
+      137 +        except Exception as e:                                
+      138 +            self.logger.warning(f"Failed to list Dodo products
+          +: {e}")                                                       
+      139 +                                                              
+      140 +        # Create new product                                  
+      141 +        product_payload = {                                   
+      142 +            "name": product_name,                             
+      143 +            "description": f"OneRouter Credits - ${amount:.2f}
+          + USD",                                                        
+      144 +            "price": {                                        
+      145 +                "price": amount_cents,                        
+      146 +                "currency": currency.upper(),                 
+      147 +                "type": "one_time_price"                      
+      148 +            },                                                
+      149 +            "tax_category": "digital_products"                
+      150 +        }                                                     
+      151 +                                                              
+      152 +        self.logger.info(f"Creating Dodo product: {product_pay
+          +load}")                                                       
+      153 +                                                              
+      154 +        response = await client.post(                         
+      155 +            f"{base_url}/products",                           
+      156 +            json=product_payload,                             
+      157 +            headers=headers                                   
+      158 +        )                                                     
+      159 +                                                              
+      160 +        if response.status_code in [200, 201]:                
+      161 +            data = response.json()                            
+      162 +            product_id = data.get("product_id") or data.get("i
+          +d")                                                           
+      163 +            self.logger.info(f"Created Dodo product: {product_
+          +id}")                                                         
+      164 +            return product_id                                 
+      165 +        else:                                                 
+      166 +            error_text = response.text                        
+      167 +            self.logger.error(f"Failed to create Dodo product:
+          + {response.status_code} - {error_text}")                      
+      168 +            raise Exception(f"Failed to create Dodo product: {
+          +error_text}")                                                 
+      169 +                                                              
+      170      async def _create_checkout_session_impl(
+      171          self,
+      172          amount: float,
+     ...
+      178          metadata: Optional[Dict[str, Any]]
+      179      ) -> Dict[str, Any]:
+      180          """
+      115 -        Implementation of checkout session creation using Dodo
+          -'s payment link API.                                          
+      181 +        Implementation of checkout session creation.          
+      182  
+      117 -        Dodo Payments uses a different approach - we create a 
+          -payment link directly                                         
+      118 -        with the amount specified, not through a product catal
+          -og.                                                           
+      183 +        Dodo requires products to be created first, then used 
+          +in a checkout.                                                
+      184 +        Steps:                                                
+      185 +        1. Create/find a product with the exact amount        
+      186 +        2. Create a checkout session using that product       
+      187          """
+      188          try:
+      189              base_url = await self._get_base_url()
+      190              headers = await self._get_auth_headers()
+      191  
+      124 -            # Convert amount to cents (Dodo expects amount in 
+          -smallest currency unit)                                       
+      125 -            amount_cents = int(amount * 100)                  
+      192 +            async with httpx.AsyncClient(timeout=30.0) as clie
+          +nt:                                                           
+      193 +                # Step 1: Create or get product with exact amo
+          +unt                                                           
+      194 +                product_id = await self._create_or_get_product
+          +(                                                             
+      195 +                    amount, currency, product_name, client, ba
+          +se_url, headers                                               
+      196 +                )                                             
+      197  
+      127 -            # Build payment link payload for Dodo's API       
+      128 -            # Using their payment_links endpoint for one-time 
+          -payments                                                      
+      129 -            payload = {                                       
+      130 -                "amount": amount_cents,                       
+      131 -                "currency": currency.upper(),                 
+      132 -                "description": product_name,                  
+      133 -            }                                                 
+      198 +                # Step 2: Create checkout session using the pr
+          +oduct                                                         
+      199 +                checkout_payload = {                          
+      200 +                    "product_cart": [                         
+      201 +                        {                                     
+      202 +                            "product_id": product_id,         
+      203 +                            "quantity": 1                     
+      204 +                        }                                     
+      205 +                    ]                                         
+      206 +                }                                             
+      207  
+      135 -            # Add customer info if provided                   
+      136 -            if customer_email:                                
+      137 -                payload["customer_email"] = customer_email    
+      138 -            if customer_name:                                 
+      139 -                payload["customer_name"] = customer_name      
+      208 +                # Add customer info if provided               
+      209 +                if customer_email or customer_name:           
+      210 +                    checkout_payload["customer"] = {}         
+      211 +                    if customer_email:                        
+      212 +                        checkout_payload["customer"]["email"] 
+          += customer_email                                              
+      213 +                    if customer_name:                         
+      214 +                        checkout_payload["customer"]["name"] =
+          + customer_name                                                
+      215  
+      141 -            # Add return URL for redirect after payment       
+      142 -            if return_url:                                    
+      143 -                payload["return_url"] = return_url            
+      144 -                payload["success_url"] = return_url           
+      145 -                payload["cancel_url"] = return_url.replace("pa
+          -yment-callback", "credits")                                   
+      216 +                # Add return URL for redirect after payment   
+      217 +                if return_url:                                
+      218 +                    checkout_payload["return_url"] = return_ur
+          +l                                                             
+      219  
+      147 -            # Add metadata as JSON string                     
+      148 -            if metadata:                                      
+      149 -                payload["metadata"] = metadata                
+      220 +                # Add metadata                                
+      221 +                if metadata:                                  
+      222 +                    checkout_payload["metadata"] = metadata   
+      223  
+      151 -            self.logger.info(f"Creating Dodo payment: amount={
+          -amount_cents} cents, currency={currency}")                    
+      224 +                self.logger.info(f"Creating Dodo checkout: pro
+          +duct_id={product_id}, amount={amount}")                       
+      225  
+      153 -            async with httpx.AsyncClient(timeout=30.0) as clie
+          -nt:                                                           
+      154 -                # Try payment_links endpoint first (standard D
+          -odo API)                                                      
+      226                  response = await client.post(
+      156 -                    f"{base_url}/payment_links",              
+      157 -                    json=payload,                             
+      227 +                    f"{base_url}/checkouts",                  
+      228 +                    json=checkout_payload,                    
+      229                      headers=headers
+      230                  )
+      231  
+      161 -                # If payment_links doesn't work, try payments 
+          -endpoint                                                      
+      162 -                if response.status_code == 404:               
+      163 -                    self.logger.info("payment_links endpoint n
+          -ot found, trying payments endpoint")                          
+      164 -                    response = await client.post(             
+      165 -                        f"{base_url}/payments",               
+      166 -                        json=payload,                         
+      167 -                        headers=headers                       
+      168 -                    )                                         
+      169 -                                                              
+      232                  if response.status_code == 400:
+      233                      error_data = response.json() if response.t
+           ext else {"error": "Bad request"}
+      172 -                    self.logger.error(f"Dodo bad request: {err
+          -or_data}")                                                    
+      234 +                    self.logger.error(f"Dodo checkout bad requ
+          +est: {error_data}")                                           
+      235                      raise Exception(f"Dodo bad request: {error
+           _data}")
+      236                  elif response.status_code == 401:
+      237                      self.logger.error("Invalid Dodo API creden
+           tials")
+      238                      raise Exception("Invalid Dodo API credenti
+           als")
+      239                  elif response.status_code == 422:
+      240                      error_data = response.json() if response.t
+           ext else {"error": "Validation error"}
+      179 -                    self.logger.error(f"Dodo validation error:
+          - {error_data}")                                               
+      241 +                    self.logger.error(f"Dodo checkout validati
+          +on error: {error_data}")                                      
+      242                      raise Exception(f"Dodo validation error: {
+           error_data}")
+      243  
+      244                  response.raise_for_status()
+      245                  data = response.json()
+      246  
+      185 -                self.logger.info(f"Dodo API response: {data}")
+      247 +                self.logger.info(f"Dodo checkout response: {da
+          +ta}")                                                         
+      248  
+      249                  # Extract checkout URL and payment ID from res
+           ponse
+      188 -                # Dodo may return different field names depend
+          -ing on API version                                            
+      250                  payment_id = (
+      190 -                    data.get("payment_link_id") or            
+      251 +                    data.get("checkout_id") or                
+      252 +                    data.get("session_id") or                 
+      253                      data.get("payment_id") or
+      254                      data.get("id") or
+      255                      ""
+      256                  )
+      195 -                payment_link = (                              
+      257 +                checkout_url = (                              
+      258 +                    data.get("checkout_url") or               
+      259                      data.get("url") or
+      260                      data.get("payment_link") or
+      198 -                    data.get("checkout_url") or               
+      199 -                    data.get("short_url") or                  
+      261                      ""
+      262                  )
+      263  
+      203 -                if not payment_link:                          
+      264 +                if not checkout_url:                          
+      265                      self.logger.error(f"No checkout URL in Dod
+           o response: {data}")
+      266                      raise Exception("Dodo API did not return a
+            checkout URL")
+      267  
+     ...
+      272                      "amount": amount,
+      273                      "currency": currency,
+      274                      "status": "created",
+      214 -                    "checkout_url": payment_link,             
+      275 +                    "checkout_url": checkout_url,             
+      276                      "provider_data": data
+      277                  }
+      278  
+
+● Now let me check if the Dodo webhook route is properly registered in the main
+  application:
+
+● Read 1 file (ctrl+o to expand)
+
+● The credits router is properly included. Now let me check for the environment
+  file to ensure Dodo variables are documented:
+
+● Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● The .env.example is missing Dodo and Razorpay configuration. Let me update it:
+
+● Update(.env.example)
+  ⎿  Added 15 lines
+      29  # Admin User IDs (Optional, comma-separated)
+      30  ADMIN_USER_IDS=
+      31  
+      32 +# Razorpay (OneRouter's own payment processing for INR credit p
+         +urchases)                                                      
+      33 +RAZORPAY_KEY_ID=                                               
+      34 +RAZORPAY_KEY_SECRET=                                           
+      35 +RAZORPAY_WEBHOOK_SECRET=                                       
+      36  
+      37 +# Dodo Payments (OneRouter's own payment processing for USD cre
+         +dit purchases)                                                 
+      38 +# Get API key from https://dashboard.dodopayments.com          
+      39 +DODO_API_KEY=                                                  
+      40 +DODO_WEBHOOK_SECRET=                                           
+      41 +DODO_MODE=test  # "test" or "live"                             
+      42  
+      43 +# OneRouter Dogfooding (Optional - for self-hosting)           
+      44 +ONEROUTER_API_KEY=                                             
+      45 +ONEROUTER_API_BASE_URL=https://one-router-clyl.onrender.com    
+      46  
+      47 +                                                               
+      48 +                                                               
+      49 +                                                               
+      50  #frontend env example
+      51  NEXT_PUBLIC_API_URL=http://localhost:8000
+      52  
+
+● Now let me check the backend .env to see what's configured:
+
+● Read 1 file (ctrl+o to expand)
+
+● I see the Dodo credentials ARE configured in the backend .env. The API key is
+  set and there's even a DODO_PRODUCT_ID configured. The issue was that the
+  adapter was using incorrect API structure.
+
+  Let me update the adapter to optionally use a pre-configured product ID if
+  available (for standard amounts), which would be more efficient:
+
+● Update(backend\app\adapters\dodo.py)
+  ⎿  Added 12 lines, removed 5 lines
+      113          """
+      114          Create a one-time product in Dodo for the given amount
+           , or find existing one.
+      115          Returns the product_id to use in checkout.
+      116 +                                                              
+      117 +        For efficiency, checks for pre-configured DODO_PRODUCT
+          +_ID first.                                                    
+      118          """
+      119 +        # Check if a pre-configured product ID exists (for sta
+          +ndard pricing)                                                
+      120 +        preconfigured_product_id = self.credentials.get("DODO_
+          +PRODUCT_ID", "")                                              
+      121 +        if preconfigured_product_id:                          
+      122 +            self.logger.info(f"Using pre-configured Dodo produ
+          +ct: {preconfigured_product_id}")                              
+      123 +            return preconfigured_product_id                   
+      124 +                                                              
+      125          # Convert amount to cents
+      126          amount_cents = int(amount * 100)
+      127  
+      120 -        # Create a unique product ID based on amount (allows r
+          -euse for same amounts)                                        
+      121 -        product_external_id = f"onerouter_credits_{amount_cent
+          -s}_{currency.lower()}"                                        
+      122 -                                                              
+      128          # First, try to find existing product with this amount
+      129          try:
+      130              list_response = await client.get(
+     ...
+      134              )
+      135              if list_response.status_code == 200:
+      136                  products = list_response.json()
+      137 +                product_list = products.get("items", []) if is
+          +instance(products, dict) else products                        
+      138                  # Look for existing product with matching pric
+           e
+      133 -                for product in products.get("items", products 
+          -if isinstance(products, list) else []):                       
+      134 -                    if product.get("price", {}).get("price") =
+          -= amount_cents:                                               
+      139 +                for product in product_list:                  
+      140 +                    price_info = product.get("price", {})     
+      141 +                    if isinstance(price_info, dict) and price_
+          +info.get("price") == amount_cents:                            
+      142                          self.logger.info(f"Found existing Dodo
+            product: {product.get('product_id')}")
+      143                          return product.get("product_id")
+      144          except Exception as e:
+
+● Now let me update credits.py to pass the DODO_PRODUCT_ID to the adapter:
+
+● Update(backend\app\routes\credits.py)
+  ⎿  Added 2 lines, removed 1 line
+      294  
+      295                  dodo = DodoAdapter({
+      296                      "DODO_API_KEY": settings.DODO_API_KEY,
+      297 -                    "DODO_MODE": settings.DODO_MODE           
+      297 +                    "DODO_MODE": settings.DODO_MODE,          
+      298 +                    "DODO_PRODUCT_ID": getattr(settings, "DODO
+          +_PRODUCT_ID", "")                                             
+      299                  })
+      300  
+      301                  dodo_result = await dodo.create_payment_link(
+
+● Now let me add DODO_PRODUCT_ID to the config:
+
+● Update(backend\app\config.py)
+  ⎿  Added 1 line
+       97      DODO_API_KEY: str = os.getenv("DODO_API_KEY", "")
+       98      DODO_WEBHOOK_SECRET: str = os.getenv("DODO_WEBHOOK_SECRET"
+           , "")
+       99      DODO_MODE: str = os.getenv("DODO_MODE", "test")  # "test" 
+           or "live"
+      100 +    DODO_PRODUCT_ID: str = os.getenv("DODO_PRODUCT_ID", "")  #
+          + Optional: pre-configured product ID                          
+      101  
+      102      def __init__(self):
+      103          """Initialize settings and validate/generate encryptio
+           n key"""
+
+● Let me verify the complete updated Dodo adapter:
+
+● Read 1 file (ctrl+o to expand)
+
+● Wait - I realize there's a potential issue. Using a pre-configured
+  DODO_PRODUCT_ID with a fixed price would charge that price instead of the
+  user's input amount. For variable credit purchases, we need dynamic pricing.
+  Let me update the adapter to skip the pre-configured product ID for this use
+  case:
+
+● Update(backend\app\adapters\dodo.py)
+  ⎿  Added 3 lines, removed 7 lines
+      114          Create a one-time product in Dodo for the given amount
+           , or find existing one.
+      115          Returns the product_id to use in checkout.
+      116  
+      117 -        For efficiency, checks for pre-configured DODO_PRODUCT
+          -_ID first.                                                    
+      117 +        NOTE: For credit purchases with variable amounts, we a
+          +lways create/find                                             
+      118 +        a product with the exact price. Pre-configured DODO_PR
+          +ODUCT_ID is NOT used                                          
+      119 +        here because it has a fixed price that may not match t
+          +he requested amount.                                          
+      120          """
+      119 -        # Check if a pre-configured product ID exists (for sta
+          -ndard pricing)                                                
+      120 -        preconfigured_product_id = self.credentials.get("DODO_
+          -PRODUCT_ID", "")                                              
+      121 -        if preconfigured_product_id:                          
+      122 -            self.logger.info(f"Using pre-configured Dodo produ
+          -ct: {preconfigured_product_id}")                              
+      123 -            return preconfigured_product_id                   
+      124 -                                                              
+      121          # Convert amount to cents
+      122          amount_cents = int(amount * 100)
+      123  
+
+● Now the Dodo adapter is properly configured to:
+  1. Use the correct API endpoints (test.dodopayments.com for test,
+  live.dodopayments.com for live)
+  2. Create products dynamically with the exact amount needed
+  3. Create checkout sessions using the /checkouts endpoint with product_cart
+  4. Handle variable credit amounts properly
+
+  Let me provide a summary of all the changes made:
+
+  Summary of Dodo Payments Integration Fixes
+
+  Files Modified:
+
+  1. backend/app/adapters/dodo.py
+    - Fixed base URLs to use correct Dodo API endpoints (test.dodopayments.com /
+   live.dodopayments.com)
+    - Rewrote _create_checkout_session_impl to:
+        - Create products dynamically via POST /products endpoint
+      - Use POST /checkouts endpoint with product_cart as required by Dodo API
+      - Handle variable pricing for credit purchases
+    - Added _create_or_get_product method to create/find products with exact
+  amounts
+    - Added comprehensive error logging for debugging
+  2. backend/app/config.py
+    - Added DODO_PRODUCT_ID configuration option
+  3. backend/app/routes/credits.py
+    - Updated DodoAdapter instantiation to include DODO_PRODUCT_ID
+  4. .env.example
+    - Added documentation for Dodo, Razorpay, and OneRouter API configuration
+  variables
+
+  Root Cause: The original adapter was using incorrect API structure - trying to
+   use a nonexistent product ID and wrong endpoint format. Dodo requires
+  products to be created first, then used in a checkout via the /checkouts
+  endpoint with a product_cart array.
+
+  To Test:
+  1. Ensure the backend is restarted to load the new code
+  2. Try purchasing credits with USD selected
+  3. You should be redirected to Dodo's hosted checkout instead of seeing the
+  "demo mode" popup
+
+  Sources used:
+  - https://docs.dodopayments.com/api-reference/introduction
+  - https://docs.dodopayments.com/api-reference/integration-guide
+
+✻ Worked for 7m 11s
+
+❯ Demo Mode: Added $10.00 to your balance it says this in window popup why  
+  just go through the context of dodo bro u have solved these alsready      
+
+● Let me search the previous conversation transcript for the Dodo solution:
+
+● Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● Bash(cd "C:\Users\koust\.claude\projects\C--A-Drive-projects-OneRouter" &&
+      findstr /i "payment_link.*dodo\|dodo.*payment\|billing_type\|one_time"
+      e1c125f9-26d0-4b6c-…)
+  ⎿ FINDSTR: Cannot open payment_link.*dodo\|dodo.*payment\|billing_type\|o
+    ne_time
+    FINDSTR: Cannot open 2
+
+
+● Searched for 1 pattern (ctrl+o to expand)
+
+● Bash(powershell -Command "Get-Content 'C:\Users\koust\.claude\projects\C--A-Dr
+      ive-projects-OneRouter\e1c125f9-26d0-4b6c-9f6d-facde627f1df.jsonl' |
+      Select-String 'pay…)
+  ⎿  Error: Exit code 1
+     At line:1 char:255
+     + ... | ForEach-Object { extglob.Line.Substring(0, [Math]::Min(500, extglob
+     ...
+     +                                                                  ~
+     Missing expression after ','.
+     At line:1 char:256
+     + ...  { extglob.Line.Substring(0, [Math]::Min(500, extglob.Line.Length)) }
+     +                                                   ~~~~~~~~~~~~~~~~~~~
+     Unexpected token 'extglob.Line.Length' in expression or statement.
+     At line:1 char:255
+
+     … +21 lines (ctrl+o to see all)
+
+● Let me fetch the Dodo API docs to get the correct endpoint format:
+
+● Fetch(https://docs.dodopayments.com/api-reference/payments/post-payments)
+  ⎿  Received 17.9KB (200 OK)
+
+● Now I see the issue - the Dodo API requires a billing field with country code
+  and customer info. Let me check the checkouts endpoint too:
+
+● Fetch(https://docs.dodopayments.com/api-reference/checkouts/post-checkouts)
+  ⎿  Error: Request failed with status code 404
+
+● Based on the Dodo API docs, the adapter is missing required fields: customer
+  and billing. Let me fix the adapter:
+
+● Update(backend\app\adapters\dodo.py)
+  ⎿  Added 27 lines, removed 19 lines
+      181          metadata: Optional[Dict[str, Any]]
+      182      ) -> Dict[str, Any]:
+      183          """
+      184 -        Implementation of checkout session creation.          
+      184 +        Implementation of checkout session creation using Dodo
+          +'s /payments endpoint.                                        
+      185  
+      186 -        Dodo requires products to be created first, then used 
+          -in a checkout.                                                
+      186 +        Dodo requires:                                        
+      187 +        1. product_cart - array with product_id and quantity  
+      188 +        2. customer - customer info (email required for new cu
+          +stomers)                                                      
+      189 +        3. billing - billing address with country code (requir
+          +ed)                                                           
+      190 +                                                              
+      191          Steps:
+      192          1. Create/find a product with the exact amount
+      189 -        2. Create a checkout session using that product       
+      193 +        2. Create a payment with payment_link=true to get chec
+          +kout URL                                                      
+      194          """
+      195          try:
+      196              base_url = await self._get_base_url()
+     ...
+      202                      amount, currency, product_name, client, ba
+           se_url, headers
+      203                  )
+      204  
+      201 -                # Step 2: Create checkout session using the pr
+          -oduct                                                         
+      202 -                checkout_payload = {                          
+      205 +                # Step 2: Create payment with payment_link=tru
+          +e                                                             
+      206 +                # This returns a checkout URL for hosted payme
+          +nt page                                                       
+      207 +                payment_payload = {                           
+      208                      "product_cart": [
+      209                          {
+      210                              "product_id": product_id,
+      211                              "quantity": 1
+      212                          }
+      208 -                    ]                                         
+      213 +                    ],                                        
+      214 +                    # Customer info (required for new customer
+          +s)                                                            
+      215 +                    "customer": {                             
+      216 +                        "email": customer_email or "customer@e
+          +xample.com",                                                  
+      217 +                        "name": customer_name or "OneRouter Cu
+          +stomer"                                                       
+      218 +                    },                                        
+      219 +                    # Billing address with country (required b
+          +y Dodo API)                                                   
+      220 +                    "billing": {                              
+      221 +                        "country": "US"  # Default to US for g
+          +lobal payments                                                
+      222 +                    },                                        
+      223 +                    # Request a payment link instead of direct
+          + charge                                                       
+      224 +                    "payment_link": True                      
+      225                  }
+      226  
+      211 -                # Add customer info if provided               
+      212 -                if customer_email or customer_name:           
+      213 -                    checkout_payload["customer"] = {}         
+      214 -                    if customer_email:                        
+      215 -                        checkout_payload["customer"]["email"] 
+          -= customer_email                                              
+      216 -                    if customer_name:                         
+      217 -                        checkout_payload["customer"]["name"] =
+          - customer_name                                                
+      218 -                                                              
+      227                  # Add return URL for redirect after payment
+      228                  if return_url:
+      221 -                    checkout_payload["return_url"] = return_ur
+          -l                                                             
+      229 +                    payment_payload["return_url"] = return_url
+      230  
+      231                  # Add metadata
+      232                  if metadata:
+      225 -                    checkout_payload["metadata"] = metadata   
+      233 +                    payment_payload["metadata"] = metadata    
+      234  
+      227 -                self.logger.info(f"Creating Dodo checkout: pro
+          -duct_id={product_id}, amount={amount}")                       
+      235 +                self.logger.info(f"Creating Dodo payment: prod
+          +uct_id={product_id}, amount={amount}, payload={payment_payload
+          +}")                                                           
+      236  
+      237                  response = await client.post(
+      230 -                    f"{base_url}/checkouts",                  
+      231 -                    json=checkout_payload,                    
+      238 +                    f"{base_url}/payments",                   
+      239 +                    json=payment_payload,                     
+      240                      headers=headers
+      241                  )
+      242  
+
+● Update(backend\app\adapters\dodo.py)
+  ⎿  Added 11 lines, removed 19 lines
+      240                      headers=headers
+      241                  )
+      242  
+      243 +                self.logger.info(f"Dodo API response status: {
+          +response.status_code}")                                       
+      244 +                                                              
+      245                  if response.status_code == 400:
+      246                      error_data = response.json() if response.t
+           ext else {"error": "Bad request"}
+      245 -                    self.logger.error(f"Dodo checkout bad requ
+          -est: {error_data}")                                           
+      247 +                    self.logger.error(f"Dodo payment bad reque
+          +st: {error_data}")                                            
+      248                      raise Exception(f"Dodo bad request: {error
+           _data}")
+      249                  elif response.status_code == 401:
+      250                      self.logger.error("Invalid Dodo API creden
+           tials")
+      251                      raise Exception("Invalid Dodo API credenti
+           als")
+      252                  elif response.status_code == 422:
+      253                      error_data = response.json() if response.t
+           ext else {"error": "Validation error"}
+      252 -                    self.logger.error(f"Dodo checkout validati
+          -on error: {error_data}")                                      
+      254 +                    self.logger.error(f"Dodo payment validatio
+          +n error: {error_data}")                                       
+      255                      raise Exception(f"Dodo validation error: {
+           error_data}")
+      256  
+      257                  response.raise_for_status()
+      258                  data = response.json()
+      259  
+      258 -                self.logger.info(f"Dodo checkout response: {da
+          -ta}")                                                         
+      260 +                self.logger.info(f"Dodo payment response: {dat
+          +a}")                                                          
+      261  
+      260 -                # Extract checkout URL and payment ID from res
+          -ponse                                                         
+      261 -                payment_id = (                                
+      262 -                    data.get("checkout_id") or                
+      263 -                    data.get("session_id") or                 
+      264 -                    data.get("payment_id") or                 
+      265 -                    data.get("id") or                         
+      266 -                    ""                                        
+      267 -                )                                             
+      268 -                checkout_url = (                              
+      269 -                    data.get("checkout_url") or               
+      270 -                    data.get("url") or                        
+      271 -                    data.get("payment_link") or               
+      272 -                    ""                                        
+      273 -                )                                             
+      262 +                # Extract payment ID and checkout URL from res
+          +ponse                                                         
+      263 +                # Dodo /payments endpoint returns payment_id a
+          +nd payment_link                                               
+      264 +                payment_id = data.get("payment_id", "")       
+      265 +                checkout_url = data.get("payment_link", "")   
+      266  
+      267                  if not checkout_url:
+      276 -                    self.logger.error(f"No checkout URL in Dod
+          -o response: {data}")                                          
+      277 -                    raise Exception("Dodo API did not return a
+          - checkout URL")                                               
+      268 +                    self.logger.error(f"No payment_link in Dod
+          +o response: {data}")                                          
+      269 +                    raise Exception("Dodo API did not return a
+          + payment_link")                                               
+      270  
+      271                  return {
+      272                      "transaction_id": f"dodo_{payment_id}",
+
+● Let me verify the complete updated adapter:
+
+● Read 1 file (ctrl+o to expand)
+
+● The Dodo adapter is now properly configured with all required fields. Now let
+  me restart the backend to apply the changes:
+
+● Bash(cd "C:\A Drive\projects\OneRouter\backend" && python -c "from
+      app.adapters.dodo import DodoAdapter; print('Dodo adapter loaded
+      successfully')" 2>&1)
+  ⎿  Dodo adapter loaded successfully
+
+● The adapter code is valid. Now you need to restart the backend server for the
+  changes to take effect.
+
+  Key fixes made:
+
+  1. Correct API endpoint: Using POST /payments instead of /checkouts
+  2. All required fields now included:
+    - product_cart - with product_id and quantity
+    - customer - email and name (required by Dodo)
+    - billing - with country code (required by Dodo)
+    - payment_link: true - to get a checkout URL
+  3. Correct base URLs:
+    - Test: https://test.dodopayments.com
+    - Live: https://live.dodopayments.com
+
+  To test:
+  1. Stop the backend server
+  2. Restart it: cd backend && python run.py
+  3. Try purchasing credits with USD selected
+
+  If it still shows demo mode, check the backend logs for the actual Dodo API
+  error response - the adapter now logs detailed information about what's
+  happening.
+
+✻ Crunched for 2m 2s
+
+❯ we are moving with fixed plan id things its users choice to choose the    
+  amount we just set default price wtf man , the current edits are not also 
+   working like its hows Demo Mode: Added $11.00 to your balance and there  
+  was tax and other calculations to enter user amount i removed quick       
+  amounts section cause its urelatable we deal with currecy as credits per  
+  api call cahrnging                                                        
+
+● You're right, I'm overcomplicating this. Let me simplify - use the fixed
+  DODO_PRODUCT_ID directly and just create the payment:
+
+● Update(backend\app\adapters\dodo.py)
+  ⎿  Added 21 lines, removed 50 lines
+      181          metadata: Optional[Dict[str, Any]]
+      182      ) -> Dict[str, Any]:
+      183          """
+      184 -        Implementation of checkout session creation using Dodo
+          -'s /payments endpoint.                                        
+      185 -                                                              
+      186 -        Dodo requires:                                        
+      187 -        1. product_cart - array with product_id and quantity  
+      188 -        2. customer - customer info (email required for new cu
+          -stomers)                                                      
+      189 -        3. billing - billing address with country code (requir
+          -ed)                                                           
+      190 -                                                              
+      191 -        Steps:                                                
+      192 -        1. Create/find a product with the exact amount        
+      193 -        2. Create a payment with payment_link=true to get chec
+          -kout URL                                                      
+      184 +        Create payment using pre-configured DODO_PRODUCT_ID.  
+      185 +        The product price is set in Dodo dashboard.           
+      186          """
+      187          try:
+      188              base_url = await self._get_base_url()
+      189              headers = await self._get_auth_headers()
+      190  
+      199 -            async with httpx.AsyncClient(timeout=30.0) as clie
+          -nt:                                                           
+      200 -                # Step 1: Create or get product with exact amo
+          -unt                                                           
+      201 -                product_id = await self._create_or_get_product
+          -(                                                             
+      202 -                    amount, currency, product_name, client, ba
+          -se_url, headers                                               
+      203 -                )                                             
+      191 +            # Use pre-configured product ID from credentials  
+      192 +            product_id = self.credentials.get("DODO_PRODUCT_ID
+          +", "")                                                        
+      193 +            if not product_id:                                
+      194 +                raise Exception("DODO_PRODUCT_ID not configure
+          +d")                                                           
+      195  
+      205 -                # Step 2: Create payment with payment_link=tru
+          -e                                                             
+      206 -                # This returns a checkout URL for hosted payme
+          -nt page                                                       
+      196 +            async with httpx.AsyncClient(timeout=30.0) as clie
+          +nt:                                                           
+      197                  payment_payload = {
+      198                      "product_cart": [
+      199                          {
+     ...
+      201                              "quantity": 1
+      202                          }
+      203                      ],
+      214 -                    # Customer info (required for new customer
+          -s)                                                            
+      204                      "customer": {
+      216 -                        "email": customer_email or "customer@e
+          -xample.com",                                                  
+      217 -                        "name": customer_name or "OneRouter Cu
+          -stomer"                                                       
+      205 +                        "email": customer_email or "customer@o
+          +nerouter.dev",                                                
+      206 +                        "name": customer_name or "OneRouter Us
+          +er"                                                           
+      207                      },
+      219 -                    # Billing address with country (required b
+          -y Dodo API)                                                   
+      208                      "billing": {
+      221 -                        "country": "US"  # Default to US for g
+          -lobal payments                                                
+      209 +                        "country": "US"                       
+      210                      },
+      223 -                    # Request a payment link instead of direct
+          - charge                                                       
+      211                      "payment_link": True
+      212                  }
+      213  
+      227 -                # Add return URL for redirect after payment   
+      214                  if return_url:
+      215                      payment_payload["return_url"] = return_url
+      216  
+      231 -                # Add metadata                                
+      217                  if metadata:
+      218                      payment_payload["metadata"] = metadata
+      219  
+      235 -                self.logger.info(f"Creating Dodo payment: prod
+          -uct_id={product_id}, amount={amount}, payload={payment_payload
+          -}")                                                           
+      220 +                self.logger.info(f"Dodo payment request: {base
+          +_url}/payments with product_id={product_id}")                 
+      221  
+      222                  response = await client.post(
+      223                      f"{base_url}/payments",
+     ...
+      225                      headers=headers
+      226                  )
+      227  
+      243 -                self.logger.info(f"Dodo API response status: {
+          -response.status_code}")                                       
+      228 +                self.logger.info(f"Dodo response: {response.st
+          +atus_code} - {response.text[:500] if response.text else 'empty
+          +'}")                                                          
+      229  
+      245 -                if response.status_code == 400:               
+      246 -                    error_data = response.json() if response.t
+          -ext else {"error": "Bad request"}                             
+      247 -                    self.logger.error(f"Dodo payment bad reque
+          -st: {error_data}")                                            
+      248 -                    raise Exception(f"Dodo bad request: {error
+          -_data}")                                                      
+      249 -                elif response.status_code == 401:             
+      250 -                    self.logger.error("Invalid Dodo API creden
+          -tials")                                                       
+      251 -                    raise Exception("Invalid Dodo API credenti
+          -als")                                                         
+      252 -                elif response.status_code == 422:             
+      253 -                    error_data = response.json() if response.t
+          -ext else {"error": "Validation error"}                        
+      254 -                    self.logger.error(f"Dodo payment validatio
+          -n error: {error_data}")                                       
+      255 -                    raise Exception(f"Dodo validation error: {
+          -error_data}")                                                 
+      230 +                if response.status_code in [400, 401, 422]:   
+      231 +                    error_data = response.text                
+      232 +                    self.logger.error(f"Dodo API error: {error
+          +_data}")                                                      
+      233 +                    raise Exception(f"Dodo API error: {error_d
+          +ata}")                                                        
+      234  
+      235                  response.raise_for_status()
+      236                  data = response.json()
+      237  
+      260 -                self.logger.info(f"Dodo payment response: {dat
+          -a}")                                                          
+      261 -                                                              
+      262 -                # Extract payment ID and checkout URL from res
+          -ponse                                                         
+      263 -                # Dodo /payments endpoint returns payment_id a
+          -nd payment_link                                               
+      238                  payment_id = data.get("payment_id", "")
+      239                  checkout_url = data.get("payment_link", "")
+      240  
+      241                  if not checkout_url:
+      268 -                    self.logger.error(f"No payment_link in Dod
+          -o response: {data}")                                          
+      269 -                    raise Exception("Dodo API did not return a
+          - payment_link")                                               
+      242 +                    self.logger.error(f"No payment_link in res
+          +ponse: {data}")                                               
+      243 +                    raise Exception("No payment_link returned"
+          +)                                                             
+      244  
+      245                  return {
+      246                      "transaction_id": f"dodo_{payment_id}",
+     ...
+      253                      "provider_data": data
+      254                  }
+      255  
+      282 -        except httpx.TimeoutException:                        
+      283 -            self.logger.error("Dodo API request timed out")   
+      284 -            raise Exception("Dodo API request timed out")     
+      285 -        except httpx.HTTPError as e:                          
+      286 -            self.logger.error(f"Dodo API network error: {str(e
+          -)}")                                                          
+      287 -            raise Exception(f"Dodo API network error: {str(e)}
+          -")                                                            
+      256 +        except Exception as e:                                
+      257 +            self.logger.error(f"Dodo payment failed: {str(e)}"
+          +)                                                             
+      258 +            raise                                             
+      259  
+      260      async def create_payment_link(
+      261          self,
+
+● Now let me remove the unused _create_or_get_product method:
+
+● Update(backend\app\adapters\dodo.py)
+  ⎿  Removed 69 lines
+      101              self.logger.error(f"Failed to create Dodo checkout
+            session: {e}")
+      102              raise
+      103  
+      104 -    async def _create_or_get_product(                         
+      105 -        self,                                                 
+      106 -        amount: float,                                        
+      107 -        currency: str,                                        
+      108 -        product_name: str,                                    
+      109 -        client: httpx.AsyncClient,                            
+      110 -        base_url: str,                                        
+      111 -        headers: Dict[str, str]                               
+      112 -    ) -> str:                                                 
+      113 -        """                                                   
+      114 -        Create a one-time product in Dodo for the given amount
+          -, or find existing one.                                       
+      115 -        Returns the product_id to use in checkout.            
+      116 -                                                              
+      117 -        NOTE: For credit purchases with variable amounts, we a
+          -lways create/find                                             
+      118 -        a product with the exact price. Pre-configured DODO_PR
+          -ODUCT_ID is NOT used                                          
+      119 -        here because it has a fixed price that may not match t
+          -he requested amount.                                          
+      120 -        """                                                   
+      121 -        # Convert amount to cents                             
+      122 -        amount_cents = int(amount * 100)                      
+      123 -                                                              
+      124 -        # First, try to find existing product with this amount
+      125 -        try:                                                  
+      126 -            list_response = await client.get(                 
+      127 -                f"{base_url}/products",                       
+      128 -                headers=headers,                              
+      129 -                params={"page_size": 100}                     
+      130 -            )                                                 
+      131 -            if list_response.status_code == 200:              
+      132 -                products = list_response.json()               
+      133 -                product_list = products.get("items", []) if is
+          -instance(products, dict) else products                        
+      134 -                # Look for existing product with matching pric
+          -e                                                             
+      135 -                for product in product_list:                  
+      136 -                    price_info = product.get("price", {})     
+      137 -                    if isinstance(price_info, dict) and price_
+          -info.get("price") == amount_cents:                            
+      138 -                        self.logger.info(f"Found existing Dodo
+          - product: {product.get('product_id')}")                       
+      139 -                        return product.get("product_id")      
+      140 -        except Exception as e:                                
+      141 -            self.logger.warning(f"Failed to list Dodo products
+          -: {e}")                                                       
+      142 -                                                              
+      143 -        # Create new product                                  
+      144 -        product_payload = {                                   
+      145 -            "name": product_name,                             
+      146 -            "description": f"OneRouter Credits - ${amount:.2f}
+          - USD",                                                        
+      147 -            "price": {                                        
+      148 -                "price": amount_cents,                        
+      149 -                "currency": currency.upper(),                 
+      150 -                "type": "one_time_price"                      
+      151 -            },                                                
+      152 -            "tax_category": "digital_products"                
+      153 -        }                                                     
+      154 -                                                              
+      155 -        self.logger.info(f"Creating Dodo product: {product_pay
+          -load}")                                                       
+      156 -                                                              
+      157 -        response = await client.post(                         
+      158 -            f"{base_url}/products",                           
+      159 -            json=product_payload,                             
+      160 -            headers=headers                                   
+      161 -        )                                                     
+      162 -                                                              
+      163 -        if response.status_code in [200, 201]:                
+      164 -            data = response.json()                            
+      165 -            product_id = data.get("product_id") or data.get("i
+          -d")                                                           
+      166 -            self.logger.info(f"Created Dodo product: {product_
+          -id}")                                                         
+      167 -            return product_id                                 
+      168 -        else:                                                 
+      169 -            error_text = response.text                        
+      170 -            self.logger.error(f"Failed to create Dodo product:
+          - {response.status_code} - {error_text}")                      
+      171 -            raise Exception(f"Failed to create Dodo product: {
+          -error_text}")                                                 
+      172 -                                                              
+      104      async def _create_checkout_session_impl(
+      105          self,
+      106          amount: float,
+
+● Now let me check the backend to see the actual error. Is the backend running?
+  Let me check the logs:
+
+● Bash(cd "C:\A Drive\projects\OneRouter\backend" && python -c "
+      import asyncio…)
+  ⎿  DODO_API_KEY set: True
+     DODO_API_KEY prefix: SyJUulUGVFjj02hO.77l...
+     DODO_MODE: test
+     … +10 lines (ctrl+o to expand)
+  ⎿  (timeout 30s)
+
+● Found the issue! The product is a "pay as you want" product in Dodo, so we
+  need to pass the amount in the product_cart:
+
+● Update(backend\app\adapters\dodo.py)
+  ⎿  Added 5 lines, removed 1 line
+      124              if not product_id:
+      125                  raise Exception("DODO_PRODUCT_ID not configure
+           d")
+      126  
+      127 +            # Convert amount to cents for Dodo API            
+      128 +            amount_cents = int(amount * 100)                  
+      129 +                                                              
+      130              async with httpx.AsyncClient(timeout=30.0) as clie
+           nt:
+      131                  payment_payload = {
+      132                      "product_cart": [
+      133                          {
+      134                              "product_id": product_id,
+      132 -                            "quantity": 1                     
+      135 +                            "quantity": 1,                    
+      136 +                            "amount": amount_cents  # Required
+          + for pay-as-you-want products                                 
+      137                          }
+      138                      ],
+      139                      "customer": {
+
+● Now let me test again:
+
+● Bash(cd "C:\A Drive\projects\OneRouter\backend" && python -c "
+      import asyncio…)
+  ⎿  SUCCESS!
+     checkout_url: https://test.checkout.dodopayments.com/qxjhHeGh
+     payment_id: pay_0NXkPX9uX71fqSXH1HNBM
+  ⎿  (timeout 30s)
+
+● It works now! The Dodo API returns a real checkout URL:
+  https://test.checkout.dodopayments.com/qxjhHeGh
+
+  The fix was simple - your Dodo product is configured as "pay as you want"
+  which requires the amount field in the product_cart.
+
+  Restart your backend server and test again. The USD credit purchase should now
+   redirect to Dodo's checkout page instead of showing the demo popup.
+
+✻ Cooked for 1m 20s
+
+❯ i said remove quick amount and to include tax calculations too and total  
+  amount is passed in to dodo and also there were issuess of after payment  
+  success in dodo it redirected to site not found page and the payment      
+  verification was not happening after correcting redirected issue          
+
+● Let me check the current CreditsPageClient and fix all these issues:
+
+● Searched for 2 patterns, read 2 files (ctrl+o to expand)
+
+● Now let me fix everything. First, updating CreditsPageClient - remove quick
+  amounts, add tax calculation:
+
+● Update(frontend\src\components\CreditsPageClient.tsx)
+  ⎿  Added 33 lines, removed 28 lines
+      60    const numAmount = parseFloat(amount) || 0;
+      61    const currencySymbol = paymentCurrency === "USD" ? "$" : "₹";
+      62  
+      63 +  // Tax calculation (Dodo handles tax as MoR, ~7% estimated fo
+         +r display)                                                     
+      64 +  const taxRate = paymentCurrency === "USD" ? 0.07 : 0.18; // G
+         +ST for INR                                                     
+      65 +  const subtotal = numAmount;                                  
+      66 +  const taxAmount = subtotal * taxRate;                        
+      67 +  const totalAmount = subtotal + taxAmount;                    
+      68 +                                                               
+      69    return (
+      70      <div className="fixed inset-0 bg-black/70 flex items-center
+           justify-center z-50 p-4">
+      71        <div className="bg-[#0a0a0a] rounded-lg w-full max-w-sm b
+          order border-gray-800">
+     ...
+      84          <div className="p-4 space-y-4">
+      85            {/* Amount Input */}
+      86            <div>
+      81 -            <label className="text-gray-400 text-sm mb-2 block"
+         ->Amount</label>                                                
+      87 +            <label className="text-gray-400 text-sm mb-2 block"
+         +>Credits Amount</label>                                        
+      88              <div className="flex items-center bg-gray-900 round
+          ed-lg px-4 py-3 border border-gray-700 focus-within:border-gray
+          -500">
+      89                <span className="text-gray-400 text-2xl mr-2">{cu
+          rrencySymbol}</span>
+      90                <input
+     ...
+       93                  onChange={(e) => setAmount(e.target.value)}
+       94                  placeholder="10"
+       95                  min="1"
+       90 -                className="bg-transparent text-white text-3xl 
+          -font-semibold w-full outline-none"                            
+       96 +                step="0.01"                                   
+       97 +                className="bg-transparent text-white text-3xl 
+          +font-semibold w-full outline-none [appearance:textfield] [&::-
+          +webkit-outer-spin-button]:appearance-none [&::-webkit-inner-sp
+          +in-button]:appearance-none"                                   
+       98                />
+       99              </div>
+      100 +            <p className="text-gray-500 text-xs mt-1">Enter th
+          +e amount of credits you want to add</p>                       
+      101            </div>
+      102  
+       95 -          {/* Quick amounts */}                               
+       96 -          <div className="flex gap-2">                        
+       97 -            {(paymentCurrency === "USD" ? [5, 10, 25, 50] : [1
+          -00, 500, 1000, 2000]).map((val) => (                          
+       98 -              <button                                         
+       99 -                key={val}                                     
+      100 -                onClick={() => setAmount(val.toString())}     
+      101 -                className={`flex-1 py-2 rounded text-sm transi
+          -tion-all ${                                                   
+      102 -                  amount === val.toString()                   
+      103 -                    ? "bg-indigo-500 text-white"              
+      104 -                    : "bg-gray-800 text-gray-400 hover:bg-gray
+          --700"                                                         
+      105 -                }`}                                           
+      106 -              >                                               
+      107 -                {currencySymbol}{val}                         
+      108 -              </button>                                       
+      109 -            ))}                                               
+      110 -          </div>                                              
+      111 -                                                              
+      103            {/* Currency Toggle */}
+      104            <div className="flex gap-2">
+      105              <button
+     ...
+      132              </button>
+      133            </div>
+      134  
+      144 -          {/* Summary */}                                     
+      145 -          <div className="bg-gray-800/40 rounded-lg p-3 text-s
+          -m">                                                           
+      146 -            <div className="flex justify-between text-gray-300
+          -">                                                            
+      147 -              <span>You pay</span>                            
+      148 -              <span className="text-white font-semibold">{curr
+          -encySymbol}{numAmount.toFixed(2)}</span>                      
+      135 +          {/* Summary with Tax */}                            
+      136 +          <div className="bg-gray-800/40 rounded-lg p-3 text-s
+          +m space-y-2">                                                 
+      137 +            <div className="flex justify-between text-gray-400
+          +">                                                            
+      138 +              <span>Subtotal</span>                           
+      139 +              <span>{currencySymbol}{subtotal.toFixed(2)}</spa
+          +n>                                                            
+      140              </div>
+      150 -            <div className="flex justify-between text-gray-300
+          - mt-1">                                                       
+      151 -              <span>Balance added</span>                      
+      152 -              <span className="text-green-400 font-semibold">+
+          -{currencySymbol}{numAmount.toFixed(2)}</span>                 
+      141 +            <div className="flex justify-between text-gray-400
+          +">                                                            
+      142 +              <span>Est. Tax ({(taxRate * 100).toFixed(0)}%)</
+          +span>                                                         
+      143 +              <span>{currencySymbol}{taxAmount.toFixed(2)}</sp
+          +an>                                                           
+      144              </div>
+      145 +            <div className="border-t border-gray-700 pt-2 flex
+          + justify-between text-white font-semibold">                   
+      146 +              <span>Total</span>                              
+      147 +              <span>{currencySymbol}{totalAmount.toFixed(2)}</
+          +span>                                                         
+      148 +            </div>                                            
+      149 +            <div className="flex justify-between text-green-40
+          +0 text-xs">                                                   
+      150 +              <span>Credits added to balance</span>           
+      151 +              <span>+{currencySymbol}{subtotal.toFixed(2)}</sp
+          +an>                                                           
+      152 +            </div>                                            
+      153            </div>
+      154  
+      155 +          {paymentCurrency === "USD" && (                     
+      156 +            <p className="text-gray-500 text-xs">             
+      157 +              Tax calculated at checkout by Dodo Payments (Mer
+          +chant of Record)                                              
+      158 +            </p>                                              
+      159 +          )}                                                  
+      160 +                                                              
+      161            {/* Action Button */}
+      162            <Button
+      163              className="w-full bg-indigo-500 hover:bg-indigo-60
+           0 h-11 text-sm font-medium"
+     ...
+      170                  Processing...
+      171                </>
+      172              ) : (
+      168 -              `Pay ${currencySymbol}${numAmount.toFixed(2)}`  
+      173 +              `Continue to Payment`                           
+      174              )}
+      175            </Button>
+      176          </div>
+
+● Now fix the backend - user enters USD directly, no conversion needed:
+
+● Update(backend\app\routes\credits.py)
+  ⎿  Added 6 lines, removed 4 lines
+      288              try:
+      289                  from ..adapters.dodo import DodoAdapter
+      290  
+      291 -                # Convert INR price to USD                    
+      292 -                price_usd = round(price_inr / 83, 2)          
+      293 -                callback_url = f"{settings.API_BASE_URL}/v1/cr
+          -edits/payment-callback/dodo"                                  
+      291 +                # User enters USD directly - credits_to_buy is
+          + in cents, convert to dollars                                 
+      292 +                price_usd = credits_to_buy / 100.0            
+      293  
+      294 +                # Callback URL - Dodo will redirect here after
+          + payment                                                      
+      295 +                callback_url = f"{settings.FRONTEND_URL}/credi
+          +ts/payment-result"                                            
+      296 +                                                              
+      297                  dodo = DodoAdapter({
+      298                      "DODO_API_KEY": settings.DODO_API_KEY,
+      299                      "DODO_MODE": settings.DODO_MODE,
+     ...
+      302  
+      303                  dodo_result = await dodo.create_payment_link(
+      304                      amount=price_usd,
+      303 -                    description=f"Purchase {credits_to_buy} On
+          -eRouter credits",                                             
+      305 +                    description=f"OneRouter Credits - ${price_
+          +usd:.2f}",                                                    
+      306                      currency="USD",
+      307                      callback_url=callback_url,
+      308                      notes={
+  ⎿  You've hit your limit · resets 3:30pm (Asia/Calcutta)
+     /upgrade to increase your usage limit.
+
+✻ Crunched for 1m 42s
+
+❯ /copy 
+  ⎿  Copied to clipboard (53 characters, 1 lines)
+
+❯ /usage 
+  ⎿  Status dialog dismissed

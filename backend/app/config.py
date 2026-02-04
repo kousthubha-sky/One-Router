@@ -29,8 +29,9 @@ class Settings:
     # Clerk Authentication
     CLERK_SECRET_KEY: str = os.getenv("CLERK_SECRET_KEY", "")
 
-    # Frontend
-    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    # Frontend - use PUBLIC_FRONTEND_URL if available, fallback to FRONTEND_URL
+    PUBLIC_FRONTEND_URL: str = os.getenv("PUBLIC_FRONTEND_URL", "").strip()
+    FRONTEND_URL: str = PUBLIC_FRONTEND_URL or os.getenv("FRONTEND_URL", "http://localhost:3000")
     API_HOST: str = os.getenv("API_HOST", "0.0.0.0")
     API_PORT: int = int(os.getenv("API_PORT", "8000"))
     API_BASE_URL: str = os.getenv("API_BASE_URL", "http://localhost:8000")
@@ -97,6 +98,7 @@ class Settings:
     DODO_API_KEY: str = os.getenv("DODO_API_KEY", "")
     DODO_WEBHOOK_SECRET: str = os.getenv("DODO_WEBHOOK_SECRET", "")
     DODO_MODE: str = os.getenv("DODO_MODE", "test")  # "test" or "live"
+    DODO_PRODUCT_ID: str = os.getenv("DODO_PRODUCT_ID", "")
 
     def __init__(self):
         """Initialize settings and validate/generate encryption key"""

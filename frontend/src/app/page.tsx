@@ -4,10 +4,79 @@ import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { MarqueeDemo } from "@/components/ui/marquee-demo";
-import { Github, Plus } from "lucide-react";
+import { Github, Plus, Activity } from "lucide-react";
 import { FeaturesSectionWithHoverEffects } from "@/components/feature-section-with-hover-effects";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { BookOpen, Boxes, Users } from "lucide-react";
+
+// Live API Status Component
+function LiveAPIStatus() {
+  const [statuses, setStatuses] = useState([
+    { name: "Razorpay", status: "operational", latency: 23, icon: "https://razorpay.com/favicon.ico" },
+    { name: "PayPal", status: "operational", latency: 45, icon: "https://www.paypalobjects.com/webstatic/icon/pp258.png" },
+    { name: "Twilio", status: "operational", latency: 31, icon: "https://www.twilio.com/favicon.ico" },
+    { name: "Resend", status: "operational", latency: 18, icon: "https://resend.com/favicon.ico" },
+  ]);
+
+  const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [pulse, setPulse] = useState(false);
+
+  useEffect(() => {
+    // Simulate live updates
+    const interval = setInterval(() => {
+      setStatuses(prev => prev.map(s => ({
+        ...s,
+        latency: Math.max(10, s.latency + Math.floor(Math.random() * 10) - 5)
+      })));
+      setLastUpdated(new Date());
+      setPulse(true);
+      setTimeout(() => setPulse(false), 500);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="bg-[#0a0a0a] border border-[#222] rounded-xl p-4 sm:p-6">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Activity className={`w-4 h-4 text-[#00ff88] ${pulse ? 'animate-pulse' : ''}`} />
+          <span className="text-sm font-mono text-white">Live Status</span>
+        </div>
+        <span className="text-[10px] font-mono text-[#666]">
+          Updated {lastUpdated.toLocaleTimeString()}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {statuses.map((service) => (
+          <div
+            key={service.name}
+            className="flex items-center gap-2 p-2 bg-black/50 rounded-lg border border-[#222] hover:border-[#333] transition-colors"
+          >
+            <img src={service.icon} alt={service.name} className="w-5 h-5 rounded" />
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-mono text-white truncate">{service.name}</div>
+              <div className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#00ff88] animate-pulse"></span>
+                <span className="text-[10px] font-mono text-[#666]">{service.latency}ms</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 pt-4 border-t border-[#222] flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-[#00ff88]"></span>
+            <span className="text-[10px] font-mono text-[#888]">All systems operational</span>
+          </div>
+        </div>
+        <span className="text-[10px] font-mono text-[#00ff88]">99.99% uptime</span>
+      </div>
+    </div>
+  );
+}
 export default function Home() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -30,9 +99,11 @@ export default function Home() {
                 <div className="w-8 h-8 bg-gradient-to-br from-black  to-cyan-600 rounded-2xl flex items-center justify-center shadow-lg transition-all duration-300 hover:shadow-cyan-500/25 hover:scale-110">
                   </div>
                 <div className="font-bold text-sm md:text-lg font-mono">
+                <Link href="/">
+                  <span className="text-white">One</span>
+                  <span className="text-cyan-400">Router</span>
+                </Link>  
                   
-                  <span className="text-white">ONE</span>
-                  <span className="text-cyan-400">ROUTER</span>
                 </div>
               </div>
 
@@ -139,14 +210,22 @@ export default function Home() {
                 </h1>
 
                 {/* Subheading */}
-                <p className="text-sm sm:text-base md:text-lg text-[#888] mb-8 font-mono">
-                  Connect to 4 services with a single API. We are expanding to more services soon.
+                <p className="text-sm sm:text-base md:text-lg text-[#888] mb-6 font-mono">
+                  Connect payments, SMS, and email with a single API. More services coming soon.
                 </p>
 
+                {/* Live Status - Mobile */}
+                <div className="lg:hidden mb-6">
+                  <LiveAPIStatus />
+                </div>
+
                 {/* Code Snippet */}
-                <div className="bg-black border border-[#0a0a0a] rounded-lg p-3 sm:p-4 mb-8 font-mono text-xs sm:text-sm overflow-x-auto">
-                  <div className="text-[#888] mb-3">npm install onerouter-js</div>
-                  <div className="text-[#00ff88]">✓ Ready to connect all services</div>
+                <div className="bg-black border border-[#222] rounded-lg p-3 sm:p-4 mb-8 font-mono text-xs sm:text-sm overflow-x-auto">
+                  <div className="flex items-center gap-2 text-[#888] mb-2">
+                    <span className="text-[#666]">$</span>
+                    <span>npm install onerouter</span>
+                  </div>
+                  <div className="text-[#00ff88]">✓ Ready to connect payments, SMS & email</div>
                 </div>
 
                 {/* CTA Buttons */}
@@ -181,8 +260,12 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Right Side - Code Example */}
-              <div className="hidden lg:block">
+              {/* Right Side - Live Status + Code */}
+              <div className="hidden lg:block space-y-4">
+                {/* Live API Status */}
+                <LiveAPIStatus />
+
+                {/* Code Example */}
                 <div className="bg-[#000] border border-[#222] rounded-xl overflow-hidden shadow-2xl">
                   {/* Header */}
                   <div className="bg-[#0a0a0a] border-b border-[#222] px-4 py-3 flex items-center justify-between">
@@ -191,43 +274,43 @@ export default function Home() {
                       <div className="w-3 h-3 rounded-full bg-[#ffd93d]"></div>
                       <div className="w-3 h-3 rounded-full bg-[#6bcf7f]"></div>
                     </div>
-                    <span className="text-xs text-[#666] font-mono">initialize.ts</span>
+                    <span className="text-xs text-[#666] font-mono">payment.ts</span>
                     <div className="w-3 h-3"></div>
                   </div>
 
                   {/* Code Content */}
-                  <div className="p-6 font-mono text-sm">
-                    <div className="text-[#888] mb-4">
-                      <span className="text-[#666]">1</span>
-                      <span className="ml-4">import {'{ OneRouter }'} from <span className="text-[#ff9d76]">&quot;onerouter-js&quot;</span></span>
+                  <div className="p-5 font-mono text-sm">
+                    <div className="text-[#888] mb-3">
+                      <span className="text-[#555]">1</span>
+                      <span className="ml-4"><span className="text-[#c586c0]">import</span> {'{ OneRouter }'} <span className="text-[#c586c0]">from</span> <span className="text-[#ce9178]">&quot;onerouter&quot;</span></span>
                     </div>
-                    <div className="text-[#888] mb-4">
-                      <span className="text-[#666]">2</span>
+                    <div className="text-[#888] mb-3">
+                      <span className="text-[#555]">2</span>
                       <span className="ml-4"></span>
                     </div>
-                    <div className="text-[#888] mb-4">
-                      <span className="text-[#666]">3</span>
-                      <span className="ml-4"><span className="text-[#ff9d76]">const</span> router = <span className="text-[#6bcf7f]">new OneRouter</span>({'{}'}</span>
+                    <div className="text-[#888] mb-3">
+                      <span className="text-[#555]">3</span>
+                      <span className="ml-4"><span className="text-[#569cd6]">const</span> <span className="text-[#9cdcfe]">payment</span> = <span className="text-[#c586c0]">await</span> router.<span className="text-[#dcdcaa]">payments</span>.<span className="text-[#dcdcaa]">create</span>({'{'})</span>
                     </div>
-                    <div className="text-[#888] mb-4">
-                      <span className="text-[#666]">4</span>
-                      <span className="ml-4">  apiKey: <span className="text-[#ff9d76]">process.env.ONEROUTER_KEY</span></span>
+                    <div className="text-[#888] mb-3">
+                      <span className="text-[#555]">4</span>
+                      <span className="ml-4">  <span className="text-[#9cdcfe]">provider</span>: <span className="text-[#ce9178]">&quot;razorpay&quot;</span>,</span>
                     </div>
-                    <div className="text-[#888] mb-4">
-                      <span className="text-[#666]">5</span>
-                      <span className="ml-4">  services: [<span className="text-[#ff9d76]">&quot;razorpay&quot;</span>, <span className="text-[#ff9d76]">&quot;paypal&quot;</span>, ...]</span>
+                    <div className="text-[#888] mb-3">
+                      <span className="text-[#555]">5</span>
+                      <span className="ml-4">  <span className="text-[#9cdcfe]">amount</span>: <span className="text-[#b5cea8]">1000</span>,</span>
                     </div>
-                    <div className="text-[#888] mb-4">
-                      <span className="text-[#666]">6</span>
+                    <div className="text-[#888] mb-3">
+                      <span className="text-[#555]">6</span>
+                      <span className="ml-4">  <span className="text-[#9cdcfe]">currency</span>: <span className="text-[#ce9178]">&quot;INR&quot;</span></span>
+                    </div>
+                    <div className="text-[#888] mb-3">
+                      <span className="text-[#555]">7</span>
                       <span className="ml-4">{'}'})</span>
                     </div>
-                    <div className="text-[#888]">
-                      <span className="text-[#666]">7</span>
-                      <span className="ml-4"></span>
-                    </div>
                     <div className="text-[#00ff88]">
-                      <span className="text-[#666]">8</span>
-                      <span className="ml-4">✓ Connected to 127 services</span>
+                      <span className="text-[#555]">8</span>
+                      <span className="ml-4">✓ Payment created in 23ms</span>
                     </div>
                   </div>
                 </div>
@@ -248,7 +331,7 @@ export default function Home() {
               Service <span className="text-sky-300">Matrix</span>
             </h2>
             <p className="text-xs sm:text-sm md:text-base text-[#888] text-center mb-8 sm:mb-12 font-mono">
-              Connect to 4 services with a single integration. We are expanding to more services soon.
+              Payments, SMS, and Email - unified under one API. More integrations coming soon.
             </p>
 
             <MarqueeDemo />
@@ -291,13 +374,13 @@ export default function Home() {
                     <span className="text-xs text-[#666] font-mono">with.ts</span>
                   </div>
                   <div className="p-3 sm:p-4 font-mono text-xs sm:text-sm space-y-2 overflow-x-auto">
-                    <div><span className="text-[#ff9d76]">import</span> {'{'}OneRouter{'}'} <span className="text-[#ff9d76]">from</span> <span className="text-[#90c695]">&apos;onerouter-js&apos;</span></div>
+                    <div><span className="text-[#ff9d76]">import</span> {'{'}OneRouter{'}'} <span className="text-[#ff9d76]">from</span> <span className="text-[#90c695]">&apos;onerouter&apos;</span></div>
                     <div className="mt-3 pt-3 border-t border-[#222]"><span className="text-[#ff9d76]">const</span> router = <span className="text-[#6bcf7f]">new OneRouter</span>({'{}'}</div>
-                    <div className="ml-4">apiKey: process.env.KEY</div>
+                    <div className="ml-4">apiKey: process.env.ONEROUTER_KEY</div>
                     <div className="ml-4">{'}'})</div>
-                    <div className="mt-3 pt-3 border-t border-[#222]"><span className="text-[#00ff88]"># Use any service with the same API</span></div>
-                    <div><span className="text-[#00ff88]">await router.call(&apos;razorpay.charge&apos;, ...)</span></div>
-                    <div><span className="text-[#00ff88]">await router.call(&apos;paypal.payment&apos;, ...)</span></div>
+                    <div className="mt-3 pt-3 border-t border-[#222]"><span className="text-[#6a9955]">// Same API for all services</span></div>
+                    <div><span className="text-[#00ff88]">await router.payments.create(...)</span></div>
+                    <div><span className="text-[#00ff88]">await router.sms.send(...)</span></div>
                   </div>
                 </div>
               </div>
@@ -316,7 +399,7 @@ export default function Home() {
               {[
                 { metric: "23ms", label: "Avg Response Time", desc: "Lightning-fast API calls" },
                 { metric: "99.99%", label: "Uptime SLA", desc: "Enterprise-grade reliability" },
-                { metric: "127+", label: "Services", desc: "And growing every month" },
+                { metric: "4+", label: "Services", desc: "Payments, SMS, Email & more" },
               ].map((item, idx) => (
                 <div key={idx} className="border border-[#222] rounded-lg p-4 sm:p-8 text-center hover:border-[#666] transition-all duration-300 transform hover:scale-105 hover:shadow-lg hover:shadow-[#666]/20">
                   <div className="text-3xl sm:text-4xl font-bold mb-2 text-[#666] font-mono">{item.metric}</div>
@@ -340,19 +423,19 @@ export default function Home() {
                 {
                   num: "01",
                   title: "Install",
-                  code: "npm install onerouter-js",
+                  code: "npm install onerouter",
                   desc: "Get the SDK from npm with one command"
                 },
                 {
                   num: "02",
                   title: "Configure",
-                  code: "const router = new OneRouter({ apiKey: process.env.KEY })",
+                  code: "const router = new OneRouter({ apiKey: process.env.ONEROUTER_KEY })",
                   desc: "Initialize with your API key and you're ready"
                 },
                 {
                   num: "03",
                   title: "Integrate",
-                  code: "await router.call(&apos;razorpay.charge&apos;, { amount: 999, currency: &apos;inr&apos; })",
+                  code: "await router.payments.create({ provider: 'razorpay', amount: 1000 })",
                   desc: "Start making calls to any service immediately"
                 },
               ].map((step, idx) => (

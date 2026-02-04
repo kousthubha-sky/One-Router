@@ -258,11 +258,13 @@ async def rate_limit_middleware(request, call_next):
         return response
 
     except Exception as e:
-        # Fail open on error
+        # Fail closed on rate limiting errors - security best practice
         import logging
         logging.exception(f"Rate limiting error: {e}")
-        response = await call_next(request)
-        return response
+        return JSONResponse(
+            status_code=503,
+            content={"error": "Service temporarily unavailable", "retry_after": 60}
+        )
 
 # API version negotiation middleware
 @app.middleware("http")
@@ -344,24 +346,26 @@ async def csrf_validation_middleware(request: Request, call_next):
             ).dict()
         )
 
-    # Validate token (existing logic)
-    session_id = None
-    auth_header = request.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        try:
-            import jwt
-            token = auth_header.split(" ", 1)[1]
-            payload = jwt.decode(token, options={"verify_signature": False})
-            session_id = payload.get("sub")
-        except Exception:
-            pass
+    # Get session_id from cookie only (don't trust unverified JWT claims)
+    session_id = request.cookies.get("__session") or request.cookies.get("session_id")
 
     if not session_id:
-        session_id = request.cookies.get("session_id")
+        # No session cookie - reject the request for CSRF-protected endpoints
+        from .exceptions import ErrorCode, ErrorDetail, ErrorResponse
+        request_id = getattr(request.state, 'request_id', str(uuid.uuid4()))
 
-    if not session_id:
-        import secrets
-        session_id = secrets.token_urlsafe(32)
+        return JSONResponse(
+            status_code=403,
+            content=ErrorResponse(
+                error=ErrorDetail(
+                    code=ErrorCode.INVALID_REQUEST_FORMAT,
+                    message="Session required for CSRF validation",
+                    details={"hint": "Use API key authentication for programmatic access"}
+                ),
+                request_id=request_id,
+                timestamp=datetime.utcnow().isoformat()
+            ).dict()
+        )
 
     from app.services.csrf_manager import CSRFTokenManager
     is_valid = await CSRFTokenManager.validate_token(session_id, csrf_token)

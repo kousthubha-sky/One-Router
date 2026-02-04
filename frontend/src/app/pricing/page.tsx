@@ -1,116 +1,37 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Check, Zap, Shield, TrendingUp, Star, CreditCard, Github } from "lucide-react";
+import { Check, Zap, Building2, Rocket, Github } from "lucide-react";
 import Link from "next/link";
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs";
 import { useState } from "react";
 
-
-
-
-const PricingCard = ({
-  title,
-  price,
-  description,
-  features,
-  highlight,
-  popular = false,
-  buttonLabel = "Get Started",
-  buttonHref = "/onboarding",
-  priceType = "free"
-}: {
-  title: string;
-  price: string;
-  description: string;
-  features: { text: string; highlight?: boolean }[];
-  highlight?: boolean;
-  popular?: boolean;
-  buttonLabel?: string;
-  buttonHref?: string;
-  priceType?: string;
-}) => (
-  <Card
-    className={`relative bg-[#1a1a1a] border-2 transition-all duration-300 ${
-      highlight
-        ? "border-cyan-500 shadow-lg shadow-cyan-500/20 scale-105"
-        : popular
-        ? "border-cyan-400 shadow-lg shadow-cyan-400/20"
-        : "border-[#222] hover:border-cyan-500/50"
-    }`}
-  >
-    <CardContent className="p-6">
-      {popular && (
-        <div className="absolute -top-3 -right-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-xs font-bold px-3 py-1 rounded-full">
-          POPULAR
-        </div>
-      )}
-      <div className="mb-4">
-        <h3 className="text-3xl font-bold text-white mb-2">{title}</h3>
-        <p className="text-4xl font-bold text-cyan-500">{price}</p>
-        {priceType !== "free" && (
-          <p className="text-gray-500 text-sm mt-1">
-            {priceType === "per_month" ? "/month" : priceType}
-          </p>
-        )}
-      </div>
-      <p className="text-[#888] mb-6">{description}</p>
-      <ul className="space-y-3 mb-6">
-        {features.map((feature, index: number) => (
-          <li key={index} className="flex items-start gap-3">
-            <Check
-              className={`w-5 h-5 shrink-0 ${
-                feature.highlight ? "text-cyan-500" : "text-[#666]"
-              }`}
-            />
-            <span className="text-[#888] text-sm">{feature.text}</span>
-          </li>
-        ))}
-      </ul>
-      <Link href={buttonHref}>
-        <Button
-          className={`w-full ${
-            highlight
-              ? "bg-cyan-500 hover:bg-cyan-600 text-black"
-              : popular
-              ? "bg-cyan-400 hover:bg-cyan-500 text-black"
-              : "bg-[#1a1a1a] hover:bg-cyan-500 text-white border border-[#333]"
-          } font-medium`}
-        >
-          {buttonLabel}
-        </Button>
-      </Link>
-    </CardContent>
-  </Card>
-);
-
-const FeatureItem = ({
-  icon: Icon,
-  title,
-  description
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  title: string;
-  description: string;
-}) => (
-  <div className="p-6 border-b border-[#222] last:border-0">
-    <div className="flex items-start gap-4">
-      <div className="flex shrink-0">
-        <Icon className="w-8 h-8 text-cyan-500" />
-      </div>
-      <div>
-        <h3 className="text-lg font-semibold text-white mb-2">{title}</h3>
-        <p className="text-[#888] text-sm">{description}</p>
-      </div>
-    </div>
-  </div>
-);
-
 export default function PricingPage() {
+  const [currency, setCurrency] = useState<"INR" | "USD">("INR");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Exchange rate for display
+  const rate = 85;
+
+  const formatPrice = (inr: number) => {
+    if (currency === "USD") {
+      return `$${(inr / rate).toFixed(2)}`;
+    }
+    return `₹${inr}`;
+  };
+
+  const formatSmallPrice = (inr: number) => {
+    if (currency === "USD") {
+      const usd = inr / rate;
+      if (usd < 0.01) return `$${usd.toFixed(4)}`;
+      return `$${usd.toFixed(3)}`;
+    }
+    return `₹${inr}`;
+  };
+
   return (
-    <div className="min-h-screen bg-black text-white font-sans">
+    <div className="min-h-screen bg-[#050005] text-white">
+      {/* Header */}
       {/* Modern Navbar */}
         <header className="sticky top-0 z-50 bg-black border-b border-[#222]">
           <div className="w-full h-16 flex items-center border-l border-r border-[#222] relative">
@@ -127,9 +48,11 @@ export default function PricingPage() {
                 <div className="w-8 h-8 bg-gradient-to-br from-black  to-cyan-600 rounded-2xl flex items-center justify-center shadow-lg transition-all duration-300 hover:shadow-cyan-500/25 hover:scale-110">
                   </div>
                 <div className="font-bold text-sm md:text-lg font-mono">
-                  
+                <Link href="/">
                   <span className="text-white">One</span>
                   <span className="text-cyan-400">Router</span>
+                </Link>  
+                  
                 </div>
               </div>
 
@@ -208,227 +131,350 @@ export default function PricingPage() {
              )}
           </div>
         </header>
-{/* Grid Background */}
-          <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff1a_1px,transparent_3px),linear-gradient(to_bottom,#ffffff1a_1px,transparent_3px)] bg-[size:40px_40px] pointer-events-none"></div>
-          
-          {/* Radial Diffusion Overlay - Fades gridlines at edges */}
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(0,0,0,0.8)_70%,rgba(0,0,0,0.8)_100%)] pointer-events-none"></div>
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        
-        <div className="text-center mb-16">
-          <h2 className="text-5xl font-bold mb-4">Simple, Transparent Pricing</h2>
-          <p className="text-xl text-[#888] max-w-2xl mx-auto mb-8">
-            Pay only for what you use. No subscriptions required.
+
+      <main className="max-w-5xl mx-auto px-4 md:px-6 py-12 md:py-16">
+        {/* Hero */}
+        <div className="text-center mb-12">
+          <h1 className="text-3xl md:text-4xl font-semibold text-white mb-3">
+            Simple pricing, no surprises
+          </h1>
+          <p className="text-[#888] text-base md:text-lg max-w-xl mx-auto mb-6">
+            Add money to your balance. Use it for any service. That&apos;s it.
+          </p>
+
+          {/* Currency Toggle */}
+          <div className="inline-flex items-center gap-1 p-1 bg-[#1A1A1A] rounded-lg border border-white/10">
+            <button
+              onClick={() => setCurrency("INR")}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+                currency === "INR"
+                  ? "bg-white text-black"
+                  : "text-[#888] hover:text-white"
+              }`}
+            >
+              INR ₹
+            </button>
+            <button
+              onClick={() => setCurrency("USD")}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+                currency === "USD"
+                  ? "bg-white text-black"
+                  : "text-[#888] hover:text-white"
+              }`}
+            >
+              USD $
+            </button>
+          </div>
+        </div>
+
+        {/* How It Works - Simple */}
+        <div className="mb-12 p-6 bg-[#0D0D0D] rounded-xl border border-white/5">
+          <h2 className="text-lg font-medium text-white mb-4 text-center">How pricing works</h2>
+          <div className="grid md:grid-cols-3 gap-6 text-center">
+            <div>
+              <div className="w-10 h-10 bg-cyan-500/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                <span className="text-cyan-400 font-bold">1</span>
+              </div>
+              <p className="text-white font-medium mb-1">Add Balance</p>
+              <p className="text-[#666] text-sm">Add {formatPrice(100)} or more to your account</p>
+            </div>
+            <div>
+              <div className="w-10 h-10 bg-cyan-500/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                <span className="text-cyan-400 font-bold">2</span>
+              </div>
+              <p className="text-white font-medium mb-1">Use Any Service</p>
+              <p className="text-[#666] text-sm">Send SMS, emails, or process payments</p>
+            </div>
+            <div>
+              <div className="w-10 h-10 bg-cyan-500/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                <span className="text-cyan-400 font-bold">3</span>
+              </div>
+              <p className="text-white font-medium mb-1">Pay Per Use</p>
+              <p className="text-[#666] text-sm">We deduct the service cost from your balance</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Service Pricing - Clear Table */}
+        <div className="mb-12">
+          <h2 className="text-xl font-medium text-white mb-6 text-center">Service Costs</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-white/10">
+                  <th className="text-left py-3 px-4 text-[#888] font-medium text-sm">Service</th>
+                  <th className="text-left py-3 px-4 text-[#888] font-medium text-sm">Provider</th>
+                  <th className="text-right py-3 px-4 text-[#888] font-medium text-sm">Cost</th>
+                  <th className="text-right py-3 px-4 text-[#888] font-medium text-sm hidden md:table-cell">Example</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                <tr className="hover:bg-white/5">
+                  <td className="py-4 px-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-green-500/10 rounded-lg flex items-center justify-center">
+                        <span className="text-green-400 text-xs">SMS</span>
+                      </div>
+                      <span className="text-white font-medium">SMS</span>
+                    </div>
+                  </td>
+                  <td className="py-4 px-4 text-[#888]">Twilio</td>
+                  <td className="py-4 px-4 text-right">
+                    <span className="text-white font-semibold">{formatSmallPrice(0.10)}</span>
+                    <span className="text-[#666] text-sm"> / message</span>
+                  </td>
+                  <td className="py-4 px-4 text-right text-[#666] text-sm hidden md:table-cell">
+                    1,000 SMS = {formatPrice(100)}
+                  </td>
+                </tr>
+                <tr className="hover:bg-white/5">
+                  <td className="py-4 px-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-blue-500/10 rounded-lg flex items-center justify-center">
+                        <span className="text-blue-400 text-xs">@</span>
+                      </div>
+                      <span className="text-white font-medium">Email</span>
+                    </div>
+                  </td>
+                  <td className="py-4 px-4 text-[#888]">Resend</td>
+                  <td className="py-4 px-4 text-right">
+                    <span className="text-white font-semibold">{formatSmallPrice(0.001)}</span>
+                    <span className="text-[#666] text-sm"> / email</span>
+                  </td>
+                  <td className="py-4 px-4 text-right text-[#666] text-sm hidden md:table-cell">
+                    10,000 emails = {formatPrice(10)}
+                  </td>
+                </tr>
+                <tr className="hover:bg-white/5">
+                  <td className="py-4 px-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-purple-500/10 rounded-lg flex items-center justify-center">
+                        <span className="text-purple-400 text-xs">₹</span>
+                      </div>
+                      <span className="text-white font-medium">Payments</span>
+                    </div>
+                  </td>
+                  <td className="py-4 px-4 text-[#888]">Razorpay / PayPal</td>
+                  <td className="py-4 px-4 text-right">
+                    <span className="text-white font-semibold">Free</span>
+                    <span className="text-[#666] text-sm"> (provider fees apply)</span>
+                  </td>
+                  <td className="py-4 px-4 text-right text-[#666] text-sm hidden md:table-cell">
+                    Only pay provider&apos;s standard fees
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[#666] text-xs mt-4 text-center">
+            * Provider fees (Razorpay 2%, PayPal 2.9%) are charged separately by them, not by us
           </p>
         </div>
 
-        <div className="mb-16">
-          <h2 className="text-3xl font-bold text-white mb-8 text-center">
-            Pay-Per-Use Pricing
-          </h2>
-          <p className="text-gray-400 text-center mb-8 max-w-2xl mx-auto">
-            We charge based on actual usage, not per API call.
-            Similar to how OpenAI charges per token and Twilio per message.
-          </p>
+        {/* Pricing Tiers */}
+        <div className="mb-12">
+          <h2 className="text-xl font-medium text-white mb-6 text-center">Choose Your Plan</h2>
+          <div className="grid md:grid-cols-3 gap-4">
+            {/* Free */}
+            <div className="p-6 bg-[#0D0D0D] rounded-xl border border-white/5">
+              <div className="flex items-center gap-2 mb-4">
+                <Zap className="w-5 h-5 text-yellow-400" />
+                <h3 className="text-lg font-medium text-white">Free</h3>
+              </div>
+              <div className="mb-4">
+                <span className="text-3xl font-semibold text-white">{formatPrice(0)}</span>
+                <span className="text-[#666] text-sm"> / month</span>
+              </div>
+              <p className="text-[#666] text-sm mb-6">Try everything with free credits</p>
+              <ul className="space-y-3 mb-6">
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-green-400" />
+                  <span className="text-[#888]">{formatPrice(10)} free balance / month</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-green-400" />
+                  <span className="text-[#888]">All providers included</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-green-400" />
+                  <span className="text-[#888]">Test environment</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-green-400" />
+                  <span className="text-[#888]">Community support</span>
+                </li>
+              </ul>
+              <Link href="/onboarding">
+                <Button className="w-full bg-[#1A1A1A] text-white hover:bg-[#252525] border border-white/10">
+                  Start Free
+                </Button>
+              </Link>
+            </div>
 
-          <div className="grid md:grid-cols-3 gap-6">
-            <Card className="bg-[#1a1a1a] border-[#222]">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CreditCard className="w-5 h-5 text-cyan-500" />
-                  <span>Payments</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-cyan-400 mb-2">1% + ₹0.50</div>
-                <p className="text-gray-400 text-sm mb-4">per transaction</p>
-                <ul className="text-gray-300 text-sm space-y-2">
-                  <li>Route to Razorpay or PayPal</li>
-                  <li>Unified checkout</li>
-                  <li>Automatic failover</li>
-                  <li>Real-time analytics</li>
-                </ul>
-                <div className="mt-4 p-3 bg-gray-900 rounded text-xs text-gray-400">
-                  Example: ₹1,000 = ₹10.50 fee
-                </div>
-              </CardContent>
-            </Card>
+            {/* Pay as you go */}
+            <div className="p-6 bg-[#1A1A1A] rounded-xl border border-cyan-500/30 relative">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                <span className="bg-cyan-500 text-black text-xs font-bold px-3 py-1 rounded-full">
+                  POPULAR
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mb-4">
+                <Rocket className="w-5 h-5 text-cyan-400" />
+                <h3 className="text-lg font-medium text-white">Pay As You Go</h3>
+              </div>
+              <div className="mb-4">
+                <span className="text-3xl font-semibold text-white">No minimum</span>
+              </div>
+              <p className="text-[#666] text-sm mb-6">Add any amount, use when needed</p>
+              <ul className="space-y-3 mb-6">
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-cyan-400" />
+                  <span className="text-[#888]">Add {formatPrice(100)}+ anytime</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-cyan-400" />
+                  <span className="text-[#888]">Balance never expires</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-cyan-400" />
+                  <span className="text-[#888]">Live environment access</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-cyan-400" />
+                  <span className="text-[#888]">Email support</span>
+                </li>
+              </ul>
+              <Link href="/credits">
+                <Button className="w-full bg-cyan-500 text-black hover:bg-cyan-400 font-medium">
+                  Add Balance
+                </Button>
+              </Link>
+            </div>
 
-            <Card className="bg-[#1a1a1a] border-[#222]">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <span className="text-green-500">💬</span>
-                  <span>SMS</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-cyan-400 mb-2">₹0.10</div>
-                <p className="text-gray-400 text-sm mb-4">per message</p>
-                <ul className="text-gray-300 text-sm space-y-2">
-                  <li>Route through Twilio</li>
-                  <li>OTP & transactional</li>
-                  <li>Delivery tracking</li>
-                  <li>10,000+ numbers</li>
-                </ul>
-                <div className="mt-4 p-3 bg-gray-900 rounded text-xs text-gray-400">
-                  Example: 100 SMS = ₹10.00
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-[#1a1a1a] border-[#222]">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <span className="text-blue-500">✉️</span>
-                  <span>Email</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-cyan-400 mb-2">₹0.001</div>
-                <p className="text-gray-400 text-sm mb-4">per email</p>
-                <ul className="text-gray-300 text-sm space-y-2">
-                  <li>Route through Resend</li>
-                  <li>Transactional & marketing</li>
-                  <li>Open & click tracking</li>
-                  <li>Custom domains</li>
-                </ul>
-                <div className="mt-4 p-3 bg-gray-900 rounded text-xs text-gray-400">
-                  Example: 1,000 emails = ₹1.00
-                </div>
-              </CardContent>
-            </Card>
+            {/* Volume */}
+            <div className="p-6 bg-[#0D0D0D] rounded-xl border border-white/5">
+              <div className="flex items-center gap-2 mb-4">
+                <Building2 className="w-5 h-5 text-purple-400" />
+                <h3 className="text-lg font-medium text-white">Volume</h3>
+              </div>
+              <div className="mb-4">
+                <span className="text-3xl font-semibold text-white">Custom</span>
+              </div>
+              <p className="text-[#666] text-sm mb-6">For high-volume usage</p>
+              <ul className="space-y-3 mb-6">
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-purple-400" />
+                  <span className="text-[#888]">Volume discounts up to 30%</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-purple-400" />
+                  <span className="text-[#888]">Dedicated account manager</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-purple-400" />
+                  <span className="text-[#888]">SLA guarantees</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-purple-400" />
+                  <span className="text-[#888]">Priority support</span>
+                </li>
+              </ul>
+              <Link href="/contact">
+                <Button className="w-full bg-[#1A1A1A] text-white hover:bg-[#252525] border border-white/10">
+                  Contact Sales
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
 
-        <div className="mb-16">
-          <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold text-white mb-4">Buy Credits (Optional)</h2>
-            <p className="text-gray-400">Purchase credits upfront for discounts.</p>
-          </div>
-          <div className="grid md:grid-cols-3 gap-6">
-            <Card className="bg-[#1a1a1a] border-[#222]">
-              <CardContent className="p-6 text-center">
-                <div className="text-3xl font-bold text-white mb-2">Starter</div>
-                <div className="text-4xl font-bold text-cyan-500 mb-4">₹1,000</div>
-                <div className="text-gray-400 mb-4">₹1,000 credits</div>
-                <Link href="/credits?amount=1000">
-                  <Button className="w-full bg-[#1a1a1a] hover:bg-cyan-500 text-white border border-[#333]">
-                    Buy ₹1,000
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-            <Card className="relative bg-[#1a1a1a] border-2 border-cyan-500">
-              <CardContent className="p-6 text-center">
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-cyan-500 text-black text-xs font-bold px-3 py-1 rounded-full">
-                  BEST VALUE
-                </div>
-                <div className="text-3xl font-bold text-white mb-2">Pro</div>
-                <div className="text-4xl font-bold text-cyan-500 mb-4">₹5,000</div>
-                <div className="text-gray-400 mb-4">₹6,000 credits (17% off)</div>
-                <Link href="/credits?amount=5000">
-                  <Button className="w-full bg-cyan-500 hover:bg-cyan-600 text-black font-bold">
-                    Buy ₹5,000
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-            <Card className="bg-[#1a1a1a] border-[#222]">
-              <CardContent className="p-6 text-center">
-                <div className="text-3xl font-bold text-white mb-2">Enterprise</div>
-                <div className="text-4xl font-bold text-cyan-500 mb-4">₹25,000</div>
-                <div className="text-gray-400 mb-4">₹35,000 credits (29% off)</div>
-                <Link href="/credits?amount=25000">
-                  <Button className="w-full bg-[#1a1a1a] hover:bg-cyan-500 text-white border border-[#333]">
-                    Buy ₹25,000
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
+        {/* Volume Discounts */}
+        <div className="mb-12 p-6 bg-[#0D0D0D] rounded-xl border border-white/5">
+          <h2 className="text-lg font-medium text-white mb-4 text-center">Volume Discounts</h2>
+          <p className="text-[#666] text-sm text-center mb-6">Add more, pay less per unit</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="text-center p-4 bg-[#1A1A1A] rounded-lg">
+              <p className="text-white font-semibold">{formatPrice(100)}+</p>
+              <p className="text-[#666] text-sm">Standard rate</p>
+            </div>
+            <div className="text-center p-4 bg-[#1A1A1A] rounded-lg">
+              <p className="text-white font-semibold">{formatPrice(1000)}+</p>
+              <p className="text-green-400 text-sm">10% off</p>
+            </div>
+            <div className="text-center p-4 bg-[#1A1A1A] rounded-lg">
+              <p className="text-white font-semibold">{formatPrice(5000)}+</p>
+              <p className="text-green-400 text-sm">20% off</p>
+            </div>
+            <div className="text-center p-4 bg-[#1A1A1A] rounded-lg">
+              <p className="text-white font-semibold">{formatPrice(10000)}+</p>
+              <p className="text-green-400 text-sm">30% off</p>
+            </div>
           </div>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6 mb-16">
-          <PricingCard
-            title="Developer"
-            price="Free"
-            description="For learning and small projects"
-            features={[
-              { text: "1,000 credits/month" },
-              { text: "All providers", highlight: true },
-              { text: "Test environment" },
-              { text: "Basic analytics", highlight: true },
-              { text: "Community support" },
-            ]}
-            buttonLabel="Start Free"
-          />
-
-          <PricingCard
-            title="Startup"
-            price="$39"
-            description="For growing teams"
-            features={[
-              { text: "100,000 credits/month" },
-              { text: "All providers", highlight: true },
-              { text: "Test + Live", highlight: true },
-              { text: "Advanced analytics", highlight: true },
-              { text: "Priority support", highlight: true },
-              { text: "Higher rate limits" },
-            ]}
-            popular={true}
-            buttonLabel="Start Trial"
-            priceType="per_month"
-          />
-
-          <PricingCard
-            title="Enterprise"
-            price="Custom"
-            description="For large organizations"
-            features={[
-              { text: "Unlimited credits", highlight: true },
-              { text: "Dedicated support", highlight: true },
-              { text: "Custom integrations", highlight: true },
-              { text: "SLA guarantee", highlight: true },
-              { text: "Volume discounts" },
-            ]}
-            buttonLabel="Contact Sales"
-          />
+        {/* FAQ */}
+        <div className="mb-12">
+          <h2 className="text-xl font-medium text-white mb-6 text-center">Questions</h2>
+          <div className="space-y-4 max-w-2xl mx-auto">
+            {[
+              {
+                q: "Do I need to pay upfront?",
+                a: "No. Start with the free tier (₹10 balance/month). Only add money when you need more.",
+              },
+              {
+                q: "Does my balance expire?",
+                a: "Purchased balance never expires. Only the free monthly credits reset each month.",
+              },
+              {
+                q: "What payment methods do you accept?",
+                a: "UPI, cards, net banking (via Razorpay) for INR. PayPal and Dodo for international cards (USD).",
+              },
+              {
+                q: "Can I get a refund?",
+                a: "Unused balance can be refunded within 30 days. Contact support@onerouter.com.",
+              },
+              {
+                q: "Do you charge extra fees on top of providers?",
+                a: "For SMS and email, we charge a small markup. For payments, we pass through the provider fees with no markup.",
+              },
+            ].map((faq, idx) => (
+              <div key={idx} className="p-4 bg-[#0D0D0D] rounded-lg border border-white/5">
+                <h3 className="text-white font-medium mb-2">{faq.q}</h3>
+                <p className="text-[#666] text-sm">{faq.a}</p>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <h2 className="text-3xl font-bold mb-8">Platform Features</h2>
-        <div className="grid md:grid-cols-2 gap-6 mb-16">
-          <FeatureItem
-            icon={Zap}
-            title="Unified API"
-            description="Single API for Razorpay, PayPal, Twilio, and Resend. Integrate once."
-          />
-          <FeatureItem
-            icon={Shield}
-            title="Bank-Grade Security"
-            description="AES-256 encryption, webhook verification, and CSRF protection."
-          />
-          <FeatureItem
-            icon={TrendingUp}
-            title="Developer Experience"
-            description="SDKs for Python & JS, detailed docs, and real-time analytics."
-          />
-          <FeatureItem
-            icon={Star}
-            title="Scalable Infrastructure"
-            description="99.9%+ uptime, automatic failover, and edge caching."
-          />
-        </div>
-
+        {/* CTA */}
         <div className="text-center">
-          <h2 className="text-3xl font-bold text-white mb-4">Ready to Get Started?</h2>
-          <p className="text-gray-400 mb-8">Start with our free tier. No credit card required.</p>
-          <Link href="/onboarding">
-            <Button className="bg-cyan-500 hover:bg-cyan-600 text-black font-medium px-8 py-3">
-              Create Free Account
-            </Button>
-          </Link>
+          <div className="inline-flex flex-col sm:flex-row items-center gap-4 p-6 bg-[#1A1A1A] rounded-2xl border border-white/5">
+            <div className="text-left">
+              <p className="text-white font-medium">Ready to start?</p>
+              <p className="text-[#666] text-sm">Get {formatPrice(10)} free balance every month</p>
+            </div>
+            <Link href="/onboarding">
+              <Button className="bg-white text-black hover:bg-gray-200 font-medium px-6">
+                Get Started Free
+              </Button>
+            </Link>
+          </div>
         </div>
       </main>
+
+      {/* Footer */}
+      <footer className="border-t border-[#222] mt-16">
+        <div className="max-w-5xl mx-auto px-6 py-8">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            <p className="text-[#666] text-sm">© 2025 OneRouter. All rights reserved.</p>
+            <div className="flex items-center gap-6">
+              <Link href="/terms" className="text-[#666] hover:text-white text-sm">Terms</Link>
+              <Link href="/privacy" className="text-[#666] hover:text-white text-sm">Privacy</Link>
+              <Link href="/contact" className="text-[#666] hover:text-white text-sm">Contact</Link>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

@@ -254,7 +254,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                   )}>
                     Products
                   </NavigationMenuTrigger>
-                  <NavigationMenuContent className="bg-[#0a0a0a] p-4 border border-white/10 rounded-lg shadow-xl left-auto right-0">
+                  <NavigationMenuContent className="bg-[#0a0a0a] p-4 border border-white/10 rounded-lg shadow-xl z-50">
                     <div className="grid grid-cols-2 gap-2 w-[600px]">
                       <div className="space-y-2">
                         {productsItems.slice(0, 3).map((item) => (
@@ -286,7 +286,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                   )}>
                     Resources
                   </NavigationMenuTrigger>
-                  <NavigationMenuContent className="bg-[#0a0a0a] p-4 border border-white/10 rounded-lg shadow-xl left-auto right-0">
+                  <NavigationMenuContent className="bg-[#0a0a0a] p-4 border border-white/10 rounded-lg shadow-xl z-50">
                     <div className="grid gap-2 w-[400px]">
                       <div className="space-y-2">
                         {resourcesItems.map((item) => (
@@ -313,7 +313,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                   )}>
                     Company
                   </NavigationMenuTrigger>
-                  <NavigationMenuContent className="bg-[#0a0a0a] p-4 border border-white/10 rounded-lg shadow-xl left-auto right-0">
+                  <NavigationMenuContent className="bg-[#0a0a0a] p-4 border border-white/10 rounded-lg shadow-xl z-50">
                     <div className="space-y-2 w-[280px]">
                       {companyItems.map((item) => (
                         <ListItem key={item.href} {...item} />
@@ -327,7 +327,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                   <Link href="/credits" className={cn(
                     navigationMenuTriggerStyle(),
                     "px-3 py-2",
-                    pathname === '/pricing' && 'bg-white/10'
+                    pathname === '/credits' && 'bg-white/10'
                   )}>
                     <DollarSign className="w-4 h-4 mr-2" />
                     Credits
@@ -479,12 +479,12 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 </div>
                 
                 <Link 
-                  href="/pricing" 
+                  href="/credits" 
                   onClick={() => setMobileMenuOpen(false)}
                   className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white/10 transition-all text-base font-medium"
                 >
                   <DollarSign className="w-4 h-4" />
-                  Pricing
+                  Credits
                 </Link>
               </div>
             </div>

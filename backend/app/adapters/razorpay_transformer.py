@@ -221,7 +221,7 @@ class RazorpayTransformer:
     @staticmethod
     def amount_to_paise(amount: Decimal) -> int:
         """Convert Decimal amount to paise (integer)"""
-        return int(amount * 100)
+        return int(amount)
 
     @staticmethod
     def paise_to_amount(paise: int) -> Decimal:

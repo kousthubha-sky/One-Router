@@ -67,11 +67,7 @@ export default function MarketplacePage() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 py-6">
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto">
                 <GlobalEnvironmentToggle services={services} apiClient={apiClient} />
-                <Link href="/api-keys" className="w-full sm:w-auto">
-                  <Button className="text-white hover:bg-[#1a1a1a] border-0 w-full sm:w-auto">
-                    Manage API Keys
-                  </Button>
-                </Link>
+                
               </div>
             </div>
           </div>

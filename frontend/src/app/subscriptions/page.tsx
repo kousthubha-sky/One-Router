@@ -70,11 +70,7 @@ export default function SubscriptionsPage() {
             <div className="flex justify-between items-center py-6">
               <div className="flex items-center space-x-4">
                 <GlobalEnvironmentToggle services={services} apiClient={apiClient} />
-                <Link href="/api-keys">
-                  <Button className="text-white hover:bg-[#1a1a1a] border-0">
-                    Manage API Keys
-                  </Button>
-                </Link>
+               
               </div>
             </div>
           </div>
