@@ -32,6 +32,11 @@ jobs:
       run:
         working-directory: ./frontend
 
+    # Environment variables needed for build
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -128,13 +133,21 @@ jobs:
 # 1. Go to GitHub → Your Repo → Settings
 # 2. Click "Secrets and variables" → "Actions"
 # 3. Click "New repository secret"
-# 4. Add these two secrets:
+# 4. Add these secrets:
 #
+#    DEPLOY HOOKS:
 #    Name: VERCEL_DEPLOY_HOOK
 #    Value: https://api.vercel.com/v1/integrations/deploy/xxx
 #
 #    Name: RENDER_DEPLOY_HOOK
 #    Value: https://api.render.com/deploy/srv-xxx?key=yyy
+#
+#    FRONTEND ENV VARS (for build):
+#    Name: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+#    Value: pk_live_xxxxx (from Clerk dashboard)
+#
+#    Name: NEXT_PUBLIC_API_URL
+#    Value: https://your-backend-url.com
 #
 # ============================================================
 # FLOW DIAGRAM
