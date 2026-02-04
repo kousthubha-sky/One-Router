@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
 import {
   Upload, Check, AlertCircle, ChevronRight, Eye, EyeOff,
-  ArrowLeft, FileText, Settings, Loader2, X, Plus
+  ArrowLeft, FileText, Settings, Loader2, Plus,
+  CreditCard, MessageSquare, Mail, ArrowRight, Sparkles
 } from "lucide-react";
 
 type ServiceStatus = "supported" | "unsupported";
@@ -30,13 +32,52 @@ const SERVICE_ICONS: Record<string, string> = {
   aws_s3: "https://a0.awsstatic.com/libra-css/images/site/fav/favicon.ico",
 };
 
+const PROVIDER_SETUP_LINKS = [
+  {
+    name: "Razorpay",
+    href: "/razorpay-setup",
+    icon: CreditCard,
+    description: "Accept INR payments via UPI, cards, netbanking",
+    color: "text-blue-400",
+    bgColor: "bg-blue-500/10",
+    borderColor: "border-blue-500/20"
+  },
+  {
+    name: "PayPal",
+    href: "/paypal-setup",
+    icon: CreditCard,
+    description: "International USD/EUR payments",
+    color: "text-indigo-400",
+    bgColor: "bg-indigo-500/10",
+    borderColor: "border-indigo-500/20"
+  },
+  {
+    name: "Twilio",
+    href: "/twilio-setup",
+    icon: MessageSquare,
+    description: "Send SMS messages globally",
+    color: "text-red-400",
+    bgColor: "bg-red-500/10",
+    borderColor: "border-red-500/20"
+  },
+  {
+    name: "Resend",
+    href: "/resend-setup",
+    icon: Mail,
+    description: "Transactional emails with high deliverability",
+    color: "text-emerald-400",
+    bgColor: "bg-emerald-500/10",
+    borderColor: "border-emerald-500/20"
+  },
+];
+
 const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
   const { getToken, isSignedIn } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [detectedServices, setDetectedServices] = useState<DetectedService[]>([]);
-  const [step, setStep] = useState<"existing" | "upload" | "review" | "complete">("existing");
+  const [step, setStep] = useState<"welcome" | "existing" | "upload" | "review" | "complete">("welcome");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [existingServices, setExistingServices] = useState<DetectedService[]>([]);
   const [checkingExisting, setCheckingExisting] = useState(true);
@@ -70,6 +111,10 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
           features: Object.keys(service.features || {}).filter(key => service.features[key])
         }));
         setExistingServices(existing);
+        // If user has services, skip welcome
+        if (existing.length > 0) {
+          setStep("existing");
+        }
       }
     } catch (error) {
       console.error('Error checking existing services:', error);
@@ -184,6 +229,7 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
   };
 
   const steps = [
+    { key: "welcome", label: "Start" },
     { key: "existing", label: "Services" },
     { key: "upload", label: "Upload" },
     { key: "review", label: "Review" },
@@ -192,10 +238,18 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
 
   const currentStepIndex = steps.findIndex(s => s.key === step);
 
+  if (checkingExisting) {
+    return (
+      <div className="min-h-screen bg-[#09090b] text-white flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-zinc-500" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#09090b] text-white">
       {/* Compact Header */}
-      <div className="border-b border-white/10 bg-[#09090b]/80 backdrop-blur-sm sticky top-0 z-10">
+      <div className=" bg-transparent backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
           <button onClick={onBack} className="flex items-center gap-2 text-sm text-zinc-400 hover:text-white transition-colors">
             <ArrowLeft className="w-4 h-4" />
@@ -204,22 +258,22 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
 
           {/* Inline Steps */}
           <div className="flex items-center gap-1">
-            {steps.map((s, i) => (
+            {steps.filter(s => s.key !== "welcome").map((s, i) => (
               <div key={s.key} className="flex items-center">
                 <div className={cn(
                   "flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-colors",
-                  i < currentStepIndex && "text-emerald-400",
-                  i === currentStepIndex && "text-white bg-white/10",
-                  i > currentStepIndex && "text-zinc-600"
+                  currentStepIndex > steps.findIndex(st => st.key === s.key) && "text-emerald-400",
+                  step === s.key && "text-white bg-white/10",
+                  currentStepIndex < steps.findIndex(st => st.key === s.key) && "text-zinc-600"
                 )}>
-                  {i < currentStepIndex ? (
+                  {currentStepIndex > steps.findIndex(st => st.key === s.key) ? (
                     <Check className="w-3 h-3" />
                   ) : (
                     <span className="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[10px]">{i + 1}</span>
                   )}
                   <span className="hidden sm:inline">{s.label}</span>
                 </div>
-                {i < steps.length - 1 && <ChevronRight className="w-3 h-3 text-zinc-700 mx-1" />}
+                {i < steps.filter(st => st.key !== "welcome").length - 1 && <ChevronRight className="w-3 h-3 text-zinc-700 mx-1" />}
               </div>
             ))}
           </div>
@@ -229,6 +283,75 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
       {/* Main Content */}
       <div className="max-w-2xl mx-auto px-4 py-8">
 
+        {/* Step: Welcome (New users) */}
+        {step === "welcome" && (
+          <div className="space-y-8">
+            <div className="text-center">
+              <div className="w-14 h-14 mx-auto bg-gradient-to-br from-cyan-500/20 to-blue-500/20 rounded-2xl flex items-center justify-center mb-4">
+                <Sparkles className="w-7 h-7 text-cyan-400" />
+              </div>
+              <h1 className="text-2xl font-semibold mb-2">Welcome to OneRouter</h1>
+              <p className="text-zinc-500 max-w-md mx-auto">
+                Connect your payment and communication providers to start making API calls.
+              </p>
+            </div>
+
+            {/* Quick Setup Options */}
+            <div className="space-y-3">
+              <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Choose a provider to set up</p>
+
+              {PROVIDER_SETUP_LINKS.map((provider) => (
+                <Link
+                  key={provider.name}
+                  href={provider.href}
+                  className={cn(
+                    "flex items-center justify-between p-4 rounded-lg border transition-all hover:scale-[1.01]",
+                    provider.bgColor, provider.borderColor, "hover:border-opacity-50"
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={cn("p-2 rounded-lg", provider.bgColor)}>
+                      <provider.icon className={cn("w-5 h-5", provider.color)} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-white">{provider.name}</p>
+                      <p className="text-xs text-zinc-500">{provider.description}</p>
+                    </div>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-zinc-500" />
+                </Link>
+              ))}
+            </div>
+
+            {/* Divider */}
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-zinc-800"></div>
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="bg-[#09090b] px-3 text-zinc-600">or</span>
+              </div>
+            </div>
+
+            {/* Bulk Import Option */}
+            <button
+              onClick={() => setStep("upload")}
+              className="w-full flex items-center justify-center gap-3 p-4 border border-dashed border-zinc-700 hover:border-zinc-500 rounded-lg text-sm text-zinc-400 hover:text-white transition-colors"
+            >
+              <Upload className="w-5 h-5" />
+              <span>Import multiple services from .env file</span>
+            </button>
+
+            {/* Skip for now */}
+            <button
+              onClick={onBack}
+              className="w-full text-center text-sm text-zinc-600 hover:text-zinc-400 transition-colors"
+            >
+              Skip for now, explore dashboard
+            </button>
+          </div>
+        )}
+
         {/* Step: Existing Services */}
         {step === "existing" && (
           <div className="space-y-6">
@@ -237,51 +360,63 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
               <p className="text-sm text-zinc-500">Manage existing services or add new ones</p>
             </div>
 
-            {checkingExisting ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-5 h-5 animate-spin text-zinc-500" />
+            {existingServices.length > 0 ? (
+              <div className="space-y-2">
+                {existingServices.map((service) => (
+                  <div key={service.name} className="flex items-center justify-between p-3 bg-zinc-900/50 border border-zinc-800 rounded-lg hover:border-zinc-700 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={SERVICE_ICONS[service.name.toLowerCase()] || `https://ui-avatars.com/api/?name=${service.name}&background=18181b&color=fff&size=32`}
+                        alt={service.name}
+                        className="w-8 h-8 rounded"
+                      />
+                      <div>
+                        <p className="text-sm font-medium capitalize">{service.name}</p>
+                        <p className="text-xs text-zinc-500">{service.features.slice(0, 2).join(", ")}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 text-xs bg-emerald-500/10 text-emerald-400 rounded">Active</span>
+                      <Link href={`/${service.name.toLowerCase()}-setup`} className="p-1.5 hover:bg-zinc-800 rounded transition-colors">
+                        <Settings className="w-4 h-4 text-zinc-500" />
+                      </Link>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
-              <>
-                {existingServices.length > 0 ? (
-                  <div className="space-y-2">
-                    {existingServices.map((service) => (
-                      <div key={service.name} className="flex items-center justify-between p-3 bg-zinc-900/50 border border-zinc-800 rounded-lg hover:border-zinc-700 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={SERVICE_ICONS[service.name.toLowerCase()] || `https://ui-avatars.com/api/?name=${service.name}&background=18181b&color=fff&size=32`}
-                            alt={service.name}
-                            className="w-8 h-8 rounded"
-                          />
-                          <div>
-                            <p className="text-sm font-medium capitalize">{service.name}</p>
-                            <p className="text-xs text-zinc-500">{service.features.slice(0, 2).join(", ")}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-0.5 text-xs bg-emerald-500/10 text-emerald-400 rounded">Active</span>
-                          <button className="p-1.5 hover:bg-zinc-800 rounded transition-colors">
-                            <Settings className="w-4 h-4 text-zinc-500" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-zinc-500 text-sm">
-                    No services configured yet
-                  </div>
-                )}
-
-                <button
-                  onClick={() => setStep("upload")}
-                  className="w-full flex items-center justify-center gap-2 p-3 border border-dashed border-zinc-700 hover:border-zinc-500 rounded-lg text-sm text-zinc-400 hover:text-white transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add services via .env file
-                </button>
-              </>
+              <div className="text-center py-8 text-zinc-500 text-sm">
+                No services configured yet
+              </div>
             )}
+
+            {/* Add more services */}
+            <div className="space-y-3">
+              <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Add more services</p>
+              <div className="grid grid-cols-2 gap-2">
+                {PROVIDER_SETUP_LINKS.map((provider) => (
+                  <Link
+                    key={provider.name}
+                    href={provider.href}
+                    className={cn(
+                      "flex items-center gap-2 p-3 rounded-lg border transition-all",
+                      "bg-zinc-900/50 border-zinc-800 hover:border-zinc-600"
+                    )}
+                  >
+                    <provider.icon className={cn("w-4 h-4", provider.color)} />
+                    <span className="text-sm">{provider.name}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={() => setStep("upload")}
+              className="w-full flex items-center justify-center gap-2 p-3 border border-dashed border-zinc-700 hover:border-zinc-500 rounded-lg text-sm text-zinc-400 hover:text-white transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Import from .env file
+            </button>
           </div>
         )}
 
@@ -290,7 +425,7 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
           <div className="space-y-6">
             <div>
               <h1 className="text-xl font-semibold mb-1">Upload Environment File</h1>
-              <p className="text-sm text-zinc-500">We'll automatically detect your services</p>
+              <p className="text-sm text-zinc-500">We&apos;ll automatically detect your services</p>
             </div>
 
             <div
@@ -300,7 +435,7 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
               onDrop={handleDrop}
               className={cn(
                 "relative border-2 border-dashed rounded-lg p-8 text-center transition-all",
-                dragActive ? "border-blue-500 bg-blue-500/5" : "border-zinc-800 hover:border-zinc-600"
+                dragActive ? "border-cyan-500 bg-cyan-500/5" : "border-zinc-800 hover:border-zinc-600"
               )}
             >
               <input
@@ -312,7 +447,7 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
 
               <div className="space-y-3">
                 {parsing ? (
-                  <Loader2 className="w-8 h-8 mx-auto animate-spin text-blue-500" />
+                  <Loader2 className="w-8 h-8 mx-auto animate-spin text-cyan-500" />
                 ) : (
                   <div className="w-10 h-10 mx-auto bg-zinc-800 rounded-lg flex items-center justify-center">
                     <FileText className="w-5 h-5 text-zinc-400" />
@@ -328,7 +463,7 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
             <div className="grid grid-cols-3 gap-3 text-center">
               {[
                 { label: "Encrypted", desc: "AES-256" },
-                { label: "50+ Services", desc: "Auto-detect" },
+                { label: "Auto-detect", desc: "50+ Services" },
                 { label: "Secure", desc: "Zero storage" },
               ].map((item) => (
                 <div key={item.label} className="p-3 bg-zinc-900/50 border border-zinc-800 rounded-lg">
@@ -337,6 +472,13 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
                 </div>
               ))}
             </div>
+
+            <button
+              onClick={() => existingServices.length > 0 ? setStep("existing") : setStep("welcome")}
+              className="w-full text-center text-sm text-zinc-600 hover:text-zinc-400 transition-colors"
+            >
+              Back to manual setup
+            </button>
           </div>
         )}
 
