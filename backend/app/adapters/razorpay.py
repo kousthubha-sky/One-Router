@@ -450,6 +450,16 @@ class RazorpayAdapter(BaseAdapter):
         """Get subscription details"""
         return await self.call_api(f"/v1/subscriptions/{subscription_id}", method="GET")
 
+    async def list_subscriptions(self, count: int = 50, skip: int = 0):
+        """List all subscriptions"""
+        params = {"count": count, "skip": skip}
+        return await self.call_api("/subscriptions", method="GET", params=params)
+
+    async def list_plans(self, count: int = 50, skip: int = 0):
+        """List all subscription plans"""
+        params = {"count": count, "skip": skip}
+        return await self.call_api("/plans", method="GET", params=params)
+
     async def cancel_subscription(self, subscription_id: str, cancel_at_cycle_end: bool = False):
         """Cancel subscription"""
         payload = {"cancel_at_cycle_end": cancel_at_cycle_end}

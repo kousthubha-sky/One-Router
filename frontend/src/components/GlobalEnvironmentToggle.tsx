@@ -48,6 +48,8 @@ const SERVICE_ICONS: Record<string, string> = {
   resend: "https://resend.com/favicon.ico",
 };
 
+const STORAGE_KEY = "onerouter_environment_mode";
+
 export function GlobalEnvironmentToggle({ services, onGlobalSwitch, apiClient }: GlobalEnvironmentToggleProps) {
   const [isSwitching, setIsSwitching] = useState(false);
   const [currentMode, setCurrentMode] = useState<"test" | "live" | "mixed">("test");
@@ -56,7 +58,25 @@ export function GlobalEnvironmentToggle({ services, onGlobalSwitch, apiClient }:
   const [servicesWithLive, setServicesWithLive] = useState<string[]>([]);
   const { getToken } = useAuth();
 
+  // Load saved preference from localStorage on mount
   useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved === "test" || saved === "live") {
+      setCurrentMode(saved);
+    }
+  }, []);
+
+  // Derive mode from services, but prefer localStorage if set
+  useEffect(() => {
+    const savedMode = localStorage.getItem(STORAGE_KEY);
+
+    // If user has explicitly set a preference, use that
+    if (savedMode === "test" || savedMode === "live") {
+      setCurrentMode(savedMode);
+      return;
+    }
+
+    // Otherwise derive from services
     if (services.length === 0) {
       setCurrentMode("test");
       return;
@@ -112,6 +132,7 @@ export function GlobalEnvironmentToggle({ services, onGlobalSwitch, apiClient }:
       });
 
       setCurrentMode(targetEnvironment);
+      localStorage.setItem(STORAGE_KEY, targetEnvironment);
       onGlobalSwitch?.(targetEnvironment);
 
     } catch (error) {
@@ -140,7 +161,9 @@ export function GlobalEnvironmentToggle({ services, onGlobalSwitch, apiClient }:
         body: JSON.stringify({ environment: "live", partial_switch: true })
       }) as unknown as SwitchResponse;
 
-      setCurrentMode(response.skipped_services?.length ? "mixed" : "live");
+      const newMode = response.skipped_services?.length ? "mixed" : "live";
+      setCurrentMode(newMode);
+      localStorage.setItem(STORAGE_KEY, newMode);
       onGlobalSwitch?.("live");
     } catch (error) {
       alert(`Failed to switch: ${error instanceof Error ? error.message : String(error)}`);

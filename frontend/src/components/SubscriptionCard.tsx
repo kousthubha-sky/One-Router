@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Pause, Play, X, RefreshCw, Calendar } from 'lucide-react';
+import { Pause, Play, X, ExternalLink, Calendar, User, CreditCard } from 'lucide-react';
 import { useSubscriptionAPI, Subscription } from '@/lib/api-subscriptions';
 
 interface SubscriptionCardProps {
@@ -16,23 +16,36 @@ export function SubscriptionCard({ subscription, onUpdate }: SubscriptionCardPro
   const [loading, setLoading] = useState<string | null>(null);
   const subscriptionAPI = useSubscriptionAPI();
 
+  const subId = subscription.id || subscription.subscription_id || '';
+
   const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'active': return 'bg-green-500/20 text-green-500 border-green-500/30';
-      case 'paused': return 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30';
-      case 'cancelled': return 'bg-red-500/20 text-red-500 border-red-500/30';
-      default: return 'bg-blue-500/20 text-blue-500 border-blue-500/30';
+    switch (status?.toLowerCase()) {
+      case 'active': return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20';
+      case 'paused': return 'bg-yellow-500/15 text-yellow-400 border-yellow-500/20';
+      case 'cancelled':
+      case 'canceled': return 'bg-red-500/15 text-red-400 border-red-500/20';
+      case 'created': return 'bg-blue-500/15 text-blue-400 border-blue-500/20';
+      case 'pending': return 'bg-orange-500/15 text-orange-400 border-orange-500/20';
+      default: return 'bg-zinc-500/15 text-zinc-400 border-zinc-500/20';
     }
+  };
+
+  const formatDate = (timestamp?: number) => {
+    if (!timestamp) return '-';
+    return new Date(timestamp * 1000).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
   };
 
   const handlePause = async () => {
     setLoading('pause');
     try {
-      await subscriptionAPI.pauseSubscription(subscription.subscription_id);
+      await subscriptionAPI.pauseSubscription(subId);
       onUpdate();
     } catch (error) {
-      console.error('Failed to pause subscription:', error);
-      alert('Failed to pause subscription');
+      console.error('Failed to pause:', error);
     } finally {
       setLoading(null);
     }
@@ -41,27 +54,23 @@ export function SubscriptionCard({ subscription, onUpdate }: SubscriptionCardPro
   const handleResume = async () => {
     setLoading('resume');
     try {
-      await subscriptionAPI.resumeSubscription(subscription.subscription_id);
+      await subscriptionAPI.resumeSubscription(subId);
       onUpdate();
     } catch (error) {
-      console.error('Failed to resume subscription:', error);
-      alert('Failed to resume subscription');
+      console.error('Failed to resume:', error);
     } finally {
       setLoading(null);
     }
   };
 
   const handleCancel = async () => {
-    if (!confirm('Are you sure you want to cancel this subscription?')) return;
-
-    const cancelAtEnd = confirm('Cancel at end of billing cycle?');
+    if (!confirm('Cancel this subscription?')) return;
     setLoading('cancel');
     try {
-      await subscriptionAPI.cancelSubscription(subscription.subscription_id, cancelAtEnd);
+      await subscriptionAPI.cancelSubscription(subId, true);
       onUpdate();
     } catch (error) {
-      console.error('Failed to cancel subscription:', error);
-      alert('Failed to cancel subscription');
+      console.error('Failed to cancel:', error);
     } finally {
       setLoading(null);
     }
@@ -69,109 +78,119 @@ export function SubscriptionCard({ subscription, onUpdate }: SubscriptionCardPro
 
   const isActive = subscription.status?.toLowerCase() === 'active';
   const isPaused = subscription.status?.toLowerCase() === 'paused';
-  const isCancelled = subscription.status?.toLowerCase() === 'cancelled';
+  const isCreated = subscription.status?.toLowerCase() === 'created';
+  const isCancelled = ['cancelled', 'canceled'].includes(subscription.status?.toLowerCase() || '');
 
   return (
-    <Card className="bg-[#1a1a1a] border-[#222] hover:border-cyan-500 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/10">
-      <CardHeader>
-        <div className="flex justify-between items-start">
-          <div className="space-y-1">
-            <CardTitle className="text-lg">{subscription.plan_id}</CardTitle>
-            <div className="flex items-center gap-2">
-              <Badge className={getStatusColor(subscription.status)}>
-                {subscription.status}
+    <Card className="bg-[#09090b] border-zinc-800/50 hover:border-zinc-700 transition-all">
+      <CardContent className="p-4">
+        {/* Header Row */}
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <Badge className={getStatusColor(subscription.status)}>
+              {subscription.status}
+            </Badge>
+            {subscription.environment && (
+              <Badge variant="outline" className="text-[10px] text-zinc-500 border-zinc-700">
+                {subscription.environment}
               </Badge>
-              {subscription.trial_days && subscription.trial_days > 0 && (
-                <Badge className="bg-purple-500/20 text-purple-500 border-purple-500/30">
-                  Trial: {subscription.trial_days} days
-                </Badge>
-              )}
-            </div>
-          </div>
-          <div className="text-right">
-            <p className="text-2xl font-bold text-cyan-500">
-              {subscription.currency} {subscription.amount?.toFixed(2)}
-            </p>
-            {subscription.billing_cycle && (
-              <p className="text-xs text-[#888]">/{subscription.billing_cycle}</p>
             )}
           </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <p className="text-sm text-[#888]">Customer ID</p>
-            <p className="font-mono text-sm">{subscription.customer_id}</p>
-          </div>
-          <div>
-            <p className="text-sm text-[#888]">Quantity</p>
-            <p className="text-sm">{subscription.quantity || 1}</p>
-          </div>
+          {subscription.short_url && (
+            <a
+              href={subscription.short_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-zinc-500 hover:text-zinc-300 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          )}
         </div>
 
-        {subscription.current_period_end && (
+        {/* Main Info */}
+        <div className="space-y-2 mb-4">
           <div className="flex items-center gap-2 text-sm">
-            <Calendar className="w-4 h-4 text-[#888]" />
-            <span className="text-[#888]">Renews: </span>
-            <span className="font-medium">
-              {new Date(subscription.current_period_end).toLocaleDateString()}
+            <span className="text-zinc-500">ID:</span>
+            <code className="text-xs text-zinc-300 bg-zinc-800/50 px-1.5 py-0.5 rounded font-mono">
+              {subId.slice(0, 20)}...
+            </code>
+          </div>
+
+          {(subscription.customer_email || subscription.customer_contact) && (
+            <div className="flex items-center gap-2 text-sm">
+              <User className="w-3.5 h-3.5 text-zinc-500" />
+              <span className="text-zinc-300">
+                {subscription.customer_email || subscription.customer_contact || 'No customer'}
+              </span>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 text-sm">
+            <CreditCard className="w-3.5 h-3.5 text-zinc-500" />
+            <span className="text-zinc-300">
+              {subscription.paid_count || 0} paid / {subscription.total_count || 0} total
             </span>
           </div>
-        )}
 
-        <div className="pt-3 border-t border-[#222] flex gap-2">
-          {isActive && (
-            <>
+          {subscription.current_end && (
+            <div className="flex items-center gap-2 text-sm">
+              <Calendar className="w-3.5 h-3.5 text-zinc-500" />
+              <span className="text-zinc-500">Next charge:</span>
+              <span className="text-zinc-300">{formatDate(subscription.current_end)}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        {!isCancelled && !isCreated && (
+          <div className="flex gap-2 pt-3 border-t border-zinc-800">
+            {isActive && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handlePause}
                 disabled={loading === 'pause'}
-                className="flex-1"
+                className="flex-1 h-8 text-xs bg-transparent border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-600"
               >
-                <Pause className="w-4 h-4 mr-2" />
+                <Pause className="w-3 h-3 mr-1.5" />
                 {loading === 'pause' ? 'Pausing...' : 'Pause'}
               </Button>
+            )}
+
+            {isPaused && (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {  /* Open plan change modal */}}
-                disabled={loading !== null}
-                className="flex-1"
+                onClick={handleResume}
+                disabled={loading === 'resume'}
+                className="flex-1 h-8 text-xs bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20"
               >
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Change Plan
+                <Play className="w-3 h-3 mr-1.5" />
+                {loading === 'resume' ? 'Resuming...' : 'Resume'}
               </Button>
-            </>
-          )}
+            )}
 
-          {isPaused && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleResume}
-              disabled={loading === 'resume'}
-              className="flex-1 bg-green-500/20 text-green-500 border-green-500/30 hover:bg-green-500/30"
-            >
-              <Play className="w-4 h-4 mr-2" />
-              {loading === 'resume' ? 'Resuming...' : 'Resume'}
-            </Button>
-          )}
-
-          {!isCancelled && (
             <Button
               variant="outline"
               size="sm"
               onClick={handleCancel}
               disabled={loading === 'cancel'}
-              className="flex-1 text-red-500 hover:bg-red-500/10 border-red-500/30"
+              className="flex-1 h-8 text-xs bg-transparent border-zinc-700 text-red-400 hover:bg-red-500/10 hover:border-red-500/30"
             >
-              <X className="w-4 h-4 mr-2" />
+              <X className="w-3 h-3 mr-1.5" />
               {loading === 'cancel' ? 'Cancelling...' : 'Cancel'}
             </Button>
-          )}
-        </div>
+          </div>
+        )}
+
+        {isCreated && (
+          <div className="pt-3 border-t border-zinc-800">
+            <p className="text-[10px] text-zinc-600 text-center">
+              Pending activation - waiting for first payment
+            </p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

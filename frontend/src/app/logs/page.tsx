@@ -5,11 +5,14 @@ import { useClientApiCall } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { FileCode, CheckCircle, XCircle, Clock, Search } from 'lucide-react';
+import {
+  FileText, CheckCircle, XCircle, Clock, Search,
+  Loader2, Activity, ChevronRight, ChevronDown, Timer
+} from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { GlobalEnvironmentToggle } from '@/components/GlobalEnvironmentToggle';
 import { BentoGrid } from '@/components/ui/bento-grid';
-import Link from 'next/link';
+import { Pagination } from '@/components/ui/pagination';
 
 interface Transaction {
   id: string;
@@ -35,13 +38,14 @@ export default function LogsPage() {
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [services, setServices] = useState<Service[]>([]);
+  const [expandedLog, setExpandedLog] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
   const apiClient = useClientApiCall();
 
   const loadTransactions = useCallback(async () => {
     try {
       setLoading(true);
-      // This endpoint needs to be created in the backend
-      // For now, we'll use a placeholder
       const response = await apiClient('/api/analytics/logs?limit=100');
       setTransactions((response as { logs: Transaction[] }).logs || []);
     } catch (error) {
@@ -75,35 +79,46 @@ export default function LogsPage() {
     return matchesFilter && matchesSearch;
   });
 
-  const getStatusIcon = (status: string) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
-      case 'success':
-        return <CheckCircle className="w-5 h-5 text-green-500" />;
-      case 'failed':
-        return <XCircle className="w-5 h-5 text-red-500" />;
-      default:
-        return <Clock className="w-5 h-5 text-cyan-500" />;
+      case 'success': return 'bg-emerald-500/15 text-emerald-400';
+      case 'failed': return 'bg-red-500/15 text-red-400';
+      default: return 'bg-blue-500/15 text-blue-400';
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'success':
-        return 'bg-green-500 text-white';
-      case 'failed':
-        return 'bg-red-500 text-white';
-      default:
-        return 'bg-cyan-500 text-white';
+  const getMethodColor = (method: string) => {
+    switch (method.toUpperCase()) {
+      case 'GET': return 'text-emerald-400';
+      case 'POST': return 'text-blue-400';
+      case 'PUT': return 'text-yellow-400';
+      case 'DELETE': return 'text-red-400';
+      default: return 'text-zinc-400';
     }
   };
+
+  const successCount = transactions.filter(tx => tx.status === 'success').length;
+  const successRate = transactions.length > 0
+    ? Math.round((successCount / transactions.length) * 100)
+    : 0;
+
+  // Pagination
+  const totalPages = Math.ceil(filteredTransactions.length / ITEMS_PER_PAGE);
+  const paginatedTransactions = filteredTransactions.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  // Reset to page 1 when filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter, searchTerm]);
 
   if (loading) {
     return (
       <DashboardLayout>
-        <div className="text-white font-sans border-t border-white/10">
-          <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500"></div>
-          </div>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-6 h-6 animate-spin text-zinc-500" />
         </div>
       </DashboardLayout>
     );
@@ -115,150 +130,183 @@ export default function LogsPage() {
         <header className="border-[#333] backdrop-blur-sm">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-l border-r border-white/10">
             <div className="flex justify-between items-center py-6">
-              <div className="flex items-center space-x-4">
-                <GlobalEnvironmentToggle services={services} apiClient={apiClient} />
-                <div className="px-4 rounded-full text-sm font-medium text-cyan-500 transition-all duration-300 hover:bg-cyan-500/10">
-                  Free Plan
-                </div>
-                
-              </div>
+              <GlobalEnvironmentToggle services={services} apiClient={apiClient} />
             </div>
           </div>
         </header>
 
-        <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 relative">
-          <div className="pointer-events-none absolute inset-0 overflow-hidden border border-white/10 [mask-image:linear-gradient(to_bottom,white_0%,white_80%,transparent_100%)]">
-            {/* Top-left corner */}
-            <div className="absolute top-10 left-10 w-20 h-20 border-t border-l border-cyan-500/30"></div>
-            {/* Top-right corner */}
-            <div className="absolute top-10 right-10 w-20 h-20 border-t border-r border-cyan-500/30"></div>
-            {/* Bottom-left corner */}
-            <div className="absolute bottom-10 left-10 w-20 h-20 border-b border-l border-cyan-500/30"></div>
-            {/* Bottom-right corner */}
-            <div className="absolute bottom-10 right-10 w-20 h-20 border-b border-r border-cyan-500/30"></div>
-          </div>
-          <div className="relative z-10">
-            {/* Logs Metrics */}
-            <BentoGrid items={[
-              {
-                title: "Total Transactions",
-                meta: transactions.length.toString(),
-                description: "API calls logged in the system",
-                icon: <FileCode className="w-4 h-4 text-cyan-500" />,
-                status: "Active",
-                tags: ["Logs", "Transactions"],
-                colSpan: 2,
-                hasPersistentHover: true,
-              },
-              {
-                title: "Success Rate",
-                meta: transactions.length > 0 ? `${Math.round((transactions.filter(tx => tx.status === 'success').length / transactions.length) * 100)}%` : "0%",
-                description: "Percentage of successful transactions",
-                icon: <CheckCircle className="w-4 h-4 text-cyan-500" />,
-                status: "Tracked",
-                tags: ["Performance", "Success"],
-              },
-            ]} />
+        <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+          {/* Metrics */}
+          <BentoGrid items={[
+            {
+              title: "Total Requests",
+              meta: `${transactions.length}`,
+              description: "API calls logged",
+              icon: <Activity className="w-4 h-4 text-cyan-500" />,
+              status: transactions.length > 0 ? "Active" : "None",
+              tags: ["Logs"],
+              colSpan: 1,
+            },
+            {
+              title: "Success Rate",
+              meta: `${successRate}%`,
+              description: `${successCount} successful requests`,
+              icon: <CheckCircle className="w-4 h-4 text-emerald-500" />,
+              status: successRate >= 90 ? "Healthy" : successRate >= 70 ? "Warning" : "Critical",
+              tags: ["Performance"],
+              colSpan: 1,
+            },
+            {
+              title: "Failed Requests",
+              meta: `${transactions.filter(tx => tx.status === 'failed').length}`,
+              description: "Requests that failed",
+              icon: <XCircle className="w-4 h-4 text-red-500" />,
+              status: "Tracked",
+              tags: ["Errors"],
+              colSpan: 1,
+            },
+          ]} />
 
-            {/* Filters */}
-            <Card className="bg-[#0a0a0a] border border-[#222] hover:border-cyan-500 transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/10">
-              <CardContent className="p-6">
-                <div className="flex flex-col md:flex-row gap-4">
-                  {/* Search */}
-                  <div className="flex-1 relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#666]" />
-                    <input
-                      type="text"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      placeholder="Search by transaction ID or service..."
-                      className="w-full pl-10 pr-4 py-3 bg-[#1a1a1a] border border-[#222] rounded-lg text-white font-mono focus:border-cyan-500 focus:outline-none transition-colors"
-                    />
-                  </div>
-
-                  {/* Status Filter */}
-                  <div className="flex gap-2">
-                    {['all', 'success', 'failed', 'pending'].map((status) => (
-                      <Button
-                        key={status}
-                        onClick={() => setFilter(status)}
-                        variant={filter === status ? 'default' : 'outline'}
-                        className={filter === status ? 'bg-cyan-500 text-white hover:bg-cyan-600' : 'bg-transparent border-[#222] text-white hover:border-cyan-500'}
-                      >
-                        {status.charAt(0).toUpperCase() + status.slice(1)}
-                      </Button>
-                    ))}
-                  </div>
+          {/* Filters */}
+          <Card className="bg-[#09090b] border-zinc-800/50 mt-8">
+            <CardContent className="p-4">
+              <div className="flex flex-col md:flex-row gap-3">
+                {/* Search */}
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Search by ID or service..."
+                    className="w-full pl-9 pr-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-white text-sm focus:border-zinc-700 focus:outline-none transition-colors"
+                  />
                 </div>
-              </CardContent>
-            </Card>
 
-            {/* Transaction Logs */}
-            <Card className="bg-[#0a0a0a] border border-[#222] hover:border-cyan-500 transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/10">
-              <CardHeader className="pb-4">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-white flex items-center gap-3 text-xl">
-                    <div className="w-8 h-8 bg-cyan-500/20 rounded-lg flex items-center justify-center border border-cyan-500/30">
-                      📋
-                    </div>
-                    Transaction Logs
-                  </CardTitle>
-                  <span className="text-sm text-[#888] bg-[#1a1a1a] px-3 py-1 rounded-full border border-[#222]">
-                    {filteredTransactions.length} transactions
-                  </span>
+                {/* Status Filter */}
+                <div className="flex gap-1.5">
+                  {['all', 'success', 'failed', 'pending'].map((status) => (
+                    <Button
+                      key={status}
+                      onClick={() => setFilter(status)}
+                      variant="outline"
+                      size="sm"
+                      className={`h-9 text-xs ${
+                        filter === status
+                          ? 'bg-white text-black border-white hover:bg-zinc-200'
+                          : 'bg-transparent border-zinc-800 text-zinc-400 hover:text-black hover:border-zinc-700'
+                      }`}
+                    >
+                      {status.charAt(0).toUpperCase() + status.slice(1)}
+                    </Button>
+                  ))}
                 </div>
-              </CardHeader>
-              <CardContent>
-                {filteredTransactions.length === 0 ? (
-                  <div className="text-center py-12 text-[#666] border border-dashed border-[#333] rounded-xl bg-[#1a1a1a]">
-                    <div className="w-16 h-16 bg-cyan-500/10 rounded-full flex items-center justify-center mb-6 mx-auto border border-cyan-500/20">
-                      <FileCode className="w-8 h-8 text-cyan-500" />
-                    </div>
-                    <h3 className="text-xl font-semibold text-white mb-2">No transactions found</h3>
-                    <p className="text-[#888]">Try adjusting your search or filter criteria</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {filteredTransactions.slice(0, 20).map((tx) => (
-                      <div
-                        key={tx.id}
-                        className="p-4 bg-[#1a1a1a] border border-[#222] rounded-lg hover:border-cyan-500 transition-colors cursor-pointer"
-                      >
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
-                              {getStatusIcon(tx.status)}
-                              <code className="text-sm font-mono text-cyan-500">
-                                {tx.transaction_id}
-                              </code>
-                              <Badge className="bg-cyan-500/20 text-cyan-400 border-cyan-500/30 text-xs">
-                                {tx.service_name}
-                              </Badge>
-                            </div>
-                            <div className="flex items-center gap-4 text-sm text-[#666]">
-                              <span className="font-mono">{tx.http_method} {tx.endpoint}</span>
-                              <span>•</span>
-                              <span>{tx.response_time_ms}ms</span>
-                              <span>•</span>
-                              <span>{new Date(tx.created_at).toLocaleString()}</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge className={getStatusColor(tx.status)}>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Transaction Logs */}
+          <Card className="bg-[#09090b] border-zinc-800/50 mt-6">
+            <CardHeader className="pb-4">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-white flex items-center gap-3 text-lg">
+                  <FileText className="w-5 h-5 text-cyan-500" />
+                  Transaction Logs
+                </CardTitle>
+                <Badge variant="outline" className="text-[10px] text-zinc-500 border-zinc-700">
+                  {filteredTransactions.length} transactions
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {filteredTransactions.length === 0 ? (
+                <div className="text-center py-12 border border-dashed border-zinc-800 rounded-lg">
+                  <FileText className="w-10 h-10 text-zinc-700 mx-auto mb-3" />
+                  <p className="text-sm text-zinc-500">No transactions found</p>
+                  <p className="text-xs text-zinc-600 mt-1">Try adjusting your search or filter</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {paginatedTransactions.map((tx) => {
+                    const isExpanded = expandedLog === tx.id;
+                    return (
+                      <div key={tx.id} className="border border-zinc-800/50 rounded-lg overflow-hidden">
+                        {/* Compact Row */}
+                        <button
+                          onClick={() => setExpandedLog(isExpanded ? null : tx.id)}
+                          className="w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-900/50 transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            {isExpanded ? (
+                              <ChevronDown className="w-4 h-4 text-zinc-500" />
+                            ) : (
+                              <ChevronRight className="w-4 h-4 text-zinc-500" />
+                            )}
+                            <Badge className={`${getStatusColor(tx.status)} text-[10px]`}>
                               {tx.status}
                             </Badge>
-                            <Badge variant="outline" className="font-mono border-[#222] text-[#888]">
-                              {tx.response_status}
-                            </Badge>
+                            <span className={`text-xs font-mono font-medium ${getMethodColor(tx.http_method)}`}>
+                              {tx.http_method}
+                            </span>
+                            <code className="text-sm text-zinc-300 truncate max-w-[200px]">
+                              {tx.endpoint}
+                            </code>
                           </div>
-                        </div>
+                          <div className="flex items-center gap-3">
+                            <Badge variant="outline" className="text-[10px] text-zinc-500 border-zinc-700">
+                              {tx.service_name}
+                            </Badge>
+                            <div className="flex items-center gap-1 text-xs text-zinc-500">
+                              <Timer className="w-3 h-3" />
+                              {tx.response_time_ms}ms
+                            </div>
+                            <span className="text-[10px] text-zinc-600">
+                              {new Date(tx.created_at).toLocaleTimeString()}
+                            </span>
+                          </div>
+                        </button>
+
+                        {/* Expanded Details */}
+                        {isExpanded && (
+                          <div className="px-4 pb-4 pt-2 border-t border-zinc-800/50 bg-zinc-900/30">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                              <div>
+                                <p className="text-[10px] text-zinc-500 mb-1">Transaction ID</p>
+                                <code className="text-xs text-zinc-300 bg-zinc-800/50 px-1.5 py-0.5 rounded">
+                                  {tx.transaction_id}
+                                </code>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-zinc-500 mb-1">Response Status</p>
+                                <span className="text-xs text-zinc-300">{tx.response_status}</span>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-zinc-500 mb-1">Response Time</p>
+                                <span className="text-xs text-zinc-300">{tx.response_time_ms}ms</span>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-zinc-500 mb-1">Timestamp</p>
+                                <span className="text-xs text-zinc-300">
+                                  {new Date(tx.created_at).toLocaleString()}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-             </Card>
-          </div>
+                    );
+                  })}
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalItems={filteredTransactions.length}
+                    itemsPerPage={ITEMS_PER_PAGE}
+                    onPageChange={setCurrentPage}
+                  />
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </main>
       </div>
     </DashboardLayout>

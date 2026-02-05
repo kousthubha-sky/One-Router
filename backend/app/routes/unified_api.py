@@ -256,14 +256,84 @@ async def create_payment_order(
 
 @router.get("/subscriptions")
 async def list_subscriptions(
+    count: int = 50,
+    skip: int = 0,
+    environment: Optional[str] = None,
     user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """List all subscriptions for the authenticated user"""
     try:
         user_id = user["id"]
-        
-        # Get all active service credentials for this user
+
+        # Build query for credentials
+        query = select(ServiceCredential).where(
+            ServiceCredential.user_id == user_id,
+            ServiceCredential.is_active == True
+        )
+
+        # Filter by environment if specified
+        if environment:
+            query = query.where(ServiceCredential.environment == environment)
+
+        result = await db.execute(query)
+        credentials = result.scalars().all()
+
+        logger.info(f"Found {len(credentials)} credentials for user {user_id}")
+
+        all_subscriptions = []
+        errors = []
+
+        # Fetch subscriptions from each configured provider
+        for cred in credentials:
+            provider = cred.provider_name.lower()
+            env = cred.environment
+            logger.info(f"Checking provider: {provider}, environment: {env}")
+
+            # Only Razorpay supports subscription listing currently
+            if provider == "razorpay":
+                try:
+                    adapter = await request_router.get_adapter(user_id, provider, db, target_environment=env)
+                    if hasattr(adapter, 'list_subscriptions'):
+                        logger.info(f"Calling list_subscriptions for {provider} ({env})")
+                        response = await adapter.list_subscriptions(count=count, skip=skip)
+                        items = response.get("items", [])
+
+                        # Add provider/environment info to each subscription
+                        for sub in items:
+                            sub["provider"] = provider
+                            sub["environment"] = env
+                            all_subscriptions.append(sub)
+
+                        logger.info(f"Found {len(items)} subscriptions from {provider} ({env})")
+                except Exception as e:
+                    error_msg = f"Failed to fetch from {provider} ({env}): {str(e)}"
+                    logger.error(error_msg)
+                    errors.append(error_msg)
+                    continue
+
+        return {
+            "subscriptions": all_subscriptions,
+            "total_count": len(all_subscriptions),
+            "errors": errors if errors else None
+        }
+
+    except Exception as e:
+        logger.exception(f"Error listing subscriptions: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to list subscriptions: {str(e)}")
+
+
+@router.get("/plans")
+async def list_plans(
+    count: int = 50,
+    skip: int = 0,
+    user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """List all subscription plans"""
+    try:
+        user_id = user["id"]
+
         result = await db.execute(
             select(ServiceCredential).where(
                 ServiceCredential.user_id == user_id,
@@ -271,19 +341,42 @@ async def list_subscriptions(
             )
         )
         credentials = result.scalars().all()
-        
-        # Since adapters don't have list_subscriptions method yet,
-        # return empty list - this endpoint is a placeholder for future implementation
-        subscriptions = []
-        
+
+        all_plans = []
+        errors = []
+
+        for cred in credentials:
+            provider = cred.provider_name.lower()
+            env = cred.environment
+
+            if provider == "razorpay":
+                try:
+                    adapter = await request_router.get_adapter(user_id, provider, db, target_environment=env)
+                    if hasattr(adapter, 'list_plans'):
+                        response = await adapter.list_plans(count=count, skip=skip)
+                        items = response.get("items", [])
+
+                        for plan in items:
+                            plan["provider"] = provider
+                            plan["environment"] = env
+                            all_plans.append(plan)
+
+                        logger.info(f"Found {len(items)} plans from {provider} ({env})")
+                except Exception as e:
+                    error_msg = f"Failed to fetch plans from {provider} ({env}): {str(e)}"
+                    logger.error(error_msg)
+                    errors.append(error_msg)
+                    continue
+
         return {
-            "subscriptions": subscriptions,
-            "total_count": len(subscriptions)
+            "plans": all_plans,
+            "total_count": len(all_plans),
+            "errors": errors if errors else None
         }
 
     except Exception as e:
-        logger.exception(f"Error listing subscriptions: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to list subscriptions: {str(e)}")
+        logger.exception(f"Error listing plans: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to list plans: {str(e)}")
 
 
 @router.post("/subscriptions")

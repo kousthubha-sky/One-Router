@@ -25,7 +25,8 @@
       "WebFetch(domain:resend.com)",
       "Bash(find:*)",
       "Bash(whois:*)",
-      "WebFetch(domain:www.whois.com)"
+      "WebFetch(domain:www.whois.com)",
+      "Bash(docker-compose logs:*)"
     ]
   }
 }

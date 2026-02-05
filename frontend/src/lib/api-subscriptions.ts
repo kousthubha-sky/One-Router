@@ -1,18 +1,33 @@
 import { useClientApiCall } from './api-client';
 
 export interface Subscription {
-  subscription_id: string;
+  // Razorpay format
+  id: string;
+  subscription_id?: string; // Alias for backwards compatibility
   plan_id: string;
   status: string;
-  customer_id: string;
-  amount: number;
-  currency: string;
-  quantity: number;
-  billing_cycle: string;
-  current_period_start: string;
-  current_period_end: string;
-  trial_days: number;
-  created_at: string;
+  customer_id?: string | null;
+  customer_email?: string | null;
+  customer_contact?: string | null;
+  quantity?: number;
+  current_start?: number; // Unix timestamp
+  current_end?: number; // Unix timestamp
+  charge_at?: number; // Unix timestamp
+  short_url?: string;
+  paid_count?: number;
+  remaining_count?: number;
+  total_count?: number;
+  created_at: number; // Unix timestamp
+  // OneRouter additions
+  provider?: string;
+  environment?: string;
+  // Legacy fields
+  amount?: number;
+  currency?: string;
+  billing_cycle?: string;
+  current_period_start?: string;
+  current_period_end?: string;
+  trial_days?: number;
 }
 
 export interface CreateSubscriptionRequest {
