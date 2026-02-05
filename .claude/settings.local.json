@@ -23,7 +23,9 @@
       "WebSearch",
       "Bash(docker compose:*)",
       "WebFetch(domain:resend.com)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(whois:*)",
+      "WebFetch(domain:www.whois.com)"
     ]
   }
 }

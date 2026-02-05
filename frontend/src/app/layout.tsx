@@ -37,21 +37,22 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "OneRouter" }],
   creator: "OneRouter",
-  metadataBase: new URL("https://onerouter.dev"),
+  metadataBase: new URL("https://onerouter.stack-end.com"),
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://onerouter.dev",
+    url: "https://onerouter.stack-end.com",
     siteName: "OneRouter",
     title: "OneRouter - One API for Payments, SMS & Email",
     description:
       "Stop juggling multiple SDKs. Connect Razorpay, PayPal, Twilio & Resend with one integration. Ship faster with a unified API.",
     images: [
       {
-        url: "/og-image.png",
+        url: "https://onerouter.stack-end.com/og-image.png",
         width: 1200,
         height: 630,
         alt: "OneRouter - Unified API for Payments, SMS & Email",
+        type: "image/png",
       },
     ],
   },
@@ -60,7 +61,7 @@ export const metadata: Metadata = {
     title: "OneRouter - One API for Payments, SMS & Email",
     description:
       "Stop juggling multiple SDKs. Connect Razorpay, PayPal, Twilio & Resend with one integration.",
-    images: ["/og-image.png"],
+    images: ["https://onerouter.stack-end.com/og-image.png"],
     creator: "@onerouter",
   },
   robots: {
