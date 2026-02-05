@@ -340,11 +340,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             <div className="hidden sm:flex items-center gap-2 sm:gap-4 ml-auto flex-shrink-0">
               <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 rounded-lg hover:bg-white/5 transition-all duration-300 group">
                 <UserButton afterSignOutUrl="/" />
-                <div className="hidden sm:block">
-                  <p className="text-m font-medium text-white group-hover:text-cyan-400 transition-colors duration-300">
-                    Account
-                  </p>
-                </div>
               </div>
             </div>
           </div>

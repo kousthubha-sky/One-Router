@@ -11,6 +11,8 @@ import {
   IndianRupee,
   DollarSign,
   AlertCircle,
+  Plus,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,6 +43,7 @@ export function CreditsPageClient() {
   const [paymentCurrency, setPaymentCurrency] = useState<"INR" | "USD">("INR");
   const [purchaseAmount, setPurchaseAmount] = useState<string>("10");
   const [autoTopUp, setAutoTopUp] = useState(false);
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const apiClient = useClientApiCall();
 
   // Exchange rate (should match backend CreditPricingService.USD_TO_INR)
@@ -99,6 +102,7 @@ export function CreditsPageClient() {
       if (response?.checkout_url?.includes("demo")) {
         const symbol = currency === "USD" ? "$" : "₹";
         alert(`Demo Mode: Added ${symbol}${amount.toFixed(2)} to your balance`);
+        setShowPurchaseModal(false);
         await loadBalance();
         return;
       }
@@ -199,15 +203,28 @@ export function CreditsPageClient() {
         </CardContent>
       </Card>
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column - Buy Credits */}
-        <div className="lg:col-span-2">
-          <Card className="bg-[#0a0a0a] border-gray-800">
-            <CardHeader>
-              <CardTitle className="text-white">Add Credits</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+      {/* Purchase Modal */}
+      {showPurchaseModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setShowPurchaseModal(false)}
+          />
+
+          {/* Modal */}
+          <div className="relative bg-[#0a0a0a] border border-gray-800 rounded-xl w-full max-w-md mx-4 p-6 shadow-2xl">
+            {/* Close Button */}
+            <button
+              onClick={() => setShowPurchaseModal(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <h2 className="text-xl font-semibold text-white mb-6">Add Credits</h2>
+
+            <div className="space-y-4">
               {/* Amount Input */}
               <div>
                 <label className="text-gray-400 text-sm mb-2 block">Amount</label>
@@ -295,12 +312,41 @@ export function CreditsPageClient() {
                   "Continue to Payment"
                 )}
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
-              {/* Links */}
-              <div className="pt-4 border-t border-gray-800 space-y-3">
+      {/* Main Content Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column - Credits Overview */}
+        <div className="lg:col-span-2">
+          {/* Add Credits Button Card */}
+          <Card className="bg-[#0a0a0a] border-gray-800 mb-6">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-white font-medium mb-1">Need more credits?</h3>
+                  <p className="text-gray-400 text-sm">Top up your balance with INR or USD</p>
+                </div>
+                <Button
+                  onClick={() => setShowPurchaseModal(true)}
+                  className="bg-indigo-500 hover:bg-indigo-600"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Credits
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Quick Links */}
+          <Card className="bg-[#0a0a0a] border-gray-800 mb-6">
+            <CardContent className="p-4">
+              <div className="flex flex-col sm:flex-row gap-3">
                 <a
                   href="/analytics"
-                  className="flex items-center justify-between p-3 rounded-lg border border-gray-800 hover:border-gray-700 hover:bg-gray-800/30 transition-colors group"
+                  className="flex-1 flex items-center justify-between p-3 rounded-lg border border-gray-800 hover:border-gray-700 hover:bg-gray-800/30 transition-colors group"
                 >
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-gray-800 rounded-lg">
@@ -311,15 +357,18 @@ export function CreditsPageClient() {
                   <ExternalLink className="w-4 h-4 text-gray-500" />
                 </a>
 
-                <p className="text-gray-500 text-sm px-3">
-                  Need Invoicing?{" "}
-                  <a
-                    href="mailto:sales@onerouter.dev"
-                    className="text-indigo-400 hover:text-indigo-300 transition-colors"
-                  >
-                    Contact Sales
-                  </a>
-                </p>
+                <a
+                  href="mailto:sales@onerouter.dev"
+                  className="flex-1 flex items-center justify-between p-3 rounded-lg border border-gray-800 hover:border-gray-700 hover:bg-gray-800/30 transition-colors group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-gray-800 rounded-lg">
+                      <Info className="w-4 h-4 text-gray-400" />
+                    </div>
+                    <span className="text-gray-300 group-hover:text-white">Need Invoicing?</span>
+                  </div>
+                  <ExternalLink className="w-4 h-4 text-gray-500" />
+                </a>
               </div>
             </CardContent>
           </Card>

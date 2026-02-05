@@ -196,22 +196,25 @@ export default function Home() {
               {/* Left Side - Content */}
               <div>
                 {/* Tag */}
-                <div className="inline-flex items-center gap-2 mb-6 text-xs sm:text-sm text-[#00ff88] font-mono">
-                  <span className="text-lg">⚡</span>
-                  <span>Unified API Gateway</span>
+                <div className="inline-flex items-center gap-2 mb-6 text-xs sm:text-sm text-[#00ff88] font-mono border border-[#00ff88]/30 px-3 py-1 rounded-full">
+                  <span className="w-2 h-2 bg-[#00ff88] rounded-full animate-pulse"></span>
+                  <span>One API for Payments, SMS & Email</span>
                 </div>
 
                 {/* Main Heading */}
-                <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold mb-6 font-mono leading-tight">
-                  One Router for <br />
+                <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold mb-4 font-mono leading-tight">
+                  Stop juggling<br />
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-cyan-500">
-                    Every Service
+                    multiple SDKs
                   </span>
                 </h1>
 
-                {/* Subheading */}
-                <p className="text-sm sm:text-base md:text-lg text-[#888] mb-6 font-mono">
-                  Connect payments, SMS, and email with a single API. More services coming soon.
+                {/* Subheading - Clear value prop */}
+                <p className="text-base sm:text-lg md:text-xl text-[#ccc] mb-2 font-mono">
+                  Connect Razorpay, PayPal, Twilio & Resend with <span className="text-white font-semibold">one integration</span>.
+                </p>
+                <p className="text-sm sm:text-base text-[#888] mb-6 font-mono">
+                  Unified API. Single dashboard. Switch providers without code changes.
                 </p>
 
                 {/* Live Status - Mobile */}
@@ -219,13 +222,27 @@ export default function Home() {
                   <LiveAPIStatus />
                 </div>
 
+                {/* Value Props */}
+                <div className="grid grid-cols-3 gap-3 mb-6">
+                  {[
+                    { label: "Payments", providers: "Razorpay, PayPal" },
+                    { label: "SMS", providers: "Twilio" },
+                    { label: "Email", providers: "Resend" },
+                  ].map((item) => (
+                    <div key={item.label} className="bg-[#0a0a0a] border border-[#222] rounded-lg p-2 sm:p-3 text-center">
+                      <div className="text-xs sm:text-sm font-semibold text-white">{item.label}</div>
+                      <div className="text-[10px] sm:text-xs text-[#666]">{item.providers}</div>
+                    </div>
+                  ))}
+                </div>
+
                 {/* Code Snippet */}
-                <div className="bg-black border border-[#222] rounded-lg p-3 sm:p-4 mb-8 font-mono text-xs sm:text-sm overflow-x-auto">
+                <div className="bg-black border border-[#222] rounded-lg p-3 sm:p-4 mb-6 font-mono text-xs sm:text-sm overflow-x-auto">
                   <div className="flex items-center gap-2 text-[#888] mb-2">
                     <span className="text-[#666]">$</span>
                     <span>npm install onerouter</span>
                   </div>
-                  <div className="text-[#00ff88]">✓ Ready to connect payments, SMS & email</div>
+                  <div className="text-[#00ff88]">✓ Ready in 2 minutes</div>
                 </div>
 
                 {/* CTA Buttons */}
@@ -254,9 +271,17 @@ export default function Home() {
                   
                 </div>
 
-                {/* Trust Badge */}
-                <div className="text-xs sm:text-sm text-[#666] font-mono">
-                  ✓ Trusted by 1000+ developers
+                {/* Trust Badges */}
+                <div className="flex flex-wrap gap-3 text-xs sm:text-sm text-[#666] font-mono">
+                  <span className="flex items-center gap-1">
+                    <span className="text-[#00ff88]">✓</span> Free tier included
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="text-[#00ff88]">✓</span> No vendor lock-in
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="text-[#00ff88]">✓</span> Test & Live modes
+                  </span>
                 </div>
               </div>
 
@@ -342,10 +367,10 @@ export default function Home() {
         <section className="px-4 sm:px-6 py-12 sm:py-20">
           <div className="max-w-7xl mx-auto">
             <h2 className="text-2xl sm:text-3xl md:text-5xl font-bold text-center mb-4 font-mono">
-              Simple <span className="text-[#00ff88]">Integration</span>
+              From <span className="text-red-400">complex</span> to <span className="text-[#00ff88]">simple</span>
             </h2>
-            <p className="text-xs sm:text-sm md:text-base text-[#888] text-center mb-8 sm:mb-12 font-mono">
-              See how easy it is to work with multiple services
+            <p className="text-xs sm:text-sm md:text-base text-[#888] text-center mb-8 sm:mb-12 font-mono max-w-2xl mx-auto">
+              Stop maintaining separate integrations for each provider. One API handles routing, failover, and provider switching automatically.
             </p>
 
             <div className="grid grid-cols-2 lg:grid-cols-2 gap-4 sm:gap-8 items-center">
@@ -378,7 +403,7 @@ export default function Home() {
                     <div className="mt-3 pt-3 border-t border-[#222]"><span className="text-[#ff9d76]">const</span> router = <span className="text-[#6bcf7f]">new OneRouter</span>({'{}'}</div>
                     <div className="ml-4">apiKey: process.env.ONEROUTER_KEY</div>
                     <div className="ml-4">{'}'})</div>
-                    <div className="mt-3 pt-3 border-t border-[#222]"><span className="text-[#6a9955]">// Same API for all services</span></div>
+                    <div className="mt-3 pt-3 border-t border-[#222]"><span className="text-[#6a9955]">&comment; Same API for all services</span></div>
                     <div><span className="text-[#00ff88]">await router.payments.create(...)</span></div>
                     <div><span className="text-[#00ff88]">await router.sms.send(...)</span></div>
                   </div>
@@ -508,12 +533,15 @@ export default function Home() {
 
         {/* Final CTA */}
         <section className="px-4 sm:px-6 py-12 sm:py-20">
-          <div className="max-w-4xl mx-auto text-center border border-[#222] rounded-2xl p-6 sm:p-12 bg-[#050505]">
+          <div className="max-w-4xl mx-auto text-center border border-[#222] rounded-2xl p-6 sm:p-12 bg-gradient-to-br from-[#050505] to-[#0a0a0a]">
             <h2 className="text-2xl sm:text-4xl md:text-5xl font-bold mb-4 font-mono bg-gradient-to-r from-white via-gray-400 to-gray-600 bg-clip-text text-transparent">
-              Ready to simplify integration?
+              Ship faster with one API
             </h2>
-            <p className="text-xs sm:text-base md:text-lg text-[#888] mb-6 sm:mb-8 font-mono">
-              Stop managing multiple SDKs. Start building better integrations.
+            <p className="text-xs sm:text-base md:text-lg text-[#888] mb-3 font-mono">
+              Connect payments, SMS, and email in minutes—not weeks.
+            </p>
+            <p className="text-xs sm:text-sm text-[#666] mb-6 sm:mb-8 font-mono">
+              Free tier available. No credit card required.
             </p>
             
             <div className="flex gap-2 sm:gap-4 justify-center flex-wrap">

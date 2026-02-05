@@ -247,7 +247,8 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
   }
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-white">
+    <div className="min-h-screen bg-[#080808] text-white">
+
       {/* Compact Header */}
       <div className=" bg-transparent backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
@@ -255,7 +256,7 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
             <ArrowLeft className="w-4 h-4" />
             <span>Back</span>
           </button>
-
+        
           {/* Inline Steps */}
           <div className="flex items-center gap-1">
             {steps.filter(s => s.key !== "welcome").map((s, i) => (
@@ -279,10 +280,10 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
           </div>
         </div>
       </div>
-
+ 
       {/* Main Content */}
-      <div className="max-w-2xl mx-auto px-4 py-8">
-
+      <div className="max-w-2xl mx-auto px-4 py-8 ">
+            
         {/* Step: Welcome (New users) */}
         {step === "welcome" && (
           <div className="space-y-8">
@@ -354,7 +355,7 @@ const EnvOnboardingFlow = ({ onBack }: { onBack: () => void }) => {
 
         {/* Step: Existing Services */}
         {step === "existing" && (
-          <div className="space-y-6">
+          <div className="space-y-6 ">
             <div>
               <h1 className="text-xl font-semibold mb-1">Your Services</h1>
               <p className="text-sm text-zinc-500">Manage existing services or add new ones</p>
