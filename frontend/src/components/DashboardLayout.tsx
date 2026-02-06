@@ -193,25 +193,59 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             {/* Mobile Logo (centered) */}
             <div className="lg:hidden flex-1 flex justify-center">
               <Link href="/dashboard" className="flex items-center gap-2 group shrink-0">
-                
+
                 <span className="font-bold font-sans text-lg text-cyan-200 group-hover:text-cyan-400 transition-colors duration-300">
                   OneRouter
                 </span>
               </Link>
             </div>
 
-            {/* Mobile Menu Button */}
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden p-2 hover:bg-white/10 rounded-lg transition-all duration-300"
-              aria-label="Toggle menu"
-            >
-              {mobileMenuOpen ? (
-                <X className="w-5 h-5" />
-              ) : (
-                <Menu className="w-5 h-5" />
-              )}
-            </button>
+            {/* Mobile Right Section - User + Hamburger */}
+            <div className="lg:hidden flex items-center gap-2">
+              {/* User Menu - Mobile */}
+              <UserButton
+                afterSignOutUrl="/"
+                appearance={{
+                  elements: {
+                    avatarBox: "w-7 h-7",
+                    userButtonPopoverCard: "bg-[#0a0a0a] border border-white/10 shadow-xl",
+                    userButtonPopoverMain: "bg-[#0a0a0a]",
+                    userButtonPopoverActions: "bg-[#0a0a0a]",
+                    userButtonPopoverActionButton: "text-white hover:bg-white/10",
+                    userButtonPopoverActionButtonText: "text-white",
+                    userButtonPopoverActionButtonIcon: "text-white",
+                    userButtonPopoverFooter: "hidden",
+                    userPreview: "bg-[#0a0a0a]",
+                    userPreviewMainIdentifier: "text-white",
+                    userPreviewSecondaryIdentifier: "text-white/60",
+                    userButtonTrigger: "focus:shadow-none",
+                  },
+                  variables: {
+                    colorBackground: "#0a0a0a",
+                    colorText: "#ffffff",
+                    colorTextSecondary: "rgba(255,255,255,0.6)",
+                    colorTextOnPrimaryBackground: "#ffffff",
+                    colorPrimary: "#06b6d4",
+                    colorInputBackground: "#1a1a1a",
+                    colorInputText: "#ffffff",
+                    colorNeutral: "#ffffff",
+                  }
+                }}
+              />
+
+              {/* Mobile Menu Button */}
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="p-2 hover:bg-white/10 rounded-lg transition-all duration-300"
+                aria-label="Toggle menu"
+              >
+                {mobileMenuOpen ? (
+                  <X className="w-5 h-5" />
+                ) : (
+                  <Menu className="w-5 h-5" />
+                )}
+              </button>
+            </div>
 
             {/* Navigation Menu - Desktop */}
             <NavigationMenu className="hidden lg:flex flex-1 justify-start ml-4 sm:ml-8 font-sans" suppressHydrationWarning>
@@ -329,12 +363,41 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               </NavigationMenuList>
             </NavigationMenu>
 
-            {/* User Menu */}
-            <div className="hidden sm:flex items-center gap-2 sm:gap-4 ml-auto flex-shrink-0">
+            {/* User Menu - Desktop */}
+            <div className="hidden lg:flex items-center gap-2 sm:gap-4 ml-auto flex-shrink-0">
               <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 rounded-lg hover:bg-white/5 transition-all duration-300 group">
-                <UserButton afterSignOutUrl="/" />
+                <UserButton
+                  afterSignOutUrl="/"
+                  appearance={{
+                    elements: {
+                      avatarBox: "w-8 h-8",
+                      userButtonPopoverCard: "bg-[#0a0a0a] border border-white/10 shadow-xl",
+                      userButtonPopoverMain: "bg-[#0a0a0a]",
+                      userButtonPopoverActions: "bg-[#0a0a0a]",
+                      userButtonPopoverActionButton: "text-white hover:bg-white/10",
+                      userButtonPopoverActionButtonText: "text-white",
+                      userButtonPopoverActionButtonIcon: "text-white",
+                      userButtonPopoverFooter: "hidden",
+                      userPreview: "bg-[#0a0a0a]",
+                      userPreviewMainIdentifier: "text-white",
+                      userPreviewSecondaryIdentifier: "text-white/60",
+                      userButtonTrigger: "focus:shadow-none",
+                    },
+                    variables: {
+                      colorBackground: "#0a0a0a",
+                      colorText: "#ffffff",
+                      colorTextSecondary: "rgba(255,255,255,0.6)",
+                      colorTextOnPrimaryBackground: "#ffffff",
+                      colorPrimary: "#06b6d4",
+                      colorInputBackground: "#1a1a1a",
+                      colorInputText: "#ffffff",
+                      colorNeutral: "#ffffff",
+                    }
+                  }}
+                />
               </div>
             </div>
+
           </div>
 
           {/* Mobile Menu */}
