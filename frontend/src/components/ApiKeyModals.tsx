@@ -50,9 +50,9 @@ export function EditApiKeyModal({
   if (!isOpen || !apiKey) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
-      <Card className="bg-[#0a0a0a] border border-[#333] w-full max-w-md">
-        <CardContent className="p-6">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <Card className="bg-[#0a0a0a] border border-[#333] w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <CardContent className="p-4 sm:p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-semibold text-white">Edit API Key</h2>
             <button
@@ -103,7 +103,7 @@ export function EditApiKeyModal({
               />
             </div>
 
-            <div className="flex gap-3 mt-6">
+            <div className="flex flex-col-reverse sm:flex-row gap-3 mt-6">
               <Button
                 onClick={onClose}
                 variant="outline"
@@ -142,9 +142,9 @@ export function ActivityModal({
   if (!isOpen || !apiKey) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
-      <Card className="bg-[#0a0a0a] border border-[#333] w-full max-w-2xl max-h-[80vh] overflow-y-auto">
-        <CardContent className="p-6">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <Card className="bg-[#0a0a0a] border border-[#333] w-full max-w-2xl max-h-[85vh] overflow-y-auto">
+        <CardContent className="p-4 sm:p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-semibold text-white">API Key Activity</h2>
             <button

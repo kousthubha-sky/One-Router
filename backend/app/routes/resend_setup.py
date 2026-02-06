@@ -21,6 +21,7 @@ from ..database import get_db
 from ..auth.dependencies import get_current_user
 from ..services.credential_manager import CredentialManager
 from ..models import ServiceCredential
+from ..cache import cache_service
 
 router = APIRouter(prefix="/api/resend", tags=["resend"])
 logger = logging.getLogger(__name__)
@@ -350,6 +351,12 @@ async def delete_resend_credentials(
             )
         )
         await db.commit()
+
+        # Invalidate credential lookup cache
+        try:
+            await cache_service.invalidate_all_credential_cache(user["id"], "resend")
+        except Exception as e:
+            logger.debug(f"Failed to invalidate credential cache: {e}")
 
         logger.info(f"User {user['id']} deleted Resend credentials")
 

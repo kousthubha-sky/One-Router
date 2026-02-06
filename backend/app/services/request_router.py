@@ -1,9 +1,13 @@
 from typing import Optional
+import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from ..models import ServiceCredential, User
 from ..services.credential_manager import CredentialManager
 from ..exceptions import ProviderNotConfiguredException
+from ..cache import cache_service
+
+logger = logging.getLogger(__name__)
 
 class RequestRouter:
     """Routes requests to appropriate service adapters with cross-environment fallback"""
@@ -25,15 +29,38 @@ class RequestRouter:
         2. Global setting: preferences["current_environment"]
         3. Default: "test"
 
+        Uses Redis caching to reduce database queries (1 hour TTL).
+
         Returns:
             environment (str): The preferred environment name for the service (for example, "test" or "live").
         """
+        # Check cache first
+        try:
+            cached_prefs = await cache_service.get_user_preferences(user_id)
+            if cached_prefs is not None:
+                # Extract environment from cached preferences
+                service_envs = cached_prefs.get("service_environments", {})
+                if service.lower() in service_envs:
+                    return service_envs[service.lower()]
+                if "current_environment" in cached_prefs:
+                    return cached_prefs["current_environment"]
+                return "test"
+        except Exception as e:
+            logger.debug(f"Cache lookup failed for user preferences: {e}")
+
+        # Cache miss - query database
         result = await db.execute(
             select(User.preferences).where(User.id == user_id)
         )
         preferences = result.scalar_one_or_none()
 
+        # Cache the preferences for future requests
         if preferences:
+            try:
+                await cache_service.cache_user_preferences(user_id, preferences)
+            except Exception as e:
+                logger.debug(f"Failed to cache user preferences: {e}")
+
             # Check per-service environment first (highest priority)
             service_envs = preferences.get("service_environments", {})
             if service.lower() in service_envs:
@@ -47,30 +74,54 @@ class RequestRouter:
         return "test"
 
     async def _get_credentials_with_fallback(
-        self, 
-        user_id: str, 
-        service: str, 
+        self,
+        user_id: str,
+        service: str,
         db: AsyncSession,
         preferred_environment: str
     ) -> Optional[ServiceCredential]:
         """
         Return the user's service credential by searching the preferred environment then a cross-environment fallback.
-        
+
         Searches the preferred environment first, then the opposite environment ("test" ↔ "live"), and returns the first active ServiceCredential found.
-        
+
+        Uses Redis caching to store credential IDs for faster lookups (5 min TTL).
+
         Returns:
             ServiceCredential: The matching active credential if found, `None` otherwise.
         """
         environments_to_try = []
-        
+
         # Build fallback chain based on preferred environment
         if preferred_environment == "test":
             environments_to_try = ["test", "live"]
         else:  # live
             environments_to_try = ["live", "test"]
-        
+
         # Try each environment in order
         for environment in environments_to_try:
+            # Check cache first for credential ID
+            try:
+                cached_credential_id = await cache_service.get_credential_lookup(
+                    user_id, service, environment
+                )
+                if cached_credential_id:
+                    # Fetch credential by ID (faster than complex query)
+                    result = await db.execute(
+                        select(ServiceCredential).where(
+                            ServiceCredential.id == cached_credential_id,
+                            ServiceCredential.is_active == True
+                        )
+                    )
+                    credential = result.scalars().first()
+                    if credential:
+                        return credential
+                    # Cache was stale, invalidate it
+                    await cache_service.invalidate_credential_cache(user_id, service, environment)
+            except Exception as e:
+                logger.debug(f"Cache lookup failed for credentials: {e}")
+
+            # Cache miss or stale - query database
             result = await db.execute(
                 select(ServiceCredential).where(
                     ServiceCredential.user_id == user_id,
@@ -81,8 +132,15 @@ class RequestRouter:
             )
             credential = result.scalars().first()  # Use first() to handle potential duplicates
             if credential:
+                # Cache the credential ID for future requests
+                try:
+                    await cache_service.cache_credential_lookup(
+                        user_id, service, environment, str(credential.id)
+                    )
+                except Exception as e:
+                    logger.debug(f"Failed to cache credential lookup: {e}")
                 return credential
-        
+
         return None
 
     async def get_adapter(self, user_id: str, service: str, db: AsyncSession, target_environment: Optional[str] = None):

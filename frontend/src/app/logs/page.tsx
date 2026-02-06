@@ -10,9 +10,8 @@ import {
   Loader2, Activity, ChevronRight, ChevronDown, Timer
 } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
-import { GlobalEnvironmentToggle } from '@/components/GlobalEnvironmentToggle';
-import { BentoGrid } from '@/components/ui/bento-grid';
 import { Pagination } from '@/components/ui/pagination';
+import { LazyGlobalEnvironmentToggle, LazyBentoGrid } from '@/components/lazy';
 
 interface Transaction {
   id: string;
@@ -130,14 +129,14 @@ export default function LogsPage() {
         <header className="border-[#333] backdrop-blur-sm">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-l border-r border-white/10">
             <div className="flex justify-between items-center py-6">
-              <GlobalEnvironmentToggle services={services} apiClient={apiClient} />
+              <LazyGlobalEnvironmentToggle services={services} apiClient={apiClient} />
             </div>
           </div>
         </header>
 
         <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
           {/* Metrics */}
-          <BentoGrid items={[
+          <LazyBentoGrid items={[
             {
               title: "Total Requests",
               meta: `${transactions.length}`,

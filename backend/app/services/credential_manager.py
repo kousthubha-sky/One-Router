@@ -7,6 +7,7 @@ from cryptography.fernet import Fernet
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..models import ServiceCredential
 from ..config import settings
+from ..cache import cache_service
 
 # Initialize logger for this module
 logger = logging.getLogger(__name__)
@@ -288,6 +289,13 @@ class CredentialManager:
 
         await db.commit()
         await db.refresh(credential)
+
+        # Invalidate credential lookup cache
+        try:
+            await cache_service.invalidate_all_credential_cache(user_id, service_name)
+            logger.debug(f"Invalidated credential cache for user {user_id}, service {service_name}")
+        except Exception as e:
+            logger.debug(f"Failed to invalidate credential cache: {e}")
 
         return credential
 
@@ -724,6 +732,11 @@ class CredentialManager:
             existing_cred.last_verified_at = None
             await db.commit()
             await db.refresh(existing_cred)
+            # Invalidate credential lookup cache
+            try:
+                await cache_service.invalidate_all_credential_cache(user_id, "razorpay")
+            except Exception as e:
+                logger.debug(f"Failed to invalidate credential cache: {e}")
             logger.info(f"Updated Razorpay {environment} credentials for user {user_id}")
             return existing_cred
 
@@ -741,6 +754,12 @@ class CredentialManager:
         db.add(credential)
         await db.commit()
         await db.refresh(credential)
+
+        # Invalidate credential lookup cache
+        try:
+            await cache_service.invalidate_all_credential_cache(user_id, "razorpay")
+        except Exception as e:
+            logger.debug(f"Failed to invalidate credential cache: {e}")
 
         logger.info(f"Stored Razorpay {environment} credentials for user {user_id}")
         return credential

@@ -20,9 +20,17 @@ from ..database import get_db
 from ..auth.dependencies import get_current_user
 from ..services.credential_manager import CredentialManager
 from ..models import ServiceCredential
+from ..cache import cache_service
 
 router = APIRouter(prefix="/api/twilio", tags=["twilio"])
 logger = logging.getLogger(__name__)
+
+
+def _mask_phone(phone: str) -> str:
+    """Mask phone number for security: +15551234567 -> +1555***4567"""
+    if not phone or len(phone) < 7:
+        return "***" if phone else None
+    return phone[:4] + "***" + phone[-4:]
 
 
 @router.get("/ping")
@@ -226,12 +234,12 @@ async def get_twilio_status(
             "test": {
                 "configured": test_creds is not None,
                 "sid_prefix": (test_creds.get("TWILIO_ACCOUNT_SID", "")[:10] + "...") if test_creds else None,
-                "from_number": test_creds.get("from_number", "") if test_creds else None
+                "from_number": _mask_phone(test_creds.get("from_number", "")) if test_creds else None
             },
             "live": {
                 "configured": live_creds is not None,
                 "sid_prefix": (live_creds.get("TWILIO_ACCOUNT_SID", "")[:10] + "...") if live_creds else None,
-                "from_number": live_creds.get("from_number", "") if live_creds else None
+                "from_number": _mask_phone(live_creds.get("from_number", "")) if live_creds else None
             },
             "active_environment": active_env
         }
@@ -324,6 +332,12 @@ async def delete_twilio_credentials(
             )
         )
         await db.commit()
+
+        # Invalidate credential lookup cache
+        try:
+            await cache_service.invalidate_all_credential_cache(user["id"], "twilio")
+        except Exception as e:
+            logger.debug(f"Failed to invalidate credential cache: {e}")
 
         logger.info(f"User {user['id']} deleted Twilio {environment} credentials")
 

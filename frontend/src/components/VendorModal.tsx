@@ -71,7 +71,7 @@ export function VendorModal({ isOpen, onClose, onSuccess }: VendorModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-[#09090b] border-zinc-800 text-white max-w-lg p-0 gap-0">
+      <DialogContent className="bg-[#09090b] border-zinc-800 text-white w-[calc(100%-2rem)] max-w-lg p-0 gap-0">
         {/* Header */}
         <DialogHeader className="p-4 border-b border-zinc-800">
           <div className="flex items-center justify-between">
@@ -95,7 +95,7 @@ export function VendorModal({ isOpen, onClose, onSuccess }: VendorModalProps) {
                 <User className="w-3.5 h-3.5 text-zinc-500" />
                 <span className="text-xs text-zinc-500 uppercase tracking-wider">Basic Info</span>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] text-zinc-500 mb-1.5">Vendor ID</label>
                   <input
@@ -139,7 +139,7 @@ export function VendorModal({ isOpen, onClose, onSuccess }: VendorModalProps) {
                 <Landmark className="w-3.5 h-3.5 text-zinc-500" />
                 <span className="text-xs text-zinc-500 uppercase tracking-wider">Bank Details</span>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] text-zinc-500 mb-1.5">Account Number</label>
                   <input
@@ -236,20 +236,20 @@ export function VendorModal({ isOpen, onClose, onSuccess }: VendorModalProps) {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between gap-3 p-4 border-t border-zinc-800 bg-zinc-900/30">
+          <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-3 p-4 border-t border-zinc-800 bg-zinc-900/30">
             <Button
               type="button"
               variant="ghost"
               onClick={onClose}
               disabled={loading}
-              className="text-zinc-400 hover:text-white hover:bg-zinc-800"
+              className="w-full sm:w-auto text-zinc-400 hover:text-white hover:bg-zinc-800"
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={loading}
-              className="bg-white text-black hover:bg-zinc-200"
+              className="w-full sm:w-auto bg-white text-black hover:bg-zinc-200"
             >
               {loading ? (
                 <>

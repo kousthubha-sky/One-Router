@@ -10,11 +10,10 @@ import {
 } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import Link from 'next/link';
-import { GlobalEnvironmentToggle } from '@/components/GlobalEnvironmentToggle';
-import { BentoGrid } from '@/components/ui/bento-grid';
 import { useClientApiCall } from '@/lib/api-client';
 import { useSubscriptionAPI } from '@/lib/api-subscriptions';
 import { Pagination } from '@/components/ui/pagination';
+import { LazyGlobalEnvironmentToggle, LazyBentoGrid } from '@/components/lazy';
 
 interface Service {
   id: string;
@@ -217,7 +216,7 @@ export default function SubscriptionsPage() {
         <header className="border-[#333] backdrop-blur-sm">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-l border-r border-white/10">
             <div className="flex justify-between items-center py-6">
-              <GlobalEnvironmentToggle services={services} apiClient={apiClient} onGlobalSwitch={handleEnvSwitch} />
+              <LazyGlobalEnvironmentToggle services={services} apiClient={apiClient} onGlobalSwitch={handleEnvSwitch} />
               <Link href="/subscriptions/create">
                 <Button className="bg-white text-black hover:bg-zinc-200 text-sm h-9">
                   <Plus className="w-4 h-4 mr-2" />
@@ -230,7 +229,7 @@ export default function SubscriptionsPage() {
 
         <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
           {/* Metrics */}
-          <BentoGrid items={[
+          <LazyBentoGrid items={[
             {
               title: "Plans Created",
               meta: `${filteredPlans.length}`,

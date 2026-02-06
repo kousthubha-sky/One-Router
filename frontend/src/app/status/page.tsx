@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import DashboardLayout from '@/components/DashboardLayout';
-import { BentoGrid } from '@/components/ui/bento-grid';
+import { LazyBentoGrid } from '@/components/lazy';
 
 interface ServiceStatus {
   name: string;
@@ -76,7 +76,7 @@ export default function StatusPage() {
       <div className="text-white font-sans border-t border-white/10">
         <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
           {/* Metrics */}
-          <BentoGrid items={[
+          <LazyBentoGrid items={[
             {
               title: "System Status",
               meta: allOperational ? "Operational" : "Degraded",

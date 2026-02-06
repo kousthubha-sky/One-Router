@@ -17,7 +17,6 @@ import {
   Calendar,
   Home,
   DollarSign,
-  FileText,
   HelpCircle,
   Users,
   BookOpen,
@@ -110,21 +109,15 @@ const resourcesItems: NavItem[] = [
 ];
 
 const companyItems: NavItem[] = [
-  { 
-    href: '/about', 
-    title: 'About Us', 
+  {
+    href: '/about',
+    title: 'About Us',
     icon: <Users className="w-4 h-4" />,
     description: 'Learn about our company'
   },
-  { 
-    href: '/blog', 
-    title: 'Blog', 
-    icon: <FileText className="w-4 h-4" />,
-    description: 'Read our latest updates'
-  },
-  { 
-    href: '/status', 
-    title: 'Status', 
+  {
+    href: '/status',
+    title: 'Status',
     icon: <Globe className="w-4 h-4" />,
     description: 'Service status and uptime'
   },

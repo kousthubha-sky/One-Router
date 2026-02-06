@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
@@ -13,6 +14,9 @@ from ..models import ServiceCredential
 from ..models.user import User
 from ..services.credential_manager import CredentialManager
 from ..responses import success_response
+from ..cache import cache_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -690,13 +694,20 @@ async def switch_all_environments_atomic(
         # Commit the transaction
         await db.commit()
 
+        # Invalidate user preferences cache
+        try:
+            await cache_service.invalidate_user_preferences(user_id)
+            logger.debug(f"Invalidated preferences cache for user {user_id}")
+        except Exception as e:
+            logger.debug(f"Failed to invalidate preferences cache: {e}")
+
         response = {
             "status": "switched",
             "environment": target_env,
             "message": f"Environment switched to {target_env}",
             "timestamp": datetime.utcnow().isoformat()
         }
-        
+
         # Add partial switch info if applicable
         if request.partial_switch:
             response["partial_switch"] = True
@@ -704,15 +715,15 @@ async def switch_all_environments_atomic(
             response["skipped_services"] = skipped_services
             if skipped_services:
                 response["message"] = f"Switched {len(switched_services)} service(s) to {target_env}. {len(skipped_services)} service(s) kept in current mode (missing {target_env} credentials)."
-        
+
         return response
-        
+
     except HTTPException:
         await db.rollback()
         raise
     except Exception as e:
         await db.rollback()
-        print(f"Error switching all environments: {e}")
+        logger.error(f"Error switching all environments: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to switch environments: {str(e)}"

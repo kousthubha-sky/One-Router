@@ -1,8 +1,12 @@
 import time
 import uuid
+import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from ..models import TransactionLog
+from ..cache import cache_service
+
+logger = logging.getLogger(__name__)
 
 class TransactionLogger:
     """Logs all API transactions for analytics"""
@@ -57,6 +61,12 @@ class TransactionLogger:
                     response_payload=response_data,
                     response_status=status_code,
                     response_time_ms=response_time_ms,
-                    status="completed" if status_code < 400 else "failed"
+                    status="success" if status_code < 400 else "failed"
                 )
             )
+
+            # Invalidate analytics cache for this user
+            try:
+                await cache_service.invalidate_user_analytics(log_entry.user_id)
+            except Exception as e:
+                logger.debug(f"Failed to invalidate analytics cache: {e}")

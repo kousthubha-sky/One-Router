@@ -9,13 +9,15 @@ import {
   Wallet, ChevronRight, ChevronDown, Mail, CreditCard
 } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
-import { GlobalEnvironmentToggle } from '@/components/GlobalEnvironmentToggle';
-import { BentoGrid } from '@/components/ui/bento-grid';
-import { VendorModal } from '@/components/VendorModal';
 import { useMarketplaceAPI, Vendor } from '@/lib/api-marketplace';
 import { useClientApiCall } from '@/lib/api-client';
 import { Pagination } from '@/components/ui/pagination';
 import Link from 'next/link';
+import {
+  LazyGlobalEnvironmentToggle,
+  LazyBentoGrid,
+  LazyVendorModal
+} from '@/components/lazy';
 
 interface Service {
   id: string;
@@ -91,7 +93,7 @@ export default function MarketplacePage() {
         <header className="border-[#333] backdrop-blur-sm">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-l border-r border-white/10">
             <div className="flex justify-between items-center py-6">
-              <GlobalEnvironmentToggle services={services} apiClient={apiClient} />
+              <LazyGlobalEnvironmentToggle services={services} apiClient={apiClient} />
               <Button
                 onClick={() => setIsModalOpen(true)}
                 className="bg-white text-black hover:bg-zinc-200 text-sm h-9"
@@ -105,7 +107,7 @@ export default function MarketplacePage() {
 
         <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
           {/* Metrics */}
-          <BentoGrid items={[
+          <LazyBentoGrid items={[
             {
               title: "Total Vendors",
               meta: `${vendors.length}`,
@@ -268,7 +270,7 @@ export default function MarketplacePage() {
         </main>
       </div>
 
-      <VendorModal
+      <LazyVendorModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSuccess={handleVendorCreated}

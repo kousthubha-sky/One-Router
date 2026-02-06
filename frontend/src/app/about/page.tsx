@@ -8,8 +8,8 @@ import {
   Github, Twitter, Linkedin, Building2, Users, Target
 } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
-import { BentoGrid } from '@/components/ui/bento-grid';
 import Link from 'next/link';
+import { LazyBentoGrid } from '@/components/lazy';
 
 export default function AboutPage() {
   const features = [
@@ -40,7 +40,7 @@ export default function AboutPage() {
       <div className="text-white font-sans border-t border-white/10">
         <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
           {/* Metrics */}
-          <BentoGrid items={[
+          <LazyBentoGrid items={[
             {
               title: "Mission",
               meta: "Simplify",

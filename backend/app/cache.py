@@ -10,6 +10,8 @@ from typing import Optional
 import json
 from datetime import timedelta, datetime
 import uuid
+import hashlib
+import hmac
 from cryptography.fernet import Fernet
 import logging
 
@@ -322,12 +324,178 @@ class CacheService:
         """Get cached user session"""
         redis = await self._get_redis()
         key = "session:{}".format(clerk_user_id)
-        
+
         data = await redis.get(key)
         if data:
             return json.loads(data)
         return None
-    
+
+    # ============================================
+    # USER PREFERENCES CACHING
+    # ============================================
+
+    def _hash_key(self, prefix: str, *args) -> str:
+        """Generate a secure hashed cache key to prevent enumeration attacks"""
+        secret = os.getenv("SECRET_KEY", "default-secret-key")
+        data = ":".join(str(a) for a in args)
+        key_hash = hmac.new(
+            secret.encode(),
+            f"{prefix}:{data}".encode(),
+            hashlib.sha256
+        ).hexdigest()[:24]
+        return f"{prefix}:{key_hash}"
+
+    async def cache_user_preferences(
+        self,
+        user_id: str,
+        preferences: dict,
+        ttl: int = 3600  # 1 hour
+    ):
+        """
+        Cache user preferences (environment settings).
+        Key is hashed to prevent user ID enumeration.
+        """
+        redis = await self._get_redis()
+        key = self._hash_key("userpref", user_id)
+
+        await redis.set(key, json.dumps(preferences), ex=ttl)
+
+    async def get_user_preferences(self, user_id: str) -> Optional[dict]:
+        """Get cached user preferences"""
+        redis = await self._get_redis()
+        key = self._hash_key("userpref", user_id)
+
+        data = await redis.get(key)
+        if data:
+            return json.loads(data)
+        return None
+
+    async def invalidate_user_preferences(self, user_id: str):
+        """Invalidate cached user preferences"""
+        redis = await self._get_redis()
+        key = self._hash_key("userpref", user_id)
+
+        await redis.delete(key)
+
+    # ============================================
+    # CREDENTIAL LOOKUP CACHING
+    # ============================================
+
+    async def cache_credential_lookup(
+        self,
+        user_id: str,
+        service_name: str,
+        environment: str,
+        credential_id: str,
+        ttl: int = 300  # 5 minutes
+    ):
+        """
+        Cache credential ID for faster lookups.
+        Only stores the credential ID, not actual credentials.
+        Key is hashed using HMAC for security.
+        """
+        redis = await self._get_redis()
+        key = self._hash_key("credlookup", user_id, service_name, environment)
+
+        await redis.set(key, credential_id, ex=ttl)
+
+    async def get_credential_lookup(
+        self,
+        user_id: str,
+        service_name: str,
+        environment: str
+    ) -> Optional[str]:
+        """Get cached credential ID"""
+        redis = await self._get_redis()
+        key = self._hash_key("credlookup", user_id, service_name, environment)
+
+        return await redis.get(key)
+
+    async def invalidate_credential_cache(
+        self,
+        user_id: str,
+        service_name: str,
+        environment: str
+    ):
+        """Invalidate cached credential lookup"""
+        redis = await self._get_redis()
+        key = self._hash_key("credlookup", user_id, service_name, environment)
+
+        await redis.delete(key)
+
+    async def invalidate_all_credential_cache(self, user_id: str, service_name: str):
+        """Invalidate all credential lookups for a service (both test and live)"""
+        await self.invalidate_credential_cache(user_id, service_name, "test")
+        await self.invalidate_credential_cache(user_id, service_name, "live")
+
+    # ============================================
+    # ANALYTICS CACHING
+    # ============================================
+
+    # TTLs by metric type (in seconds)
+    _ANALYTICS_TTLS = {
+        "overview": 3600,      # 1 hour
+        "timeseries": 7200,    # 2 hours
+        "cost": 14400,         # 4 hours
+        "errors": 3600,        # 1 hour
+        "service": 3600,       # 1 hour
+        "logs": 300,           # 5 minutes for logs
+    }
+
+    async def cache_analytics(
+        self,
+        user_id: str,
+        metric_type: str,
+        period: str,
+        data: dict,
+        ttl: int = None
+    ):
+        """
+        Cache analytics query results.
+        Different metrics have different TTLs based on how frequently they change.
+        """
+        redis = await self._get_redis()
+        key = self._hash_key("analytics", user_id, metric_type, period)
+
+        actual_ttl = ttl or self._ANALYTICS_TTLS.get(metric_type, 3600)
+
+        await redis.set(key, json.dumps(data), ex=actual_ttl)
+
+    async def get_cached_analytics(
+        self,
+        user_id: str,
+        metric_type: str,
+        period: str
+    ) -> Optional[dict]:
+        """Get cached analytics results"""
+        redis = await self._get_redis()
+        key = self._hash_key("analytics", user_id, metric_type, period)
+
+        data = await redis.get(key)
+        if data:
+            return json.loads(data)
+        return None
+
+    async def invalidate_user_analytics(self, user_id: str):
+        """
+        Invalidate all analytics caches for a user.
+        Called when new transactions are logged.
+        """
+        redis = await self._get_redis()
+
+        # Invalidate common metric types and periods
+        metric_types = ["overview", "timeseries", "cost", "errors", "service", "logs"]
+        periods = ["7d", "30d", "90d", "1y", "24h"]
+
+        keys_to_delete = []
+        for metric in metric_types:
+            for period in periods:
+                key = self._hash_key("analytics", user_id, metric, period)
+                keys_to_delete.append(key)
+
+        if keys_to_delete:
+            await redis.delete(*keys_to_delete)
+
     # ============================================
     # UTILITY METHODS
     # ============================================
@@ -359,6 +527,18 @@ class CacheService:
                 "message": str(e)
             }
 
+    async def clear_pattern(self, pattern: str):
+        """Clear all keys matching pattern (use with caution!)"""
+        redis = await self._get_redis()
+        cursor = 0
+
+        while True:
+            cursor, keys = await redis.scan(cursor, match=pattern, count=100)
+            if keys:
+                await redis.delete(*keys)
+            if cursor == 0:
+                break
+
 
 async def check_redis_connection() -> dict:
     """Check Redis connection health for health checks"""
@@ -379,18 +559,6 @@ async def check_redis_connection() -> dict:
 
     except Exception as e:
         return {"status": "error", "message": str(e)}
-    
-    async def clear_pattern(self, pattern: str):
-        """Clear all keys matching pattern (use with caution!)"""
-        redis = await self._get_redis()
-        cursor = 0
-        
-        while True:
-            cursor, keys = await redis.scan(cursor, match=pattern, count=100)
-            if keys:
-                await redis.delete(*keys)
-            if cursor == 0:
-                break
 
 
 # Global cache instance

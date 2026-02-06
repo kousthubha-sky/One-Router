@@ -3,6 +3,7 @@
 Environment management - Test/Live mode switching
 """
 
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
@@ -11,6 +12,9 @@ from typing import Dict, Any
 from ..database import get_db
 from ..auth.dependencies import get_current_user
 from ..models import ServiceCredential, User
+from ..cache import cache_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -135,6 +139,13 @@ async def switch_environment(
 
         await db.commit()  # Single commit for both changes
 
+        # Invalidate user preferences cache
+        try:
+            await cache_service.invalidate_user_preferences(user_id)
+            logger.debug(f"Invalidated preferences cache for user {user_id}")
+        except Exception as e:
+            logger.debug(f"Failed to invalidate preferences cache: {e}")
+
         return {
             "status": "switched",
             "service": service_name,
@@ -256,6 +267,13 @@ async def set_user_environment(
         user_obj.preferences["current_environment"] = environment
         flag_modified(user_obj, "preferences")
         await db.commit()
+
+        # Invalidate user preferences cache
+        try:
+            await cache_service.invalidate_user_preferences(user['id'])
+            logger.debug(f"Invalidated preferences cache for user {user['id']}")
+        except Exception as e:
+            logger.debug(f"Failed to invalidate preferences cache: {e}")
 
         return {"success": True, "environment": environment}
 

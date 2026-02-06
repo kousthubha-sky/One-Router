@@ -4,6 +4,7 @@ Advanced Analytics Dashboard
 Provides comprehensive usage analytics, performance metrics, and cost analysis
 """
 
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc, and_, or_, case, text
@@ -15,6 +16,9 @@ from ..database import get_db
 from ..auth.dependencies import get_current_user
 from ..models import TransactionLog, ApiKey, User, WebhookEvent
 from ..responses import success_response, paginated_response
+from ..cache import cache_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -228,7 +232,7 @@ async def get_analytics_overview(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Get comprehensive analytics overview
+    Get comprehensive analytics overview (cached for 1 hour)
 
     Returns:
     - Total API calls
@@ -243,6 +247,21 @@ async def get_analytics_overview(
     """
     try:
         user_id = str(user.get("id"))
+
+        # Check cache first
+        try:
+            cached_data = await cache_service.get_cached_analytics(user_id, "overview", period)
+            if cached_data:
+                logger.debug(f"Analytics overview cache hit for user {user_id}")
+                if response_format == "standard":
+                    return success_response(
+                        data=cached_data,
+                        request_id=getattr(request.state, "request_id", str(uuid4()))
+                    )
+                return cached_data
+        except Exception as e:
+            logger.debug(f"Cache lookup failed: {e}")
+
         since_date = await AnalyticsService.get_date_range(period)
         api_key_ids = await AnalyticsService.get_user_api_keys(user_id, db)
 
@@ -274,6 +293,12 @@ async def get_analytics_overview(
             **costs
         }
 
+        # Cache the result
+        try:
+            await cache_service.cache_analytics(user_id, "overview", period, data)
+        except Exception as e:
+            logger.debug(f"Failed to cache analytics: {e}")
+
         if response_format == "standard":
             return success_response(
                 data=data,
@@ -293,17 +318,35 @@ async def get_analytics_timeseries(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Get time series data for charts
+    Get time series data for charts (cached for 2 hours)
     """
     try:
         user_id = str(user.get("id"))
+
+        # Check cache first
+        try:
+            cached_data = await cache_service.get_cached_analytics(user_id, "timeseries", period)
+            if cached_data:
+                logger.debug(f"Analytics timeseries cache hit for user {user_id}")
+                return cached_data
+        except Exception as e:
+            logger.debug(f"Cache lookup failed: {e}")
+
         since_date = await AnalyticsService.get_date_range(period)
         api_key_ids = await AnalyticsService.get_user_api_keys(user_id, db)
 
         if not api_key_ids:
             return {"daily_volume": []}
 
-        return await AnalyticsService.calculate_time_series_data(user_id, api_key_ids, since_date, db)
+        data = await AnalyticsService.calculate_time_series_data(user_id, api_key_ids, since_date, db)
+
+        # Cache the result
+        try:
+            await cache_service.cache_analytics(user_id, "timeseries", period, data)
+        except Exception as e:
+            logger.debug(f"Failed to cache analytics: {e}")
+
+        return data
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Time series analytics error: {str(e)}")
@@ -317,10 +360,21 @@ async def get_service_analytics(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Get service-specific analytics
+    Get service-specific analytics (cached for 1 hour)
     """
     try:
         user_id = str(user.get("id"))
+        cache_key_period = f"{service_name}:{period}"
+
+        # Check cache first
+        try:
+            cached_data = await cache_service.get_cached_analytics(user_id, "service", cache_key_period)
+            if cached_data:
+                logger.debug(f"Analytics service cache hit for user {user_id}")
+                return cached_data
+        except Exception as e:
+            logger.debug(f"Cache lookup failed: {e}")
+
         since_date = await AnalyticsService.get_date_range(period)
         api_key_ids = await AnalyticsService.get_user_api_keys(user_id, db)
 
@@ -397,13 +451,21 @@ async def get_service_analytics(
             for row in endpoints_result
         ]
 
-        return {
+        data = {
             "service": service_name,
             "period": period,
             "since_date": since_date.isoformat(),
             **metrics,
             "top_endpoints": top_endpoints
         }
+
+        # Cache the result
+        try:
+            await cache_service.cache_analytics(user_id, "service", cache_key_period, data)
+        except Exception as e:
+            logger.debug(f"Failed to cache analytics: {e}")
+
+        return data
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Service analytics error: {str(e)}")
@@ -416,10 +478,20 @@ async def get_error_analytics(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Get error analytics and trends
+    Get error analytics and trends (cached for 1 hour)
     """
     try:
         user_id = str(user.get("id"))
+
+        # Check cache first
+        try:
+            cached_data = await cache_service.get_cached_analytics(user_id, "errors", period)
+            if cached_data:
+                logger.debug(f"Analytics errors cache hit for user {user_id}")
+                return cached_data
+        except Exception as e:
+            logger.debug(f"Cache lookup failed: {e}")
+
         since_date = await AnalyticsService.get_date_range(period)
         api_key_ids = await AnalyticsService.get_user_api_keys(user_id, db)
 
@@ -520,7 +592,7 @@ async def get_error_analytics(
             for row in service_errors_result
         }
 
-        return {
+        data = {
             "period": period,
             "total_errors": total_errors,
             "error_rate": error_rate,
@@ -528,6 +600,14 @@ async def get_error_analytics(
             "daily_errors": daily_errors,
             "errors_by_service": errors_by_service
         }
+
+        # Cache the result
+        try:
+            await cache_service.cache_analytics(user_id, "errors", period, data)
+        except Exception as e:
+            logger.debug(f"Failed to cache analytics: {e}")
+
+        return data
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error analytics error: {str(e)}")
@@ -540,10 +620,20 @@ async def get_cost_analytics(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Get cost analytics and projections
+    Get cost analytics and projections (cached for 4 hours)
     """
     try:
         user_id = str(user.get("id"))
+
+        # Check cache first
+        try:
+            cached_data = await cache_service.get_cached_analytics(user_id, "cost", period)
+            if cached_data:
+                logger.debug(f"Analytics cost cache hit for user {user_id}")
+                return cached_data
+        except Exception as e:
+            logger.debug(f"Cache lookup failed: {e}")
+
         since_date = await AnalyticsService.get_date_range(period)
         api_key_ids = await AnalyticsService.get_user_api_keys(user_id, db)
 
@@ -555,7 +645,15 @@ async def get_cost_analytics(
                 "projected_monthly": 0
             }
 
-        return await AnalyticsService.calculate_cost_analytics(user_id, api_key_ids, since_date, db)
+        data = await AnalyticsService.calculate_cost_analytics(user_id, api_key_ids, since_date, db)
+
+        # Cache the result
+        try:
+            await cache_service.cache_analytics(user_id, "cost", period, data)
+        except Exception as e:
+            logger.debug(f"Failed to cache analytics: {e}")
+
+        return data
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Cost analytics error: {str(e)}")

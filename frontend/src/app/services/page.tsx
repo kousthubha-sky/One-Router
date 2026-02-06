@@ -6,12 +6,14 @@ import { Button } from '@/components/ui/button';
 import { CheckCircle2, Settings, Loader2, Pencil, Key, Shield, ToggleLeft, ToggleRight } from 'lucide-react';
 import Link from 'next/link';
 import DashboardLayout from '@/components/DashboardLayout';
-import { GlobalEnvironmentToggle } from '@/components/GlobalEnvironmentToggle';
-import { BentoGrid } from '@/components/ui/bento-grid';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { EditServiceModal } from '@/components/EditServiceModal';
-import { ServiceModesOverview } from '@/components/ServiceModesOverview';
+import {
+  LazyGlobalEnvironmentToggle,
+  LazyBentoGrid,
+  LazyEditServiceModal,
+  LazyServiceModesOverview
+} from '@/components/lazy';
 
 interface Service {
   id: string;
@@ -109,7 +111,7 @@ export default function ServicesPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-l border-r border-white/10">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 py-6">
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto">
-                <GlobalEnvironmentToggle 
+                <LazyGlobalEnvironmentToggle 
                   services={servicesData} 
                   onGlobalSwitch={handleEnvironmentChange}
                   apiClient={apiClient}
@@ -138,7 +140,7 @@ export default function ServicesPage() {
             </div>
 
             {/* Services Metrics */}
-            <BentoGrid items={[
+            <LazyBentoGrid items={[
               {
                 title: "Connected Services",
                 meta: `${services.length} active in ${currentEnvironment}`,
@@ -162,7 +164,7 @@ export default function ServicesPage() {
             {/* Service Modes Overview - Shows categorized view */}
             {services.length > 0 && (
               <div className="mt-8">
-                <ServiceModesOverview services={services} />
+                <LazyServiceModesOverview services={services} />
               </div>
             )}
 
@@ -308,7 +310,7 @@ export default function ServicesPage() {
                                 </span>
                               </td>
                               <td className="px-6 py-4 text-right">
-                                <EditServiceModal
+                                <LazyEditServiceModal
                                   service={service}
                                   trigger={
                                     <button
@@ -394,7 +396,7 @@ export default function ServicesPage() {
                               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                               <span className="text-green-400 text-xs">Active</span>
                             </div>
-                            <EditServiceModal
+                            <LazyEditServiceModal
                               service={service}
                               trigger={
                                 <button className="p-2 rounded-lg hover:bg-[#222] transition-colors">

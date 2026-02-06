@@ -1,8 +1,7 @@
 'use client';
 
-
 import { useRouter } from "next/navigation";
-import EnvOnboardingFlow from "@/components/EnvOnboardingFlow";
+import { LazyEnvOnboardingFlow } from "@/components/lazy";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -11,5 +10,5 @@ export default function OnboardingPage() {
     router.push('/dashboard');
   };
 
-  return <EnvOnboardingFlow onBack={handleBack} />;
+  return <LazyEnvOnboardingFlow onBack={handleBack} />;
 }

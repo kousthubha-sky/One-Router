@@ -3,11 +3,10 @@
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { MarqueeDemo } from "@/components/ui/marquee-demo";
 import { Github, Plus, Activity } from "lucide-react";
-import { FeaturesSectionWithHoverEffects } from "@/components/feature-section-with-hover-effects";
 import { useState, useEffect } from "react";
 import { BookOpen, Boxes, Users } from "lucide-react";
+import { LazyFeaturesSectionWithHoverEffects, LazyMarqueeDemo } from "@/components/lazy";
 
 // Live API Status Component
 function LiveAPIStatus() {
@@ -346,7 +345,7 @@ export default function Home() {
 
         {/* Features Section with Hover Effects */}
         <section className="px-4 sm:px-6 py-12 sm:py-20">
-          <FeaturesSectionWithHoverEffects />
+          <LazyFeaturesSectionWithHoverEffects />
         </section>
 
         {/* Service Integrations - Marquee */}
@@ -359,7 +358,7 @@ export default function Home() {
               Payments, SMS, and Email - unified under one API. More integrations coming soon.
             </p>
 
-            <MarqueeDemo />
+            <LazyMarqueeDemo />
           </div>
         </section>
 

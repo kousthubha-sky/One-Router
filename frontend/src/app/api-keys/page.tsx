@@ -8,11 +8,13 @@ import { Button } from '@/components/ui/button';
 import { Copy, Key, Plus, Shield, AlertTriangle, ZapIcon, GitGraph, Lock } from 'lucide-react';
 import Link from 'next/link';
 import DashboardLayout from '@/components/DashboardLayout';
-import { GlobalEnvironmentToggle } from '@/components/GlobalEnvironmentToggle';
-import { BentoGrid } from '@/components/ui/bento-grid';
-
-import ApiKeysTable from '@/components/ApiKeysTable';
-import { EditApiKeyModal, ActivityModal } from '@/components/ApiKeyModals';
+import {
+  LazyGlobalEnvironmentToggle,
+  LazyBentoGrid,
+  LazyApiKeysTable,
+  LazyEditApiKeyModal,
+  LazyActivityModal
+} from '@/components/lazy';
 
 interface APIKey {
   id: string;
@@ -210,7 +212,7 @@ export default function APIKeysPage() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-l border-r border-white/10">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 py-6">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto">
-                  <GlobalEnvironmentToggle
+                  <LazyGlobalEnvironmentToggle
                     services={services}
                     onGlobalSwitch={handleEnvironmentChange}
                     apiClient={clientApiCall}
@@ -237,7 +239,7 @@ export default function APIKeysPage() {
           </div>
           <div className="relative z-10">
             {/* API Keys Metrics */}
-            <BentoGrid items={[
+            <LazyBentoGrid items={[
               {
                 title: "Total API Keys",
                 meta: `${apiKeys.length} active`,
@@ -333,7 +335,7 @@ export default function APIKeysPage() {
                 </Button>
               </div>
               
-              <ApiKeysTable
+              <LazyApiKeysTable
                 apiKeys={apiKeys}
                 onEdit={handleEditKey}
                 onDisable={handleDisableKey}
@@ -386,7 +388,7 @@ export default function APIKeysPage() {
         </main>
 
         {/* Modals */}
-        <EditApiKeyModal
+        <LazyEditApiKeyModal
           isOpen={isEditModalOpen}
           apiKey={editingKey}
           onClose={() => {
@@ -397,7 +399,7 @@ export default function APIKeysPage() {
           loading={isSaving}
         />
 
-        <ActivityModal
+        <LazyActivityModal
           isOpen={isActivityModalOpen}
           apiKey={viewingActivity}
           onClose={() => {

@@ -13,9 +13,8 @@ import {
 } from "lucide-react";
 import { useClientApiCall } from "@/lib/api-client";
 import DashboardLayout from "@/components/DashboardLayout";
-import { GlobalEnvironmentToggle } from "@/components/GlobalEnvironmentToggle";
-import { BentoGrid } from "@/components/ui/bento-grid";
 import Link from "next/link";
+import { LazyGlobalEnvironmentToggle, LazyBentoGrid } from "@/components/lazy";
 
 interface AnalyticsOverview {
   period: string;
@@ -154,7 +153,7 @@ export default function AnalyticsPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-l border-r border-white/10">
             <div className="flex justify-between items-center py-6">
               <div className="flex items-center space-x-4">
-                <GlobalEnvironmentToggle services={services} />
+                <LazyGlobalEnvironmentToggle services={services} />
                 {balance && (
                   <Link href="/credits" className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyan-500/10 hover:bg-cyan-500/20 transition-colors">
                     <DollarSign className="w-4 h-4 text-cyan-400" />
@@ -228,7 +227,7 @@ export default function AnalyticsPage() {
           {/* Analytics Overview */}
           {hasServices && (
             <>
-              <BentoGrid items={[
+              <LazyBentoGrid items={[
                 {
                   title: "Total API Calls",
                   meta: (overview?.total_calls || 0).toLocaleString(),

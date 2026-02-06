@@ -7,7 +7,6 @@ import { Shield, Key, BarChart3, Link as LinkIcon, CheckCircle2, Pencil, Sparkle
 import Link from "next/link";
 import DashboardLayout from "@/components/DashboardLayout";
 import { GlobalEnvironmentToggle } from "@/components/GlobalEnvironmentToggle";
-import { EditServiceModal } from "@/components/EditServiceModal";
 import { BentoGrid } from "@/components/ui/bento-grid";
 import { ConnectedServicesSection } from "@/components/ConnectedServicesSection";
 
