@@ -679,10 +679,10 @@ async def generic_proxy(
             log_entry.response_payload = result
             log_entry.response_status = 200
             log_entry.response_time_ms = response_time_ms
-            log_entry.status = "completed"
-        
+            log_entry.status = "success"
+
         await db.commit()
-        
+
         # Cache the response for idempotent retrieval
         await cache_service.cache_idempotent_response(user["id"], idempotency_key, result)
         
@@ -853,7 +853,7 @@ async def create_payment_link(
             log_entry.response_payload = serialized_result
             log_entry.response_status = 200
             log_entry.response_time_ms = response_time_ms
-            log_entry.status = "completed"
+            log_entry.status = "success"
 
         await db.commit()
 
