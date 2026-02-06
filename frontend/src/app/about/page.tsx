@@ -205,7 +205,7 @@ export default function AboutPage() {
               </div>
 
               {/* Social Links */}
-              <div className="flex gap-3 mt-6 pt-6 border-t border-zinc-800/50">
+              <div className="flex gap-3 mt-6 pt-6 border-t border-zinc-800/60">
                 <a
                   href="https://github.com/onerouter"
                   target="_blank"
