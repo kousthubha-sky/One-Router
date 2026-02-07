@@ -3,7 +3,7 @@
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Github, Plus, Activity } from "lucide-react";
+import { Github, Plus, Activity, Package, Download } from "lucide-react";
 import { useState, useEffect } from "react";
 import { BookOpen, Boxes, Users } from "lucide-react";
 import { LazyFeaturesSectionWithHoverEffects, LazyMarqueeDemo } from "@/components/lazy";
@@ -111,19 +111,19 @@ export default function Home() {
                  <Link href="/docs" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
                    docs
                  </Link>
-                 <a href="/privacy" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
-                   privacy
-                 </a>
-                 <a href="/terms" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
-                   terms
-                 </a>
+                 <Link href="/sandbox" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
+                   sandbox
+                 </Link>
                  <Link href="/pricing" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
                    pricing
                  </Link>
+                 <a href="/privacy" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
+                   privacy
+                 </a>
                  <a href="/contact" className="text-[#888] hover:text-white transition-all duration-300 font-mono text-xs xl:text-sm hover:underline decoration-[#00ff88]">
                    contact
                  </a>
-                 
+
                </nav>
 
               {/* Right - Auth & GitHub */}
@@ -165,14 +165,14 @@ export default function Home() {
                  <Link href="/docs" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
                    docs
                  </Link>
-                 <Link href="/privacy" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
-                   privacy
-                 </Link>
-                 <Link href="/terms" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
-                   terms
+                 <Link href="/sandbox" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
+                   sandbox
                  </Link>
                  <Link href="/pricing" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
                    pricing
+                 </Link>
+                 <Link href="/privacy" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
+                   privacy
                  </Link>
                  <Link href="/contact" className="block text-[#888] hover:text-white transition-colors duration-200 font-mono text-sm py-2 border-b border-[#222]">
                    contact
@@ -260,14 +260,21 @@ export default function Home() {
                       </Button>
                     </Link>
                   </SignedIn>
+                <Link href="/sandbox">
+                  <Button className="px-4 sm:px-8 py-2 sm:py-3 text-xs sm:text-sm bg-transparent border border-[#00ff88]/40 text-[#00ff88] font-bold rounded-lg hover:border-[#00ff88]/70 transition-all duration-300 transform hover:scale-105 font-mono flex items-center gap-2 hover:bg-[#00ff88]/5">
+                    <Activity className="w-3 sm:w-4 h-3 sm:h-4" />
+                    <span className="hidden sm:inline">Try Live Demo</span>
+                    <span className="sm:hidden">Demo</span>
+                  </Button>
+                </Link>
                 <Link href="/docs">
                   <Button className="px-4 sm:px-8 py-2 sm:py-3 text-xs sm:text-sm bg-transparent border border-white/30 text-white font-bold rounded-lg hover:border-white/60 transition-all duration-300 transform hover:scale-105 font-mono flex items-center gap-2 hover:bg-white/5">
                     <Plus className="w-3 sm:w-4 h-3 sm:h-4" />
                     <span className="hidden sm:inline">View Documentation</span>
                     <span className="sm:hidden">Docs</span>
                   </Button>
-                </Link>  
-                  
+                </Link>
+
                 </div>
 
                 {/* Trust Badges */}
@@ -339,6 +346,41 @@ export default function Home() {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Social Proof / SDK Distribution */}
+        <section className="px-4 sm:px-6 py-10 sm:py-14 border-t border-[#222]">
+          <div className="max-w-4xl mx-auto">
+            <p className="text-center text-xs sm:text-sm text-[#666] font-mono mb-6">Available on your favorite package manager</p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-8">
+              <a
+                href="https://www.npmjs.com/package/onerouterjs-sdk"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 bg-[#0a0a0a] border border-[#222] rounded-lg px-5 py-3 hover:border-[#444] transition-all duration-300 group"
+              >
+                <Package className="w-5 h-5 text-[#cb3837] group-hover:scale-110 transition-transform" />
+                <div>
+                  <div className="text-sm font-mono text-white font-semibold">onerouter-js</div>
+                  <div className="text-[10px] font-mono text-[#888]">npm install onerouter-js</div>
+                </div>
+                <Download className="w-4 h-4 text-[#666] ml-2" />
+              </a>
+              <a
+                href="https://pypi.org/project/onerouter/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 bg-[#0a0a0a] border border-[#222] rounded-lg px-5 py-3 hover:border-[#444] transition-all duration-300 group"
+              >
+                <Package className="w-5 h-5 text-[#3776ab] group-hover:scale-110 transition-transform" />
+                <div>
+                  <div className="text-sm font-mono text-white font-semibold">onerouter</div>
+                  <div className="text-[10px] font-mono text-[#888]">pip install onerouter</div>
+                </div>
+                <Download className="w-4 h-4 text-[#666] ml-2" />
+              </a>
             </div>
           </div>
         </section>
@@ -581,7 +623,7 @@ export default function Home() {
               <div>
                 <h4 className="font-bold font-mono mb-4 text-white text-xs sm:text-sm">Product</h4>
                 <ul className="space-y-2 text-[#888] text-xs sm:text-sm font-mono">
-                  <li><a href="" className="hover:text-white transition-colors duration-300 hover:underline decoration-[#666]">Features</a></li>
+                  <li><a href="/sandbox" className="hover:text-white transition-colors duration-300 hover:underline decoration-[#666]">Sandbox</a></li>
                   <li><a href="/pricing" className="hover:text-white transition-colors duration-300 hover:underline decoration-[#666]">Pricing</a></li>
                   <li><a href="/docs" className="hover:text-white transition-colors duration-300 hover:underline decoration-[#666]">Docs</a></li>
                 </ul>
@@ -589,9 +631,9 @@ export default function Home() {
               <div>
                 <h4 className="font-bold font-mono mb-4 text-white text-xs sm:text-sm">Company</h4>
                 <ul className="space-y-2 text-[#888] text-xs sm:text-sm font-mono">
-                  <li><a href="#" className="hover:text-white transition-colors duration-300 hover:underline decoration-[#666]">Blog</a></li>
-                  <li><a href="#" className="hover:text-white transition-colors duration-300 hover:underline decoration-[#666]">GitHub</a></li>
-                  <li><a href="#" className="hover:text-white transition-colors duration-300 hover:underline decoration-[#666]">Community</a></li>
+                  <li><a href="/docs" className="hover:text-white transition-colors duration-300 hover:underline decoration-[#666]">Blog</a></li>
+                  <li><a href="https://github.com/onerouter" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors duration-300 hover:underline decoration-[#666]">GitHub</a></li>
+                  <li><a href="/contact" className="hover:text-white transition-colors duration-300 hover:underline decoration-[#666]">Community</a></li>
                 </ul>
               </div>
               <div>
@@ -599,13 +641,13 @@ export default function Home() {
                 <ul className="space-y-2 text-[#888] text-xs sm:text-sm font-mono">
                   <li><a href="/privacy" className="hover:text-white transition-colors duration-300 hover:underline decoration-[#666]">Privacy</a></li>
                   <li><a href="/terms" className="hover:text-white transition-colors duration-300 hover:underline decoration-[#666]">Terms</a></li>
-                  <li><a href="" className="hover:text-white transition-colors duration-300 hover:underline decoration-[#666]">License</a></li>
+                  <li><a href="/terms" className="hover:text-white transition-colors duration-300 hover:underline decoration-[#666]">License</a></li>
                 </ul>
               </div>
             </div>
             
             <div className="border-t border-[#222] pt-6 sm:pt-8 text-center text-[#666] font-mono text-xs sm:text-sm">
-              <p>© 2025 One Router. Built for developers, by developers.</p>
+              <p>&copy; 2026 One Router. Built for developers, by developers.</p>
             </div>
           </div>
         </footer>

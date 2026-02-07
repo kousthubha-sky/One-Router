@@ -190,8 +190,8 @@ async def rate_limit_middleware(request, call_next):
     """Simplified rate limiting - only for API endpoints"""
     path = request.url.path
 
-    # Skip rate limiting for health checks and docs
-    if path in ["/", "/docs", "/redoc", "/api/health", "/openapi.json"]:
+    # Skip rate limiting for health checks, docs, and sandbox (has its own rate limiter)
+    if path in ["/", "/docs", "/redoc", "/api/health", "/openapi.json"] or path.startswith("/api/sandbox"):
         response = await call_next(request)
         return response
 
@@ -305,6 +305,7 @@ async def csrf_validation_middleware(request: Request, call_next):
         "/v1/",           # All unified API endpoints
         "/api/keys",      # API key management
         "/webhooks/",     # Webhook receivers
+        "/api/sandbox/",  # Sandbox endpoints (no auth required)
     ]
 
     if any(path.startswith(api_path) for api_path in api_paths):
@@ -543,6 +544,10 @@ app.include_router(credits_callback_router, tags=["credits-callback"])
 
 # Admin routes (RBAC, audit, GDPR)
 app.include_router(admin_router, tags=["admin"])
+
+# Sandbox/demo routes (no auth required)
+from .routes.sandbox import router as sandbox_router
+app.include_router(sandbox_router, prefix="/api/sandbox", tags=["sandbox"])
 
 # Health check endpoint
 @app.get("/")
