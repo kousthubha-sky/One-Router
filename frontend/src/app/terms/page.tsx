@@ -182,7 +182,7 @@ export default function TermsPage() {
             <h2 className="text-white font-medium mb-3">8. Contact</h2>
             <p className="leading-relaxed">
               For questions about these terms, contact us at{' '}
-              <a href="mailto:support@onerouter.com" className="text-white hover:underline">
+              <a href="mailto:support.onerouter@stack-end.com" className="text-white hover:underline">
                 support@onerouter.com
               </a>
             </p>

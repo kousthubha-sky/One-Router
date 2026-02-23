@@ -99,6 +99,11 @@ class Settings:
     DODO_WEBHOOK_SECRET: str = os.getenv("DODO_WEBHOOK_SECRET", "")
     DODO_MODE: str = os.getenv("DODO_MODE", "test")  # "test" or "live"
     DODO_PRODUCT_ID: str = os.getenv("DODO_PRODUCT_ID", "")
+    
+    # Dodo Subscription Product IDs (for each subscription tier)
+    DODO_SUBSCRIPTION_ID1: str = os.getenv("DODO_SUBSCRIPTION_ID1", "")  # Pro plan
+    DODO_SUBSCRIPTION_ID2: str = os.getenv("DODO_SUBSCRIPTION_ID2", "")  # Team plan
+    DODO_SUBSCRIPTION_ID3: str = os.getenv("DODO_SUBSCRIPTION_ID3", "")  # Enterprise plan
 
     def __init__(self):
         """Initialize settings and validate/generate encryption key"""

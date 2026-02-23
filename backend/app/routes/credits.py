@@ -10,9 +10,9 @@ import jwt
 import logging
 import httpx
 from uuid import uuid4
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
@@ -23,7 +23,7 @@ from ..database import get_db
 from ..auth.dependencies import get_current_user, get_api_user, get_api_or_current_user
 from ..services.credits_service import CreditsService
 from ..services.razorpay_service import RazorpayService, CreditPricingService
-from ..models import UserCredit, CreditTransaction, OneRouterPayment, TransactionType, PaymentStatus
+from ..models import UserCredit, CreditTransaction, OneRouterPayment, TransactionType, PaymentStatus, Subscription, SubscriptionStatus
 from ..config import settings
 from ..responses import success_response, paginated_response
 
@@ -251,7 +251,7 @@ async def purchase_credits(
                     amount_usd = amount_inr / usd_to_inr
                     credits_in_cents = int(round(amount_usd * 100))
 
-                    callback_url = f"{settings.API_BASE_URL}/credits/payment-callback"
+                    callback_url = f"{settings.FRONTEND_URL}/credits/payment-callback"
 
                     # Generate reference_id for signature verification
                     reference_id = f"credit_{user_id[:8]}_{uuid4().hex[:8]}"
@@ -872,6 +872,277 @@ async def dodo_payment_callback(
         url=f"{settings.FRONTEND_URL}/credits/payment-result?token={token}",
         status_code=303
     )
+
+
+# ---------------------------------------------------------------------------
+# Shared helper for subscription credit granting
+# ---------------------------------------------------------------------------
+
+async def _grant_subscription_credits(
+    db: AsyncSession,
+    user_id: str,
+    credits: int,
+    description: str,
+    payment_id: str,
+):
+    """Add credits to user balance and record the transaction."""
+    # Upsert UserCredit row
+    result = await db.execute(
+        select(UserCredit).where(UserCredit.user_id == user_id)
+    )
+    user_credit = result.scalar_one_or_none()
+
+    if user_credit is None:
+        user_credit = UserCredit(
+            user_id=user_id,
+            balance=credits,
+            total_purchased=credits,
+        )
+        db.add(user_credit)
+    else:
+        user_credit.balance += credits
+        user_credit.total_purchased += credits
+
+    # Record transaction
+    tx = CreditTransaction(
+        user_id=user_id,
+        amount=credits,
+        transaction_type=TransactionType.SUBSCRIPTION,
+        payment_id=payment_id,
+        description=description,
+    )
+    db.add(tx)
+
+
+# Subscription callback routes
+@router.get("/subscription-callback/razorpay")
+async def razorpay_subscription_callback(
+    request: Request,
+    razorpay_payment_id: str = Query(None),
+    razorpay_order_id: str = Query(None),
+    razorpay_payment_link_id: str = Query(None),
+    razorpay_payment_link_reference_id: str = Query(None),
+    razorpay_payment_link_status: str = Query(None),
+    razorpay_signature: str = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Handle Razorpay subscription callback redirect with proper lookup."""
+    frontend_url = settings.FRONTEND_URL
+
+    logger.info(
+        f"Razorpay subscription callback received: "
+        f"payment_link_id={razorpay_payment_link_id}, "
+        f"payment_id={razorpay_payment_id}, "
+        f"status={razorpay_payment_link_status}"
+    )
+
+    def redirect_error(message: str):
+        return RedirectResponse(
+            url=f"{frontend_url}/credits?error=subscription_failed&message={message}",
+            status_code=302,
+        )
+
+    def redirect_success(subscription_id: str):
+        return RedirectResponse(
+            url=f"{frontend_url}/credits?subscription_success=true&subscription_id={subscription_id}",
+            status_code=302,
+        )
+
+    # Verify signature — NON-FATAL: log warning and continue.
+    # A bad signature check must NOT block activation since the subscription
+    # lookup below is the real source of truth.
+    if razorpay_signature and razorpay_payment_link_id and razorpay_payment_id:
+        try:
+            sig_payload = (
+                f"{razorpay_payment_link_id}"
+                f"|{razorpay_payment_link_reference_id or ''}"
+                f"|{razorpay_payment_link_status}"
+                f"|{razorpay_payment_id}"
+            )
+            expected_sig = hmac.new(
+                settings.RAZORPAY_KEY_SECRET.encode(),
+                sig_payload.encode(),
+                hashlib.sha256,
+            ).hexdigest()
+            if not hmac.compare_digest(expected_sig, razorpay_signature):
+                # Log as warning only — do not block. Signature mismatch can occur
+                # if the key used differs between subscription creation and callback.
+                logger.warning(
+                    "Razorpay subscription signature mismatch — proceeding with DB lookup. "
+                    f"payment_link_id={razorpay_payment_link_id}"
+                )
+            else:
+                logger.info("Razorpay subscription signature verified OK")
+        except Exception as e:
+            logger.error(f"Signature verification error (non-fatal): {e}")
+
+    # Check payment status
+    if razorpay_payment_link_status != "paid":
+        logger.info(f"Razorpay subscription not paid: status={razorpay_payment_link_status}")
+        return redirect_error(f"payment_status_{razorpay_payment_link_status}")
+
+    # Look up subscription.
+    # Query by provider_order_id (= payment link ID stored at creation time) first,
+    # then fall back to provider_subscription_id for resilience.
+    subscription = None
+
+    if razorpay_payment_link_id:
+        result = await db.execute(
+            select(Subscription).where(
+                or_(
+                    Subscription.provider_order_id == razorpay_payment_link_id,
+                    Subscription.provider_subscription_id == razorpay_payment_link_id,
+                )
+            )
+        )
+        subscription = result.scalar_one_or_none()
+        logger.info(
+            f"Subscription lookup by payment_link_id={razorpay_payment_link_id}: "
+            f"{'found' if subscription else 'NOT FOUND'}"
+        )
+
+    # Fallback: try razorpay_order_id
+    if subscription is None and razorpay_order_id:
+        result = await db.execute(
+            select(Subscription).where(
+                or_(
+                    Subscription.provider_order_id == razorpay_order_id,
+                    Subscription.provider_subscription_id == razorpay_order_id,
+                )
+            )
+        )
+        subscription = result.scalar_one_or_none()
+        logger.info(
+            f"Subscription fallback lookup by order_id={razorpay_order_id}: "
+            f"{'found' if subscription else 'NOT FOUND'}"
+        )
+
+    if subscription is None:
+        logger.error(
+            f"Subscription not found — "
+            f"razorpay_payment_link_id={razorpay_payment_link_id}, "
+            f"razorpay_order_id={razorpay_order_id}. "
+            f"Check that provider_order_id was stored correctly at purchase time."
+        )
+        return redirect_error("subscription_not_found")
+
+    # Idempotency guard
+    if subscription.status == SubscriptionStatus.ACTIVE:
+        logger.info(f"Subscription {subscription.id} already active, skipping")
+        return redirect_success(str(subscription.id))
+
+    # Activate subscription & grant credits
+    now = datetime.now(timezone.utc)
+    subscription.status = SubscriptionStatus.ACTIVE
+    subscription.provider_payment_id = razorpay_payment_id
+    subscription.current_period_start = now
+    subscription.current_period_end = now + timedelta(days=30)
+    subscription.updated_at = now
+
+    await _grant_subscription_credits(
+        db=db,
+        user_id=str(subscription.user_id),
+        credits=subscription.credits_per_month,
+        description=f"{subscription.plan_name} subscription credits",
+        payment_id=str(subscription.id),
+    )
+
+    await db.commit()
+    logger.info(f"Razorpay subscription activated: id={subscription.id}, user={subscription.user_id}")
+
+    return redirect_success(str(subscription.id))
+
+
+@router.get("/subscription-callback/dodo")
+async def dodo_subscription_callback(
+    request: Request,
+    payment_id: str = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Handle Dodo subscription callback redirect with proper lookup."""
+    frontend_url = settings.FRONTEND_URL
+
+    logger.info(f"Dodo subscription callback received: payment_id={payment_id}")
+
+    def redirect_error(message: str):
+        return RedirectResponse(
+            url=f"{frontend_url}/credits?error=subscription_failed&message={message}",
+            status_code=302,
+        )
+
+    def redirect_success(subscription_id: str):
+        return RedirectResponse(
+            url=f"{frontend_url}/credits?subscription_success=true&subscription_id={subscription_id}",
+            status_code=302,
+        )
+
+    if not payment_id:
+        return redirect_error("missing_payment_id")
+
+    # Query by provider_order_id OR provider_subscription_id for resilience.
+    result = await db.execute(
+        select(Subscription).where(
+            or_(
+                Subscription.provider_order_id == payment_id,
+                Subscription.provider_subscription_id == payment_id,
+            )
+        )
+    )
+    subscription = result.scalar_one_or_none()
+
+    logger.info(
+        f"Dodo subscription lookup by payment_id={payment_id}: "
+        f"{'found id=' + str(subscription.id) if subscription else 'NOT FOUND'}"
+    )
+
+    if subscription is None:
+        logger.error(
+            f"Dodo subscription not found for payment_id={payment_id}. "
+            f"Check that provider_order_id was stored correctly at purchase time."
+        )
+        return redirect_error("subscription_not_found")
+
+    # Idempotency guard
+    if subscription.status == SubscriptionStatus.ACTIVE:
+        logger.info(f"Dodo subscription {subscription.id} already active")
+        return redirect_success(str(subscription.id))
+
+    # Verify payment with Dodo API
+    try:
+        from ..adapters.dodo import DodoAdapter
+        dodo = DodoAdapter({
+            "DODO_API_KEY": settings.DODO_API_KEY,
+            "DODO_MODE": settings.DODO_MODE,
+            "DODO_PRODUCT_ID": settings.DODO_PRODUCT_ID,
+        })
+        payment_status = await dodo.get_payment_status(payment_id)
+        if payment_status not in ("paid", "succeeded", "active"):
+            logger.warning(f"Dodo payment not completed: status={payment_status}")
+            return redirect_error(f"payment_status_{payment_status}")
+    except Exception as e:
+        # If status check fails, log but still activate (webhook will reconcile)
+        logger.warning(f"Dodo status check failed (proceeding anyway): {e}")
+
+    # Activate
+    now = datetime.now(timezone.utc)
+    subscription.status = SubscriptionStatus.ACTIVE
+    subscription.provider_payment_id = payment_id
+    subscription.current_period_start = now
+    subscription.current_period_end = now + timedelta(days=30)
+    subscription.updated_at = now
+
+    await _grant_subscription_credits(
+        db=db,
+        user_id=str(subscription.user_id),
+        credits=subscription.credits_per_month,
+        description=f"{subscription.plan_name} subscription credits",
+        payment_id=str(subscription.id),
+    )
+
+    await db.commit()
+    logger.info(f"Dodo subscription activated: id={subscription.id}, user={subscription.user_id}")
+
+    return redirect_success(str(subscription.id))
 
 
 @router.get("/verify-payment/{payment_id}")

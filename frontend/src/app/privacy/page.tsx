@@ -226,7 +226,7 @@ export default function PrivacyPage() {
             <h2 className="text-white font-medium mb-3">Contact</h2>
             <p className="leading-relaxed">
               For privacy questions, contact us at{' '}
-              <a href="mailto:privacy@onerouter.com" className="text-white hover:underline">
+              <a href="mailto:support.onerouter@stack-end.com" className="text-white hover:underline">
                 privacy@onerouter.com
               </a>
             </p>

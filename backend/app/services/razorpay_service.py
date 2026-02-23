@@ -326,7 +326,7 @@ class RazorpayService:
 class CreditPricingService:
     """Service for credit pricing plans"""
 
-    # Credit packages in INR
+    # Credit packages in INR (one-time purchases)
     PRICING_PLANS = [
         {
             "id": "starter",
@@ -357,6 +357,58 @@ class CreditPricingService:
         }
     ]
 
+    # Subscription plans (monthly recurring)
+    SUBSCRIPTION_PLANS = [
+        {
+            "id": "sub_pro",
+            "name": "Pro",
+            "price_usd": 29,
+            "price_inr": 2500,  # ~₹2500 at ~86 INR/USD
+            "credits": 3500,  # $35 worth of credits
+            "interval": "monthly",
+            "description": "For growing teams",
+            "features": [
+                "3,500 credits/month",
+                "All providers included",
+                "Priority support",
+                "Volume discounts on top-ups"
+            ]
+        },
+        {
+            "id": "sub_team",
+            "name": "Team",
+            "price_usd": 99,
+            "price_inr": 8500,  # ~₹8500 at ~86 INR/USD
+            "credits": 12000,  # $120 worth of credits
+            "interval": "monthly",
+            "description": "For teams and businesses",
+            "features": [
+                "12,000 credits/month",
+                "All providers included",
+                "Dedicated account manager",
+                "SLA guarantees",
+                "Volume discounts on top-ups"
+            ]
+        },
+        {
+            "id": "sub_enterprise",
+            "name": "Enterprise",
+            "price_usd": 499,
+            "price_inr": 43000,  # ~₹43000 at ~86 INR/USD
+            "credits": 60000,  # $600 worth of credits
+            "interval": "monthly",
+            "description": "For large scale operations",
+            "features": [
+                "60,000 credits/month",
+                "All providers included",
+                "24/7 dedicated support",
+                "Custom SLAs",
+                "Volume discounts on top-ups",
+                "White-glove onboarding"
+            ]
+        }
+    ]
+
     FREE_TIER = {
         "credits": 1000,
         "description": "Free tier - 1000 credits/month"
@@ -364,16 +416,37 @@ class CreditPricingService:
 
     @classmethod
     def get_plans(cls, currency: str = "INR") -> list:
-        """Get available credit plans"""
+        """Get available one-time credit plans"""
         return cls.PRICING_PLANS
 
     @classmethod
     def get_plan(cls, plan_id: str) -> Optional[Dict]:
-        """Get specific plan details"""
+        """Get specific one-time plan details"""
         for plan in cls.PRICING_PLANS:
             if plan["id"] == plan_id:
                 return plan
         return None
+
+    @classmethod
+    def get_subscription_plans(cls) -> list:
+        """Get available subscription plans"""
+        return cls.SUBSCRIPTION_PLANS
+
+    @classmethod
+    def get_subscription_plan(cls, plan_id: str) -> Optional[Dict]:
+        """Get specific subscription plan details"""
+        for plan in cls.SUBSCRIPTION_PLANS:
+            if plan["id"] == plan_id:
+                return plan
+        return None
+
+    @classmethod
+    def get_credits_for_subscription(cls, plan_id: str) -> int:
+        """Get credits awarded for a subscription plan"""
+        plan = cls.get_subscription_plan(plan_id)
+        if plan:
+            return plan["credits"]
+        return 0
 
     @classmethod
     def calculate_amount(cls, credits: int, currency: str = "INR") -> float:

@@ -542,6 +542,10 @@ from .routes.credits import router as credits_router, callback_router as credits
 app.include_router(credits_router, tags=["credits"])
 app.include_router(credits_callback_router, tags=["credits-callback"])
 
+# Import and include subscriptions router
+from .routes.subscriptions import router as subscriptions_router
+app.include_router(subscriptions_router, tags=["subscriptions"])
+
 # Admin routes (RBAC, audit, GDPR)
 app.include_router(admin_router, tags=["admin"])
 

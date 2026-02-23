@@ -11,6 +11,7 @@ class TransactionType(str, enum.Enum):
     CONSUMPTION = "consumption"
     REFUND = "refund"
     BONUS = "bonus"
+    SUBSCRIPTION = "subscription"
 
 
 class PaymentStatus(str, enum.Enum):
@@ -65,7 +66,7 @@ class OneRouterPayment(Base):
     amount = Column(Numeric(10, 2), nullable=False)  # Payment amount in currency
     currency = Column(String(3), nullable=False, default="INR")
     credits_purchased = Column(Integer, nullable=False)  # Number of credits bought
-    provider = Column(String(50), nullable=False)  # 'razorpay', 'paypal'
+    provider = Column(String(50), nullable=False)  # 'razorpay', 'paypal', 'dodo'
     provider_payment_id = Column(String, nullable=True)  # Razorpay payment_id
     provider_order_id = Column(String, nullable=True)  # Razorpay order_id
     status = Column(SQLEnum(PaymentStatus, native_enum=True, name='payment_status'), nullable=False, default=PaymentStatus.PENDING)
@@ -78,4 +79,44 @@ class OneRouterPayment(Base):
         Index('idx_one_router_payments_user', 'user_id'),
         Index('idx_one_router_payments_status', 'status'),
         Index('idx_one_router_payments_provider', 'provider'),
+    )
+
+
+class SubscriptionStatus(str, enum.Enum):
+    """Status of subscriptions"""
+    PENDING = "pending"
+    ACTIVE = "active"
+    CANCELLED = "cancelled"
+    PAST_DUE = "past_due"
+    EXPIRED = "expired"
+
+
+class Subscription(Base):
+    """Track user subscriptions"""
+    __tablename__ = "subscriptions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    plan_id = Column(String(50), nullable=False)  # 'sub_pro', 'sub_team', 'sub_enterprise'
+    plan_name = Column(String(100), nullable=False)
+    provider = Column(String(50), nullable=False)  # 'razorpay', 'dodo'
+    provider_subscription_id = Column(String, nullable=True)
+    provider_order_id = Column(String, nullable=True)  # Razorpay payment_link_id, Dodo order_id
+    provider_payment_id = Column(String, nullable=True)  # Razorpay payment_id for completed payments
+    credits_per_month = Column(Integer, nullable=False)
+    price = Column(Numeric(10, 2), nullable=False)
+    currency = Column(String(3), nullable=False, default="USD")
+    status = Column(SQLEnum(SubscriptionStatus, native_enum=True, name='subscription_status'), nullable=False, default=SubscriptionStatus.PENDING)
+    current_period_start = Column(TIMESTAMP, nullable=True)
+    current_period_end = Column(TIMESTAMP, nullable=True)
+    cancel_at_period_end = Column(Integer, nullable=False, default=0)  # 1 = yes, 0 = no
+    cancelled_at = Column(TIMESTAMP, nullable=True)
+    ended_at = Column(TIMESTAMP, nullable=True)
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index('idx_subscriptions_user', 'user_id'),
+        Index('idx_subscriptions_status', 'status'),
+        Index('idx_subscriptions_provider', 'provider'),
     )

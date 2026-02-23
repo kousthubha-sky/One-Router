@@ -1490,7 +1490,7 @@ To: any email address`}
               <div id="ts-contact" className="p-4 bg-[#1A1A1A] rounded-lg">
                 <h3 className="text-white font-medium mb-2">Still stuck?</h3>
                 <p className="text-[#888] text-sm">
-                  Contact us at <a href="mailto:support@onerouter.com" className="text-white hover:underline">support@onerouter.com</a> with:
+                  Contact us at <a href="mailto:support.onerouter@stack-end.com" className="text-white hover:underline">support@onerouter.com</a> with:
                 </p>
                 <ul className="text-[#666] text-sm mt-2 space-y-1">
                   <li>• Your request_id from the error response</li>

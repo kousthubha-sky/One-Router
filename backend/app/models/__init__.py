@@ -5,7 +5,7 @@ from .service_credential import ServiceCredential
 from .transaction_log import TransactionLog
 from .webhook_event import WebhookEvent
 from .idempotency_key import IdempotencyKey
-from .credits import UserCredit, CreditTransaction, OneRouterPayment, TransactionType, PaymentStatus
+from .credits import UserCredit, CreditTransaction, OneRouterPayment, TransactionType, PaymentStatus, Subscription, SubscriptionStatus
 from .audit_log import AuditLog
 from .webhook_queue import WebhookQueue
 
@@ -21,6 +21,8 @@ __all__ = ["User",
            "OneRouterPayment",
            "TransactionType",
            "PaymentStatus",
+           "Subscription",
+           "SubscriptionStatus",
            "AuditLog",
            "WebhookQueue"
            ]

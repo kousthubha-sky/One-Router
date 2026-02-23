@@ -125,7 +125,7 @@ export default function ContactPage() {
         <div className="grid gap-4 mb-12">
           {/* Email Support */}
           <a
-            href="mailto:support@onerouter.com"
+            href="mailto:support.onerouter@stack-end.com"
             className="flex items-center gap-4 p-5 bg-[#0D0D0D] rounded-xl border border-white/5 hover:border-white/10 transition-colors group"
           >
             <div className="w-12 h-12 bg-[#1A1A1A] rounded-xl flex items-center justify-center group-hover:bg-[#252525] transition-colors">
@@ -133,7 +133,7 @@ export default function ContactPage() {
             </div>
             <div className="flex-1">
               <h3 className="text-white font-medium mb-1">Email support</h3>
-              <p className="text-[#666] text-sm">support@onerouter.com</p>
+              <p className="text-[#666] text-sm">support.onerouter@stack-end.com</p>
             </div>
             <div className="text-xs text-[#666]">24-48 hours</div>
           </a>

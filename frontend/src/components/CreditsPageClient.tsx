@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useClientApiCall } from "@/lib/api-client";
+import Link from "next/link";
 import {
   RefreshCw,
   Info,
@@ -13,10 +14,49 @@ import {
   AlertCircle,
   Plus,
   X,
+  Zap,
+  Check,
+  ArrowRight,
+  Rocket,
+  Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+
+const SUBSCRIPTION_PLANS = [
+  {
+    id: "sub_pro",
+    name: "Pro",
+    price_usd: 29,
+    price_inr: 2500,
+    credits: 3500,
+    credits_display: "3,500",
+    color: "cyan",
+    features: ["3,500 credits/month", "Priority support", "Auto-renewal"]
+  },
+  {
+    id: "sub_team",
+    name: "Team",
+    price_usd: 99,
+    price_inr: 8500,
+    credits: 12000,
+    credits_display: "12,000",
+    color: "purple",
+    features: ["12,000 credits/month", "Dedicated manager", "SLA guarantees", "Auto-renewal"]
+  },
+  {
+    id: "sub_enterprise",
+    name: "Enterprise",
+    price_usd: 0,
+    price_inr: 0,
+    credits: 60000,
+    credits_display: "60,000",
+    color: "green",
+    is_custom: true,
+    features: ["60,000 credits/month", "24/7 support", "Custom SLAs", "White-glove onboarding"]
+  }
+];
 
 interface Transaction {
   id: string;
@@ -44,6 +84,7 @@ export function CreditsPageClient() {
   const [purchaseAmount, setPurchaseAmount] = useState<string>("10");
   const [autoTopUp, setAutoTopUp] = useState(false);
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+  const [subCurrency, setSubCurrency] = useState<"INR" | "USD">("INR");
   const apiClient = useClientApiCall();
 
   // Exchange rate (should match backend CreditPricingService.USD_TO_INR)
@@ -115,6 +156,42 @@ export function CreditsPageClient() {
     } finally {
       setPurchasing(false);
     }
+  }
+
+  async function handleSubscribe(planId: string, provider: "razorpay" | "dodo") {
+    setPurchasing(true);
+    setError(null);
+
+    try {
+      const currency = provider === "razorpay" ? "INR" : "USD";
+
+      const response = (await apiClient("/v1/subscriptions/purchase", {
+        method: "POST",
+        body: JSON.stringify({
+          plan_id: planId,
+          provider: provider,
+          currency: currency,
+        }),
+      })) as unknown as { checkout_url?: string; error?: string };
+
+      if (response?.error) {
+        setError(String(response.error));
+        return;
+      }
+
+      if (response?.checkout_url) {
+        // Redirect to payment provider checkout
+        window.location.href = response.checkout_url;
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Subscription failed");
+    } finally {
+      setPurchasing(false);
+    }
+  }
+
+  function getPrice(plan: typeof SUBSCRIPTION_PLANS[0], currency: "INR" | "USD") {
+    return currency === "INR" ? plan.price_inr : plan.price_usd;
   }
 
   function formatDate(dateStr: string) {
@@ -320,9 +397,9 @@ export function CreditsPageClient() {
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column - Credits Overview */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-6">
           {/* Add Credits Button Card */}
-          <Card className="bg-[#0a0a0a] border-gray-800 mb-6">
+          <Card className="bg-[#0a0a0a] border-gray-800">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -341,7 +418,7 @@ export function CreditsPageClient() {
           </Card>
 
           {/* Quick Links */}
-          <Card className="bg-[#0a0a0a] border-gray-800 mb-6">
+          <Card className="bg-[#0a0a0a] border-gray-800">
             <CardContent className="p-4">
               <div className="flex flex-col sm:flex-row gap-3">
                 <a
@@ -358,7 +435,7 @@ export function CreditsPageClient() {
                 </a>
 
                 <a
-                  href="mailto:sales@onerouter.dev"
+                  href="mailto:support.onerouter@stack-end.com"
                   className="flex-1 flex items-center justify-between p-3 rounded-lg border border-gray-800 hover:border-gray-700 hover:bg-gray-800/30 transition-colors group"
                 >
                   <div className="flex items-center gap-3">
@@ -374,7 +451,7 @@ export function CreditsPageClient() {
           </Card>
 
           {/* Recent Transactions */}
-          <Card className="bg-[#0a0a0a] border-gray-800 mt-6">
+          <Card className="bg-[#0a0a0a] border-gray-800">
             <CardHeader>
               <CardTitle className="text-white">Recent Transactions</CardTitle>
             </CardHeader>
@@ -417,38 +494,29 @@ export function CreditsPageClient() {
           </Card>
         </div>
 
-        {/* Right Column - Auto Top-Up */}
+        {/* Right Column - Auto Top-Up (Coming Soon) */}
         <div>
-          <Card className="bg-[#0a0a0a] border-gray-800">
-            <CardHeader>
-              <CardTitle className="text-white">Auto Top-Up</CardTitle>
+          <Card className="bg-[#0a0a0a] border-gray-800 sticky top-6 relative overflow-hidden">
+            {/* Overlay — no pointer events reach the content below */}
+            <div className="absolute inset-0 z-20 rounded-xl bg-black/70 backdrop-blur-[2px] flex flex-col items-center justify-center gap-2 cursor-not-allowed">
+              <span className="text-[10px] font-bold tracking-widest text-gray-400 uppercase">Coming Soon</span>
+              <p className="text-gray-600 text-xs">Auto Top-Up is not yet available</p>
+            </div>
+            {/* Dimmed content — purely decorative, non-interactive */}
+            <CardHeader className="pointer-events-none select-none">
+              <CardTitle className="text-white opacity-25">Auto Top-Up</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pointer-events-none select-none opacity-25">
               <div className="space-y-4">
                 <p className="text-gray-400 text-sm">
                   Automatically recharge your balance when it reaches a minimum threshold.
                 </p>
-                
-                {autoTopUp ? (
-                  <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
-                    <p className="text-green-400 text-sm font-medium">Enabled</p>
-                    <p className="text-gray-400 text-xs mt-1">
-                      Recharge: $50 when balance drops below $10
-                    </p>
-                  </div>
-                ) : (
-                  <div className="bg-gray-800/30 border border-gray-700 rounded-lg p-3">
-                    <p className="text-gray-400 text-sm">Not configured</p>
-                  </div>
-                )}
-
-                <Button 
-                  className="w-full bg-gray-800 hover:bg-gray-700 text-white"
-                  onClick={() => setAutoTopUp(!autoTopUp)}
-                >
-                  {autoTopUp ? "Disable" : "Enable"} Auto Top-Up
+                <div className="bg-gray-800/30 border border-gray-700 rounded-lg p-3">
+                  <p className="text-gray-400 text-sm">Not configured</p>
+                </div>
+                <Button className="w-full bg-gray-800 text-white" disabled>
+                  Enable Auto Top-Up
                 </Button>
-
                 <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
                   <div className="flex gap-2">
                     <Info className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
@@ -462,7 +530,73 @@ export function CreditsPageClient() {
           </Card>
         </div>
       </div>
+
+      {/* Monthly Subscriptions - Coming Soon */}
+      <div className="mt-6 relative">
+        {/* Full-section overlay — completely blocks interaction with everything inside */}
+        <div className="absolute inset-0 z-20 rounded-xl bg-black/75 backdrop-blur-[2px] flex flex-col items-center justify-center gap-3 cursor-not-allowed">
+          <span className="text-[10px] font-bold tracking-widest text-gray-400 uppercase">Coming Soon</span>
+          <p className="text-gray-500 text-sm">Monthly subscriptions are not yet available</p>
+        </div>
+
+        {/* Dimmed content — purely decorative, non-interactive */}
+        <div className="pointer-events-none select-none opacity-20">
+          <h2 className="text-xl font-medium text-white mb-6 text-center">Monthly Subscriptions</h2>
+
+          <div className="flex justify-center mb-6">
+            <div className="inline-flex items-center gap-1 p-1 bg-[#0D0D0D] rounded-lg border border-gray-800">
+              <button className="px-4 py-2 rounded-md text-sm font-medium text-gray-500" disabled>INR</button>
+              <button className="px-4 py-2 rounded-md text-sm font-medium text-gray-500" disabled>USD</button>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-4">
+            {SUBSCRIPTION_PLANS.map((plan, idx) => (
+              <div
+                key={plan.id}
+                className={`p-6 rounded-xl border ${
+                  idx === 1 ? "bg-[#1A1A1A] border-purple-500/30" : "bg-[#0D0D0D] border-gray-800"
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-4">
+                  {plan.color === "cyan" && <Rocket className="w-5 h-5 text-cyan-400" />}
+                  {plan.color === "purple" && <Building2 className="w-5 h-5 text-purple-400" />}
+                  {plan.color === "green" && <Building2 className="w-5 h-5 text-green-400" />}
+                  <h3 className="text-lg font-medium text-white">{plan.name}</h3>
+                </div>
+                <div className="mb-4">
+                  {plan.is_custom ? (
+                    <span className="text-2xl font-semibold text-green-400">Custom</span>
+                  ) : (
+                    <span className="text-2xl font-semibold text-white">
+                      ₹{plan.price_inr.toLocaleString()}
+                    </span>
+                  )}
+                  {!plan.is_custom && <span className="text-[#666] text-sm"> / month</span>}
+                </div>
+                <p className="text-[#666] text-sm mb-4">{plan.credits_display} credits/month</p>
+                <ul className="space-y-2 mb-4">
+                  {plan.features.map((feature, fidx) => (
+                    <li key={fidx} className="flex items-center gap-2 text-sm">
+                      <Check className={`w-4 h-4 ${
+                        plan.color === "cyan" ? "text-cyan-400" :
+                        plan.color === "purple" ? "text-purple-400" : "text-green-400"
+                      }`} />
+                      <span className="text-[#888]">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Button className="w-full text-sm bg-gray-800 text-white" disabled>
+                  {plan.is_custom ? "Contact Sales" : "Subscribe"}
+                </Button>
+              </div>
+            ))}
+          </div>
+          <p className="text-[#666] text-xs mt-4 text-center">
+            Subscriptions automatically renew. Cancel anytime.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
-

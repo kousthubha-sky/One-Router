@@ -388,6 +388,137 @@ export default function PricingPage() {
           </div>
         </div>
 
+        {/* Monthly Subscriptions */}
+        <div className="mb-12">
+          <h2 className="text-xl font-medium text-white mb-2 text-center">Monthly Subscriptions</h2>
+          <p className="text-[#666] text-sm text-center mb-6">Get recurring credits every month with automatic renewal</p>
+          <div className="grid md:grid-cols-3 gap-4">
+            {/* Pro Subscription */}
+            <div className="p-6 bg-[#0D0D0D] rounded-xl border border-cyan-500/30">
+              <div className="flex items-center gap-2 mb-4">
+                <Rocket className="w-5 h-5 text-cyan-400" />
+                <h3 className="text-lg font-medium text-white">Pro</h3>
+              </div>
+              <div className="mb-4">
+                <span className="text-3xl font-semibold text-white">₹{currency === "INR" ? "2500" : "29"}</span>
+                <span className="text-[#666] text-sm"> / month</span>
+              </div>
+              <p className="text-[#666] text-sm mb-4">{currency === "INR" ? "₹2500" : "$29"}/mo = 3,500 credits</p>
+              <ul className="space-y-3 mb-6">
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-cyan-400" />
+                  <span className="text-[#888]">3,500 credits/month</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-cyan-400" />
+                  <span className="text-[#888]">All providers included</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-cyan-400" />
+                  <span className="text-[#888]">Priority support</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-cyan-400" />
+                  <span className="text-[#888]">Auto-renewal</span>
+                </li>
+              </ul>
+              <Link href="/credits">
+                <Button className="w-full bg-cyan-500 text-black hover:bg-cyan-400 font-medium">
+                  Subscribe
+                </Button>
+              </Link>
+            </div>
+
+            {/* Team Subscription */}
+            <div className="p-6 bg-[#1A1A1A] rounded-xl border border-purple-500/30 relative">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                <span className="bg-purple-500 text-white text-xs font-bold px-3 py-1 rounded-full">
+                  BEST VALUE
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mb-4">
+                <Building2 className="w-5 h-5 text-purple-400" />
+                <h3 className="text-lg font-medium text-white">Team</h3>
+              </div>
+              <div className="mb-4">
+                <span className="text-3xl font-semibold text-white">₹{currency === "INR" ? "8500" : "99"}</span>
+                <span className="text-[#666] text-sm"> / month</span>
+              </div>
+              <p className="text-[#666] text-sm mb-4">{currency === "INR" ? "₹8500" : "$99"}/mo = 12,000 credits</p>
+              <ul className="space-y-3 mb-6">
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-purple-400" />
+                  <span className="text-[#888]">12,000 credits/month</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-purple-400" />
+                  <span className="text-[#888]">All providers included</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-purple-400" />
+                  <span className="text-[#888]">Dedicated account manager</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-purple-400" />
+                  <span className="text-[#888]">SLA guarantees</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-purple-400" />
+                  <span className="text-[#888]">Auto-renewal</span>
+                </li>
+              </ul>
+              <Link href="/credits">
+                <Button className="w-full bg-purple-500 text-white hover:bg-purple-400 font-medium">
+                  Subscribe
+                </Button>
+              </Link>
+            </div>
+
+            {/* Enterprise Subscription */}
+            <div className="p-6 bg-[#0D0D0D] rounded-xl border border-white/5">
+              <div className="flex items-center gap-2 mb-4">
+                <Building2 className="w-5 h-5 text-green-400" />
+                <h3 className="text-lg font-medium text-white">Enterprise</h3>
+              </div>
+              <div className="mb-4">
+                <span className="text-3xl font-semibold text-green-400">Custom</span>
+                <span className="text-[#666] text-sm"> / month</span>
+              </div>
+              <p className="text-[#666] text-sm mb-4">60,000 credits/month</p>
+              <ul className="space-y-3 mb-6">
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-green-400" />
+                  <span className="text-[#888]">60,000 credits/month</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-green-400" />
+                  <span className="text-[#888]">All providers included</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-green-400" />
+                  <span className="text-[#888]">24/7 dedicated support</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-green-400" />
+                  <span className="text-[#888]">Custom SLAs</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-green-400" />
+                  <span className="text-[#888]">White-glove onboarding</span>
+                </li>
+              </ul>
+              <Link href="/contact">
+                <Button className="w-full bg-[#1A1A1A] text-white hover:bg-[#252525] border border-white/10">
+                  Contact Sales
+                </Button>
+              </Link>
+            </div>
+          </div>
+          <p className="text-[#666] text-xs mt-4 text-center">
+            Subscriptions automatically renew. Cancel anytime.
+          </p>
+        </div>
+
         {/* Volume Discounts */}
         <div className="mb-12 p-6 bg-[#0D0D0D] rounded-xl border border-white/5">
           <h2 className="text-lg font-medium text-white mb-4 text-center">Volume Discounts</h2>
