@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle, AlertCircle, Loader2, ArrowLeft } from "lucide-react";
@@ -16,7 +16,7 @@ interface SubscriptionResultData {
   exp: number;
 }
 
-export default function SubscriptionResultPage() {
+function SubscriptionResultContent() {
   const searchParams = useSearchParams();
   const [result, setResult] = useState<SubscriptionResultData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -132,5 +132,24 @@ export default function SubscriptionResultPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen bg-[#050005] flex items-center justify-center">
+      <div className="text-center">
+        <Loader2 className="w-12 h-12 animate-spin text-cyan-400 mx-auto mb-4" />
+        <p className="text-gray-400">Loading...</p>
+      </div>
+    </div>
+  );
+}
+
+export default function SubscriptionResultPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <SubscriptionResultContent />
+    </Suspense>
   );
 }
